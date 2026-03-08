@@ -1,0 +1,63 @@
+name: Build and deploy ASP.NET Core app to Azure Web App - cloudstationpro
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore CloudStationWeb/CloudStationWeb.csproj
+
+      - name: Build
+        run: dotnet build CloudStationWeb/CloudStationWeb.csproj --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish CloudStationWeb/CloudStationWeb.csproj --configuration Release --output ./publish --no-build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: ./publish
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: ./publish
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD585C81D4714E2FB01C9D9925B416E2 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_04D2256AAB2849D49EB8D61A2272CA38 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_3C585C38F4B94B16A14761DDCFD2DF0E }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: cloudstationpro
+          package: ./publish
