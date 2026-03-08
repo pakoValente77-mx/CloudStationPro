@@ -1,0 +1,63 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Acceso Denegado";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloudStation Pro - Acceso Denegado</title>
+    <link href="/lib/fonts/inter/inter.css" rel="stylesheet">
+    <link rel="stylesheet" href="/lib/fomantic-ui/dist/semantic.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0b0e14 0%, #1a1f2e 50%, #0d1117 100%);
+            color: #fff;
+            margin: 0;
+        }
+        .denied-card {
+            background: rgba(20, 24, 33, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 48px 40px;
+            text-align: center;
+            max-width: 420px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.7);
+        }
+        .denied-icon {
+            width: 64px; height: 64px;
+            background: rgba(239, 68, 68, 0.15);
+            border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            margin-bottom: 20px;
+        }
+        .denied-icon i { font-size: 28px; color: #ef4444; }
+        h2 { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+        p { color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 28px; }
+        .btn-back {
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: #fff; border: none; border-radius: 12px;
+            font-family: 'Inter'; font-size: 14px; font-weight: 600;
+            cursor: pointer; text-decoration: none; display: inline-block;
+        }
+        .btn-back:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(59,130,246,0.4); }
+    </style>
+</head>
+<body>
+    <div class="denied-card">
+        <div class="denied-icon"><i class="lock icon"></i></div>
+        <h2>Acceso Denegado</h2>
+        <p>No tiene permisos suficientes para acceder a esta sección. Contacte al administrador si cree que esto es un error.</p>
+        <a href="/" class="btn-back">Volver al Inicio</a>
+    </div>
+</body>
+</html>

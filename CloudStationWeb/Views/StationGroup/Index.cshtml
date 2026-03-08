@@ -1,0 +1,603 @@
+@{
+    ViewData["Title"] = "Mis Grupos";
+}
+
+@section Styles {
+    <style>
+        .group-manager-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            height: calc(100vh - 90px);
+        }
+
+        .glass-panel {
+            background: rgba(15, 25, 30, 0.85); /* Fondo Dark Slate CFE */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 230, 118, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 230, 118, 0.05);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Panel Izquierdo: Lista de Grupos --- */
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #00e676;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .group-header h3 {
+            color: #00e676;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 16px;
+        }
+
+        .group-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .group-item {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .group-item:hover {
+            background: rgba(0, 230, 118, 0.1);
+            border-color: rgba(0, 230, 118, 0.4);
+        }
+
+        .group-item.active {
+            background: rgba(0, 230, 118, 0.2);
+            border-color: #00e676;
+            box-shadow: inset 4px 0 0 #00e676;
+        }
+
+        .group-title {
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .group-meta {
+            color: #aaa;
+            font-size: 11px;
+        }
+
+        .group-delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #ef4444;
+            opacity: 0.5;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .group-item:hover .group-delete-btn {
+            opacity: 1;
+        }
+
+        .group-delete-btn:hover {
+            transform: scale(1.2);
+        }
+
+        /* --- Panel Derecho: Editor de Estaciones --- */
+        .editor-header {
+            margin-bottom: 20px;
+        }
+
+        .editor-header h2 {
+            color: #E6B93F; /* Dorado CFE */
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .editor-header p {
+            color: #a5d6a7;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .stations-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .search-bar {
+            width: 100%;
+        }
+
+        .search-bar input {
+            width: 100%;
+            background: rgba(0,0,0,0.5) !important;
+            border: 1px solid rgba(0, 230, 118, 0.3) !important;
+            color: #fff !important;
+        }
+
+        .stations-list {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+            align-content: flex-start;
+        }
+
+        .station-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .station-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .station-card.selected {
+            background: rgba(0, 121, 52, 0.4);
+            border-color: #00e676;
+        }
+
+        .station-icon {
+            color: #00e676;
+            font-size: 20px;
+        }
+
+        .station-info {
+            flex: 1;
+        }
+
+        .station-name {
+            color: #fff;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .station-details {
+            color: #aaa;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 4em;
+            margin-bottom: 15px;
+            color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Botones CFE */
+        .btn-green {
+            background: linear-gradient(135deg, #007934 0%, #00a84d 100%) !important;
+            color: white !important;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 121, 52, 0.4), inset 0 1px 1px rgba(255,255,255,0.3) !important;
+        }
+
+        .btn-green:hover {
+            background: linear-gradient(135deg, #00a84d 0%, #00e676 100%) !important;
+            box-shadow: 0 6px 20px rgba(0, 230, 118, 0.6) !important;
+            transform: translateY(-2px);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #C2931C 0%, #E6B93F 100%) !important;
+            color: #1a1a1a !important;
+            border: none;
+            box-shadow: 0 4px 15px rgba(194, 147, 28, 0.3), inset 0 1px 1px rgba(255,255,255,0.4) !important;
+        }
+
+        .btn-gold:hover {
+            background: linear-gradient(135deg, #d3a42d 0%, #f7ca50 100%) !important;
+            box-shadow: 0 6px 20px rgba(230, 185, 63, 0.6) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Modals */
+        .ui.modal {
+            background: rgba(20, 30, 35, 0.95) !important;
+            border: 1px solid #00e676 !important;
+            box-shadow: 0 0 30px rgba(0, 230, 118, 0.2) !important;
+            color: white !important;
+        }
+        
+        .ui.modal > .header {
+            background: rgba(0, 0, 0, 0.3) !important;
+            color: #00e676 !important;
+            border-bottom: 1px solid #00e676 !important;
+        }
+
+        .ui.modal > .content {
+            background: transparent !important;
+            color: white !important;
+        }
+        
+        .ui.modal > .actions {
+            background: rgba(0, 0, 0, 0.3) !important;
+            border-top: 1px solid rgba(255,255,255,0.1) !important;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 230, 118, 0.4); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00e676; }
+    </style>
+}
+
+<div class="group-manager-container">
+    <!-- Listado de Grupos -->
+    <div class="glass-panel">
+        <div class="group-header">
+            <h3><i class="folder outline icon"></i> Mis Grupos</h3>
+            <button class="ui tiny button btn-green" onclick="showCreateGroupModal()">
+                <i class="plus icon"></i> Nuevo
+            </button>
+        </div>
+        
+        <div class="group-list" id="group-list-container">
+            <!-- Grupos cargados vía AJAX -->
+            <div class="ui active centered inline loader"></div>
+        </div>
+    </div>
+
+    <!-- Editor de Estaciones -->
+    <div class="glass-panel" id="editor-panel">
+        <div class="empty-state" id="editor-empty">
+            <i class="mouse pointer icon"></i>
+            <h2>Selecciona un Grupo</h2>
+            <p>Haz clic en un grupo de la izquierda para configurar sus estaciones.</p>
+        </div>
+
+        <div class="stations-container" id="editor-content" style="display: none;">
+            <div class="editor-header">
+                <h2 id="current-group-name">Nombre del Grupo</h2>
+                <p>Selecciona las estaciones que pertenecerán a esta red.</p>
+                <button class="ui right floated button btn-gold" onclick="saveGroupSettings()">
+                    <i class="save icon"></i> Guardar Cambios
+                </button>
+            </div>
+
+            <div class="ui icon input search-bar">
+                <i class="search icon"></i>
+                <input type="text" id="station-search" placeholder="Buscar estación por nombre o cuenca..." onkeyup="filterStations()">
+            </div>
+            
+            <div class="ui toggle checkbox" style="margin-top: 10px; margin-bottom: 5px;">
+                <input type="checkbox" id="cfe-only-toggle" checked="checked">
+                <label style="color: #00e676 !important;">Solo Estaciones CFE</label>
+            </div>
+
+            <div class="stations-list" id="stations-list-container">
+                <!-- Estaciones cargadas vía AJAX -->
+                <div class="ui active centered inline loader"></div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #aaa; font-size: 12px;">
+                <span id="selection-counter">0 estaciones seleccionadas</span>
+                <span>
+                    <a href="javascript:void(0)" onclick="selectAllFiltered()" style="color: #00e676; margin-right: 15px;">Seleccionar Visibles</a>
+                    <a href="javascript:void(0)" onclick="clearSelection()" style="color: #ef4444;">Limpiar Selección</a>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear Grupo -->
+<div class="ui tiny modal" id="create-group-modal">
+    <div class="header">
+        <i class="plus circle icon"></i> Crear Nuevo Grupo
+    </div>
+    <div class="content">
+        <div class="ui form inverted">
+            <div class="field">
+                <label style="color:#a5d6a7;">Nombre del Grupo</label>
+                <div class="ui input focus">
+                    <input type="text" id="new-group-name" placeholder="Ej. Red Grijalva Corta" maxlength="100">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="actions">
+        <div class="ui cancel basic inverted button">Cancelar</div>
+        <div class="ui button btn-green" onclick="createGroup()">Crear Grupo</div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let allStations = [];
+        let currentGroupId = null;
+        let selectedStationIds = new Set();
+
+        $(document).ready(function() {
+            loadGroups();
+            loadAllStations();
+
+            // Reload all stations when CFE toggle changes
+            $('#cfe-only-toggle').change(function() {
+                loadAllStations();
+            });
+        });
+
+        // ---------------- GROUPS MANAGEMENT ----------------
+        
+        function loadGroups() {
+            $.ajax({
+                url: '/StationGroup/GetGroups',
+                method: 'GET',
+                success: function(groups) {
+                    const container = $('#group-list-container');
+                    container.empty();
+
+                    if (groups.length === 0) {
+                        container.html('<div style="color:#aaa; text-align:center; padding: 20px;">No has creado ningún grupo aún.</div>');
+                        return;
+                    }
+
+                    groups.forEach(g => {
+                        const item = $(`
+                            <div class="group-item" data-id="${g.id}" onclick="selectGroup(${g.id}, '${g.nombre}')">
+                                <div class="group-title">${g.nombre}</div>
+                                <div class="group-meta">ID: ${g.id}</div>
+                                <i class="trash alternate icon group-delete-btn" onclick="deleteGroup(event, ${g.id}, '${g.nombre}')" title="Eliminar grupo"></i>
+                            </div>
+                        `);
+                        container.append(item);
+                    });
+                    
+                    if (currentGroupId) {
+                        $(`.group-item[data-id="${currentGroupId}"]`).addClass('active');
+                    }
+                },
+                error: function(xhr) {
+                    alert('Error al cargar la lista de grupos.');
+                }
+            });
+        }
+
+        function showCreateGroupModal() {
+            $('#new-group-name').val('');
+            $('#create-group-modal').modal('show');
+        }
+
+        function createGroup() {
+            const name = $('#new-group-name').val().trim();
+            if (!name) {
+                alert('Ingrese un nombre para el grupo');
+                return;
+            }
+
+            $.ajax({
+                url: '/StationGroup/CreateGroup',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ name: name }),
+                success: function(res) {
+                    $('#create-group-modal').modal('hide');
+                    loadGroups();
+                    selectGroup(res.id, name);
+                },
+                error: function(xhr) {
+                    alert('Error al crear el grupo: ' + (xhr.responseJSON?.error || 'Desconocido'));
+                }
+            });
+        }
+
+        function deleteGroup(e, id, name) {
+            e.stopPropagation(); // Prevent row click
+            if (confirm(`¿Estás seguro de eliminar el grupo "${name}" y toda su configuración?`)) {
+                $.ajax({
+                    url: '/StationGroup/DeleteGroup/' + id,
+                    method: 'DELETE',
+                    success: function() {
+                        if (currentGroupId === id) {
+                            currentGroupId = null;
+                            $('#editor-panel #editor-content').hide();
+                            $('#editor-panel #editor-empty').show();
+                        }
+                        loadGroups();
+                    },
+                    error: function(xhr) {
+                        alert('Error al eliminar: ' + (xhr.responseJSON?.error || 'Desconocido'));
+                    }
+                });
+            }
+        }
+
+        // ---------------- STATIONS MANAGEMENT ----------------
+
+        function loadAllStations() {
+            const onlyCfe = $('#cfe-only-toggle').is(':checked');
+            $.ajax({
+                url: '/DataAnalysis/GetStations', 
+                method: 'GET',
+                data: { onlyCfe: onlyCfe },
+                success: function(data) {
+                    allStations = data;
+                    renderStations();
+                },
+                error: function() {
+                    $('#stations-list-container').html('<div style="color:red; padding:10px;">Error cargando catálogo de estaciones</div>');
+                }
+            });
+        }
+
+        function renderStations() {
+            const container = $('#stations-list-container');
+            container.empty();
+            
+            allStations.forEach(s => {
+                // We use databaseId (GUID) because the backend database table expects it
+                const dbId = String(s.databaseId);
+                const isSelected = selectedStationIds.has(dbId);
+                const safeName = (s.name || '').toLowerCase();
+                const safeSub = ''; // GetStationListAsync doesn't return Subcuenca info
+                const card = $(`
+                    <div class="station-card ${isSelected ? 'selected' : ''}" data-id="${dbId}" data-name="${safeName}" data-sub="${safeSub}" onclick="toggleStation('${dbId}')">
+                        <div class="station-icon">
+                            <i class="${isSelected ? 'check circle' : 'circle outline'} icon"></i>
+                        </div>
+                        <div class="station-info">
+                            <div class="station-name">${s.name || 'Sin Nombre'}</div>
+                            <div class="station-details">Estación Disponible</div>
+                        </div>
+                    </div>
+                `);
+                container.append(card);
+            });
+            updateCounter();
+        }
+
+        function selectGroup(id, name) {
+            currentGroupId = id;
+            $('.group-item').removeClass('active');
+            $(`.group-item[data-id="${id}"]`).addClass('active');
+
+            $('#current-group-name').text(name);
+            $('#editor-empty').hide();
+            $('#editor-content').show();
+            
+            // Fetch configuration
+            $('#stations-list-container').addClass('loading');
+            $.ajax({
+                url: '/StationGroup/GetGroupStations/' + id,
+                method: 'GET',
+                success: function(stationIds) {
+                    selectedStationIds = new Set(stationIds);
+                    $('#station-search').val('');
+                    renderStations();
+                    $('#stations-list-container').removeClass('loading');
+                },
+                error: function() {
+                    alert('No se pudieron cargar las estaciones de este grupo.');
+                    $('#stations-list-container').removeClass('loading');
+                }
+            });
+        }
+
+        function toggleStation(id) {
+            if (!currentGroupId) return;
+            
+            const card = $(`.station-card[data-id="${id}"]`);
+            const icon = card.find('.station-icon i');
+            
+            if (selectedStationIds.has(id)) {
+                selectedStationIds.delete(id);
+                card.removeClass('selected');
+                icon.removeClass('check circle').addClass('circle outline');
+            } else {
+                selectedStationIds.add(id);
+                card.addClass('selected');
+                icon.removeClass('circle outline').addClass('check circle');
+            }
+            updateCounter();
+        }
+
+        function filterStations() {
+            const term = $('#station-search').val().toLowerCase();
+            $('.station-card').each(function() {
+                const name = $(this).data('name');
+                const sub = $(this).data('sub');
+                if (name.includes(term) || sub.includes(term)) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+        }
+
+        function selectAllFiltered() {
+            if (!currentGroupId) return;
+            $('.station-card:visible').each(function() {
+                const id = String($(this).data('id'));
+                if (!selectedStationIds.has(id)) toggleStation(id);
+            });
+        }
+
+        function clearSelection() {
+            if (!currentGroupId) return;
+            $('.station-card').each(function() {
+                const id = String($(this).data('id'));
+                if (selectedStationIds.has(id)) toggleStation(id);
+            });
+        }
+
+        function updateCounter() {
+            $('#selection-counter').text(`${selectedStationIds.size} estaciones seleccionadas`);
+        }
+
+        function saveGroupSettings() {
+            if (!currentGroupId) return;
+
+            const payload = Array.from(selectedStationIds);
+            const btn = $('.editor-header .btn-gold');
+            btn.addClass('loading disabled');
+
+            $.ajax({
+                url: '/StationGroup/UpdateGroupStations/' + currentGroupId,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function() {
+                    btn.removeClass('loading disabled');
+                    $('body').toast({
+                        class: 'success',
+                        message: `¡Se han guardado ${payload.length} estaciones en el grupo!`
+                    });
+                },
+                error: function(xhr) {
+                    btn.removeClass('loading disabled');
+                    alert('Error guardando estaciones: ' + (xhr.responseJSON?.error || 'Desconocido'));
+                }
+            });
+        }
+    </script>
+}

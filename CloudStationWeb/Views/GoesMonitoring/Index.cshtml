@@ -1,0 +1,782 @@
+@{
+    ViewData["Title"] = "Monitoreo GOES";
+}
+
+@section Styles {
+<style>
+    .monitoring-page {
+        padding: 30px; /* Reduced since layout now has margin-top */
+        max-width: 1800px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-header h1 {
+        font-size: 28px;
+        font-weight: 600;
+        color: #fff;
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .page-header .subtitle {
+        color: rgba(255,255,255,0.5);
+        font-size: 14px;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .stat-card {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 24px;
+        transition: all 0.3s;
+    }
+
+    .stat-card:hover {
+        background: rgba(255,255,255,0.05);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .stat-card .stat-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+        opacity: 0.8;
+    }
+
+    .stat-card .stat-value {
+        font-size: 36px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 4px;
+    }
+
+    .stat-card .stat-label {
+        font-size: 13px;
+        color: rgba(255,255,255,0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .stat-trend {
+        font-size: 12px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Controls */
+    .controls-bar {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .control-group {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-period {
+        padding: 8px 16px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.7);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-period:hover {
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+    }
+
+    .btn-period.active {
+        background: rgba(59,130,246,0.2);
+        border-color: rgba(59,130,246,0.4);
+        color: #60a5fa;
+    }
+
+    /* Chart containers */
+    .chart-container {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 25px;
+    }
+
+    .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .chart-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    /* Station table */
+    .station-table-container {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .station-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .station-table thead {
+        position: sticky;
+        top: 0;
+        background: rgba(0,0,0,0.8);
+        z-index: 10;
+    }
+
+    .station-table th {
+        padding: 12px;
+        text-align: left;
+        font-size: 12px;
+        color: rgba(255,255,255,0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .station-table td {
+        padding: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        font-size: 14px;
+        color: #fff;
+    }
+
+    .station-table tr:hover {
+        background: rgba(255,255,255,0.03);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .health-bar {
+        width: 100%;
+        height: 6px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .health-bar-fill {
+        height: 100%;
+        transition: width 0.3s;
+    }
+
+    .search-box {
+        padding: 10px 16px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: #fff;
+        font-size: 14px;
+        width: 300px;
+    }
+
+    .search-box::placeholder {
+        color: rgba(255,255,255,0.3);
+    }
+
+    /* Station Detail Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+
+    .modal-content {
+        background: rgba(20,25,40,0.95);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 20px;
+        width: 90%;
+        max-width: 900px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+        animation: modalIn 0.25s ease-out;
+    }
+
+    @@keyframes modalIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px 28px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .modal-header h2 {
+        color: #fff;
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .modal-header .modal-subtitle {
+        color: rgba(255,255,255,0.4);
+        font-size: 13px;
+        margin-top: 4px;
+    }
+
+    .modal-close {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #fff;
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+    .modal-close:hover { background: rgba(255,255,255,0.15); }
+
+    .modal-body { padding: 24px 28px 28px; }
+
+    .btn-detail {
+        background: rgba(59,130,246,0.15);
+        border: 1px solid rgba(59,130,246,0.3);
+        color: #60a5fa;
+        padding: 5px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .btn-detail:hover {
+        background: rgba(59,130,246,0.25);
+        transform: translateY(-1px);
+    }
+</style>
+}
+
+<div class="monitoring-page">
+    <div class="page-header">
+        <h1>
+            <i class="satellite icon"></i>
+            Monitoreo GOES
+        </h1>
+        <div class="subtitle">
+            Sistema de telemetría y salud de estaciones
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card glass-card">
+            <div class="stat-icon">📡</div>
+            <div class="stat-value" id="total-stations">--</div>
+            <div class="stat-label">Total Estaciones</div>
+        </div>
+        <div class="stat-card glass-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="active-stations" style="color: #22c55e;">--</div>
+            <div class="stat-label">Transmitiendo</div>
+            <div class="stat-trend" id="active-trend"></div>
+        </div>
+        <div class="stat-card glass-card">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value" id="silent-stations" style="color: #ef4444;">--</div>
+            <div class="stat-label">Silenciosas</div>
+            <div class="stat-trend" id="silent-trend"></div>
+        </div>
+        <div class="stat-card glass-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" id="reception-rate">--%</div>
+            <div class="stat-label">Tasa de Recepción</div>
+            <div class="stat-trend" id="rate-detail"></div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-bar">
+        <div class="control-group">
+            <button class="btn-period active" data-period="24h">24 Horas</button>
+            <button class="btn-period" data-period="7d">7 Días</button>
+            <button class="btn-period" data-period="30d">30 Días</button>
+        </div>
+        <input type="text" id="station-search" class="search-box" placeholder="🔍 Buscar estación...">
+        <select id="status-filter" class="search-box" style="width: 200px;">
+            <option value="all">Todas las estaciones</option>
+            <option value="active">Solo operativas</option>
+            <option value="attention">Solo atención</option>
+            <option value="failed">Solo fallas</option>
+        </select>
+    </div>
+
+    <!-- Transmission Trend Chart -->
+    <div class="chart-container glass-card">
+        <div class="chart-header">
+            <div class="chart-title">📈 Tendencia de Transmisiones</div>
+        </div>
+        <div id="trend-chart" style="height: 300px;"></div>
+    </div>
+
+    <!-- Transmission Timeline Heatmap -->
+    <div class="chart-container glass-card">
+        <div class="chart-header">
+            <div class="chart-title">🗓️ Timeline de Transmisiones por Estación</div>
+        </div>
+        <div id="timeline-chart" style="height: 500px;"></div>
+    </div>
+
+    <!-- Station Health Table -->
+    <div class="chart-container glass-card">
+        <div class="chart-header">
+            <div class="chart-title">🏥 Salud de Estaciones</div>
+        </div>
+        <div class="station-table-container">
+            <table class="station-table">
+                <thead>
+                    <tr>
+                        <th>Estación</th>
+                        <th>Última TX</th>
+                        <th>Horas</th>
+                        <th>TX (24h)</th>
+                        <th>Esperadas</th>
+                        <th>Salud</th>
+                        <th>Estado</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="station-table-body">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Station Detail Modal -->
+    <div id="station-detail-modal" class="modal-overlay" onclick="if(event.target===this)closeStationModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2>📡 <span id="modal-station-name">Estación</span></h2>
+                    <div class="modal-subtitle" id="modal-station-id"></div>
+                </div>
+                <button class="modal-close" onclick="closeStationModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="station-detail-chart" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/highcharts/highcharts.js" asp-append-version="true"></script>
+<script src="~/lib/highcharts/modules/heatmap.js" asp-append-version="true"></script>
+<script src="~/lib/highcharts/modules/exporting.js" asp-append-version="true"></script>
+<script>
+    let currentPeriod = '24h';
+    let currentFilter = 'all';
+    let stationsData = [];
+
+    $(document).ready(function() {
+        // Period buttons
+        $('.btn-period').on('click', function() {
+            $('.btn-period').removeClass('active');
+            $(this).addClass('active');
+            currentPeriod = $(this).data('period');
+            loadAllData();
+        });
+
+        // Status filter
+        $('#status-filter').on('change', function() {
+            currentFilter = $(this).val();
+            loadStationHealth();
+        });
+
+        // Search
+        $('#station-search').on('input', function() {
+            const term = $(this).val().toLowerCase();
+            filterStationTable(term);
+        });
+
+        // Initial load
+        loadAllData();
+
+        // Auto-refresh every 5 minutes
+        setInterval(loadAllData, 300000);
+    });
+
+    function loadAllData() {
+        loadTransmissionStats();
+        loadStationHealth();
+        loadTransmissionTrend();
+        loadTransmissionTimeline();
+    }
+
+    function loadTransmissionStats() {
+        $.getJSON(`/GoesMonitoring/GetTransmissionStats?period=${currentPeriod}`, function(data) {
+            $('#total-stations').text(data.totalStations || 0);
+            $('#active-stations').text(data.activeStations || 0);
+            $('#silent-stations').text(data.silentStations || 0);
+            $('#reception-rate').text((data.receptionRate || 0).toFixed(1) + '%');
+            
+            $('#active-trend').text(`${data.activeStations || 0} de ${data.totalStations || 0}`);
+            $('#silent-trend').text(`${data.silentStations || 0} sin transmitir`);
+            $('#rate-detail').text(`${data.totalTransmissionsLast24h || 0} / ${data.expectedTransmissionsLast24h || 0} TX`);
+        }).fail(function() {
+            console.error('Error loading transmission stats');
+            $('#total-stations').text('0');
+            $('#active-stations').text('0');
+            $('#silent-stations').text('0');
+            $('#reception-rate').text('0%');
+        });
+    }
+
+    function loadStationHealth() {
+        $.getJSON(`/GoesMonitoring/GetStationHealth?period=${currentPeriod}&filter=${currentFilter}`, function(data) {
+            stationsData = data || [];
+            renderStationTable(data || []);
+        }).fail(function() {
+            console.error('Error loading station health');
+            stationsData = [];
+            renderStationTable([]);
+        });
+    }
+
+    function renderStationTable(data) {
+        const tbody = $('#station-table-body');
+        tbody.empty();
+
+        if (!data || data.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">
+                        <i class="satellite icon" style="font-size: 48px; display: block; margin-bottom: 16px; opacity: 0.3;"></i>
+                        <div style="font-size: 16px; margin-bottom: 8px;">No hay datos de estaciones disponibles</div>
+                        <div style="font-size: 13px;">Verifica que la base de datos TimescaleDB esté configurada y contenga datos de sensor_data</div>
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        data.forEach(station => {
+            const lastTxText = station.lastTransmission 
+                ? new Date(station.lastTransmission).toLocaleString() 
+                : 'Nunca';
+            
+            const hoursText = station.hoursSinceLastTx < 9999 
+                ? station.hoursSinceLastTx + 'h' 
+                : '∞';
+
+            const row = $(`
+                <tr>
+                    <td><strong>${station.stationName}</strong></td>
+                    <td>${lastTxText}</td>
+                    <td>${hoursText}</td>
+                    <td>${station.transmissionsLast24h}</td>
+                    <td>${station.expectedTransmissions}</td>
+                    <td>
+                        <div class="health-bar">
+                            <div class="health-bar-fill" style="width: ${station.healthScore}%; background: ${station.statusColor};"></div>
+                        </div>
+                        <small style="color: rgba(255,255,255,0.5);">${station.healthScore}%</small>
+                    </td>
+                    <td>
+                        <span class="status-badge" style="background: ${station.statusColor}22; color: ${station.statusColor}; border: 1px solid ${station.statusColor}44;">
+                            ${station.status}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn-detail" onclick="showStationDetail('${station.stationId}', '${station.stationName.replace(/'/g, "\\'")}')">
+                            📊 Ver
+                        </button>
+                    </td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+    }
+
+    function filterStationTable(term) {
+        if (!term) {
+            renderStationTable(stationsData);
+            return;
+        }
+        const filtered = stationsData.filter(s => s.stationName.toLowerCase().includes(term));
+        renderStationTable(filtered);
+    }
+
+    function loadTransmissionTrend() {
+        $.getJSON(`/GoesMonitoring/GetTransmissionTrend?period=${currentPeriod}`, function(data) {
+            if (!data || data.length === 0) {
+                $('#trend-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4); text-align: center;"><div><i class="chart line icon" style="font-size: 48px; opacity: 0.3;"></i><div style="margin-top: 16px;">No hay datos de tendencia disponibles</div></div></div>');
+                return;
+            }
+
+            const categories = data.map(d => new Date(d.hour).getTime());
+            const received = data.map(d => d.receivedCount);
+            const expected = data.map(d => d.expectedCount);
+
+            Highcharts.chart('trend-chart', {
+                chart: { type: 'line', backgroundColor: 'transparent' },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: { 
+                    type: 'datetime',
+                    labels: { style: { color: '#fff' } }
+                },
+                yAxis: { 
+                    title: { text: 'Transmisiones', style: { color: '#fff' } },
+                    labels: { style: { color: '#fff' } },
+                    gridLineColor: 'rgba(255,255,255,0.1)'
+                },
+                legend: { 
+                    itemStyle: { color: '#fff' }
+                },
+                series: [{
+                    name: 'Recibidas',
+                    data: received.map((val, i) => [categories[i], val]),
+                    color: '#22c55e',
+                    lineWidth: 3
+                }, {
+                    name: 'Esperadas',
+                    data: expected.map((val, i) => [categories[i], val]),
+                    color: '#60a5fa',
+                    lineWidth: 2,
+                    dashStyle: 'Dash'
+                }]
+            });
+        }).fail(function() {
+            $('#trend-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4);">Error cargando datos</div>');
+        });
+    }
+
+    function loadTransmissionTimeline() {
+        $.getJSON(`/GoesMonitoring/GetTransmissionTimeline?period=${currentPeriod}`, function(data) {
+            if (!data || data.length === 0) {
+                $('#timeline-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4); text-align: center;"><div><i class="calendar icon" style="font-size: 48px; opacity: 0.3;"></i><div style="margin-top: 16px;">No hay datos de timeline disponibles</div></div></div>');
+                return;
+            }
+
+            // Build a map of stationId -> stationName
+            const nameMap = {};
+            data.forEach(d => {
+                if (!nameMap[d.stationId]) {
+                    nameMap[d.stationId] = d.stationName || d.stationId;
+                }
+            });
+
+            // Count transmissions per station to rank them
+            const txCounts = {};
+            data.forEach(d => {
+                txCounts[d.stationId] = (txCounts[d.stationId] || 0) + d.transmissionCount;
+            });
+
+            // Sort by activity descending, take top 25 for readability
+            const topStationIds = Object.keys(txCounts)
+                .sort((a, b) => txCounts[b] - txCounts[a])
+                .slice(0, 25);
+
+            const stationNames = topStationIds.map(id => nameMap[id]);
+
+            // Build series data as [x, y] scatter points with marker color
+            const greenPoints = [];
+            const redPoints = [];
+
+            data.forEach(point => {
+                const stationIndex = topStationIds.indexOf(point.stationId);
+                if (stationIndex === -1) return;
+                const timestamp = new Date(point.timestamp).getTime();
+                if (point.transmissionCount > 0) {
+                    greenPoints.push({ x: timestamp, y: stationIndex, count: point.transmissionCount });
+                } else {
+                    redPoints.push({ x: timestamp, y: stationIndex, count: 0 });
+                }
+            });
+
+            // Dynamic height based on number of stations
+            const chartHeight = Math.max(400, stationNames.length * 28);
+            $('#timeline-chart').css('height', chartHeight + 'px');
+
+            Highcharts.chart('timeline-chart', {
+                chart: { type: 'scatter', backgroundColor: 'transparent', height: chartHeight },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: {
+                    type: 'datetime',
+                    labels: { style: { color: '#fff' } },
+                    gridLineColor: 'rgba(255,255,255,0.05)',
+                    gridLineWidth: 1
+                },
+                yAxis: {
+                    categories: stationNames,
+                    title: { text: null },
+                    labels: { 
+                        style: { color: '#fff', fontSize: '11px' },
+                        step: 1
+                    },
+                    gridLineColor: 'rgba(255,255,255,0.08)',
+                    reversed: true,
+                    min: 0,
+                    max: stationNames.length - 1
+                },
+                legend: { 
+                    itemStyle: { color: '#fff' },
+                    itemHoverStyle: { color: '#aaa' }
+                },
+                plotOptions: {
+                    scatter: {
+                        marker: {
+                            radius: 6,
+                            symbol: 'square'
+                        }
+                    }
+                },
+                series: [{
+                    name: 'TX Recibida',
+                    data: greenPoints,
+                    color: '#22c55e',
+                    marker: { symbol: 'square', radius: 6 }
+                }, {
+                    name: 'TX Faltante',
+                    data: redPoints,
+                    color: '#ef4444',
+                    marker: { symbol: 'square', radius: 6 }
+                }],
+                tooltip: {
+                    formatter: function() {
+                        const name = stationNames[this.point.y] || 'Desconocida';
+                        return `<b>${name}</b><br/>
+                                ${new Date(this.point.x).toLocaleString()}<br/>
+                                ${this.point.count > 0 ? '✅ ' + this.point.count + ' TX' : '❌ Sin TX'}`;
+                    }
+                }
+            });
+        }).fail(function() {
+            $('#timeline-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4);">Error cargando datos</div>');
+        });
+    }
+
+    function showStationDetail(stationId, stationName) {
+        $('#modal-station-name').text(stationName);
+        $('#modal-station-id').text('ID: ' + stationId);
+        $('#station-detail-modal').addClass('active');
+        $('#station-detail-chart').html('<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.4)"><div style="text-align:center"><div class="ui active inline loader"></div><div style="margin-top:12px">Cargando datos...</div></div></div>');
+
+        $.getJSON(`/GoesMonitoring/GetStationDetail?stationId=${encodeURIComponent(stationId)}&period=${currentPeriod}`, function(resp) {
+            if (!resp.data || resp.data.length === 0) {
+                $('#station-detail-chart').html('<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.4)">Sin datos para este período</div>');
+                return;
+            }
+
+            const hours = resp.data.map(d => new Date(d.hour).getTime());
+            const exitosas = resp.data.map(d => d.exitosas);
+            const fallidas = resp.data.map(d => d.fallidas);
+
+            Highcharts.chart('station-detail-chart', {
+                chart: { backgroundColor: 'transparent' },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: {
+                    type: 'datetime',
+                    labels: { style: { color: '#fff' } },
+                    gridLineColor: 'rgba(255,255,255,0.05)',
+                    gridLineWidth: 1
+                },
+                yAxis: {
+                    title: { text: 'Transmisiones', style: { color: 'rgba(255,255,255,0.6)' } },
+                    labels: { style: { color: '#fff' } },
+                    gridLineColor: 'rgba(255,255,255,0.08)',
+                    min: 0
+                },
+                legend: { itemStyle: { color: '#fff' } },
+                plotOptions: {
+                    column: { borderRadius: 3, borderWidth: 0 },
+                    series: { animation: { duration: 600 } }
+                },
+                series: [{
+                    type: 'column',
+                    name: 'Exitosas',
+                    data: exitosas.map((v, i) => [hours[i], v]),
+                    color: '#22c55e'
+                }, {
+                    type: 'column',
+                    name: 'Fallidas',
+                    data: fallidas.map((v, i) => [hours[i], v]),
+                    color: '#ef4444'
+                }],
+                tooltip: {
+                    shared: true,
+                    formatter: function() {
+                        let s = `<b>${new Date(this.x).toLocaleString()}</b>`;
+                        this.points.forEach(p => {
+                            s += `<br/><span style="color:${p.color}">●</span> ${p.series.name}: <b>${p.y}</b>`;
+                        });
+                        return s;
+                    }
+                }
+            });
+        }).fail(function() {
+            $('#station-detail-chart').html('<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.4)">Error al cargar datos</div>');
+        });
+    }
+
+    function closeStationModal() {
+        $('#station-detail-modal').removeClass('active');
+    }
+
+    // Close modal with Escape key
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape') closeStationModal();
+    });
+
+</script>
+}

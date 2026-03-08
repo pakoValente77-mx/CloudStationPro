@@ -1,0 +1,595 @@
+@{
+    ViewData["Title"] = "Repositorio de Documentos";
+    var products = Model as List<CloudStationWeb.Models.DocumentProduct>;
+    var isAdmin = (bool)(ViewData["IsAdmin"] ?? false);
+    var isOperador = (bool)(ViewData["IsOperador"] ?? false);
+    var canUpload = isAdmin || isOperador;
+    var todayUploads = ViewData["TodayUploads"] as List<int> ?? new List<int>();
+    var recentLogs = ViewData["RecentLogs"] as List<CloudStationWeb.Models.DocumentAuditLog> ?? new();
+    var today = (DateTime)(ViewData["Today"] ?? DateTime.UtcNow.Date);
+    var pendingProducts = products?.Where(p => p.RequiredDaily && !todayUploads.Contains(p.Id)).ToList() ?? new();
+}
+
+@section Styles {
+<style>
+    .doc-page {
+        padding: 30px 40px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 28px;
+    }
+
+    .page-header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .page-header h1 .icon-circle {
+        width: 40px; height: 40px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+
+    .header-actions { display: flex; gap: 10px; }
+
+    .btn-glass {
+        padding: 10px 18px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: rgba(255,255,255,0.7);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+
+    .btn-glass:hover {
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+    }
+
+    /* Alerts */
+    .alert-banner {
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.2);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    .alert-banner .alert-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .alert-banner h3 { color: #f87171; font-size: 14px; font-weight: 600; margin: 0 0 4px 0; }
+    .alert-banner p { color: rgba(255,255,255,0.5); font-size: 13px; margin: 0; }
+    .alert-banner .product-list { color: #fca5a5; font-weight: 500; }
+
+    /* Success/Error messages */
+    .msg-success {
+        background: rgba(34,197,94,0.08);
+        border: 1px solid rgba(34,197,94,0.2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        color: #86efac;
+        font-size: 13px;
+    }
+
+    .msg-error {
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        color: #fca5a5;
+        font-size: 13px;
+    }
+
+    /* Product Cards Grid */
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 20px;
+        margin-bottom: 32px;
+    }
+
+    .product-card {
+        background: rgba(20,24,33,0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 16px;
+        padding: 24px;
+        transition: all 0.25s;
+        position: relative;
+    }
+
+    .product-card:hover {
+        border-color: rgba(99,102,241,0.3);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .product-card.pending {
+        border-color: rgba(239,68,68,0.3);
+    }
+
+    .product-card .card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+
+    .product-card .product-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .product-card .product-desc {
+        color: rgba(255,255,255,0.4);
+        font-size: 12px;
+        margin-bottom: 16px;
+        line-height: 1.5;
+    }
+
+    .badge {
+        display: inline-flex;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .badge-ok {
+        background: rgba(34,197,94,0.12);
+        color: #86efac;
+    }
+
+    .badge-pending {
+        background: rgba(239,68,68,0.12);
+        color: #f87171;
+        animation: pulse-badge 2s infinite;
+    }
+
+    @@keyframes pulse-badge {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
+    .file-info {
+        background: rgba(255,255,255,0.03);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+    }
+
+    .file-info .label { color: rgba(255,255,255,0.4); font-size: 11px; margin-bottom: 4px; }
+    .file-info .value { color: #fff; font-size: 13px; font-weight: 500; }
+    .file-info .meta { color: rgba(255,255,255,0.35); font-size: 11px; margin-top: 4px; }
+
+    .card-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .btn-action {
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .btn-download {
+        background: rgba(59,130,246,0.12);
+        color: #60a5fa;
+    }
+    .btn-download:hover { background: rgba(59,130,246,0.2); color: #93bbfd; }
+
+    .btn-upload {
+        background: rgba(34,197,94,0.12);
+        color: #86efac;
+    }
+    .btn-upload:hover { background: rgba(34,197,94,0.2); color: #a7f3d0; }
+
+    .btn-history {
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.6);
+    }
+    .btn-history:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .no-file {
+        color: rgba(255,255,255,0.3);
+        font-size: 13px;
+        font-style: italic;
+        padding: 14px;
+        text-align: center;
+    }
+
+    /* Recent Activity */
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .activity-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .activity-table th {
+        text-align: left;
+        padding: 10px 14px;
+        color: rgba(255,255,255,0.4);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .activity-table td {
+        padding: 10px 14px;
+        font-size: 13px;
+        color: rgba(255,255,255,0.7);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .action-badge {
+        display: inline-flex;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .action-upload { background: rgba(34,197,94,0.12); color: #86efac; }
+    .action-replace { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .action-download { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+    /* Upload Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-card {
+        background: rgba(20,25,40,0.95);
+        backdrop-filter: blur(40px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 32px;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+    }
+
+    .modal-card h3 {
+        color: #fff;
+        font-size: 18px;
+        margin-bottom: 20px;
+    }
+
+    .modal-card label {
+        color: rgba(255,255,255,0.6);
+        font-size: 13px;
+        font-weight: 500;
+        display: block;
+        margin-bottom: 6px;
+    }
+
+    .modal-card select,
+    .modal-card input[type="file"],
+    .modal-card textarea {
+        width: 100%;
+        padding: 10px 14px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: #fff;
+        font-size: 13px;
+        margin-bottom: 16px;
+        outline: none;
+    }
+
+    .modal-card select option { background: #1a1f2e; }
+
+    .modal-card textarea {
+        resize: vertical;
+        min-height: 60px;
+        font-family: inherit;
+    }
+
+    .modal-btns {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 8px;
+    }
+
+    .btn-primary {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .btn-cancel {
+        padding: 10px 20px;
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.6);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+</style>
+}
+
+<div class="doc-page">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>
+            <span class="icon-circle">📁</span>
+            Repositorio de Documentos
+        </h1>
+        <div class="header-actions">
+            @if (isAdmin)
+            {
+                <a href="@Url.Action("AuditLog")" class="btn-glass"><i class="clipboard list icon"></i> Bitácora</a>
+                <a href="@Url.Action("ManageProducts")" class="btn-glass"><i class="cog icon"></i> Productos</a>
+                <a href="@Url.Action("StorageSettings")" class="btn-glass"><i class="folder icon"></i> 📂 Almacenamiento</a>
+            }
+            @if (canUpload)
+            {
+                <button class="btn-glass" onclick="document.getElementById('uploadModal').classList.add('active')" style="background: linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; border:none;">
+                    <i class="upload icon"></i> Subir Documento
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Messages -->
+    @if (TempData["Success"] != null)
+    {
+        <div class="msg-success">✅ @TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="msg-error">❌ @TempData["Error"]</div>
+    }
+
+    <!-- Alert Banner for missing documents -->
+    @if (canUpload && pendingProducts.Any())
+    {
+        <div class="alert-banner">
+            <span class="alert-icon">⚠️</span>
+            <div>
+                <h3>Documentos Pendientes del Día</h3>
+                <p>Los siguientes productos no han sido subidos hoy:
+                    <span class="product-list">@string.Join(", ", pendingProducts.Select(p => p.Name))</span>
+                </p>
+            </div>
+        </div>
+    }
+
+    <!-- Product Cards -->
+    <div class="products-grid">
+        @if (products != null)
+        {
+            @foreach (var product in products)
+            {
+                var latest = product.Entries.FirstOrDefault(e => e.IsLatest);
+                var isPending = product.RequiredDaily && !todayUploads.Contains(product.Id);
+
+                <div class="product-card @(isPending ? "pending" : "")">
+                    <div class="card-top">
+                        <span class="product-name">@product.Name</span>
+                        @if (isPending)
+                        {
+                            <span class="badge badge-pending">⏳ Pendiente</span>
+                        }
+                        else if (todayUploads.Contains(product.Id))
+                        {
+                            <span class="badge badge-ok">✓ Al día</span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(product.Description))
+                    {
+                        <div class="product-desc">@product.Description</div>
+                    }
+
+                    @if (latest != null)
+                    {
+                        <div class="file-info">
+                            <div class="label">Último archivo</div>
+                            <div class="value" style="font-family:monospace;">@latest.StoredFileName</div>
+                            <div class="meta">
+                                Original: @latest.FileName • Subido por @latest.UploadedBy?.FullName • @latest.UploadedAt.ToString("dd/MM/yyyy HH:mm") UTC
+                                • @FormatSize(latest.FileSize)
+                            </div>
+                        </div>
+
+                        <div class="card-actions">
+                            <a href="@Url.Action("Download", new { id = latest.Id })" class="btn-action btn-download">
+                                <i class="download icon"></i> Descargar
+                            </a>
+                            <a href="@Url.Action("History", new { id = product.Id })" class="btn-action btn-history">
+                                <i class="history icon"></i> Historial
+                            </a>
+                            @if (canUpload)
+                            {
+                                <button class="btn-action btn-upload" onclick="openUpload(@product.Id, '@product.Name')">
+                                    <i class="upload icon"></i> Reemplazar
+                                </button>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="no-file">No se ha subido ningún archivo aún</div>
+                        <div class="card-actions">
+                            <a href="@Url.Action("History", new { id = product.Id })" class="btn-action btn-history">
+                                <i class="history icon"></i> Historial
+                            </a>
+                            @if (canUpload)
+                            {
+                                <button class="btn-action btn-upload" onclick="openUpload(@product.Id, '@product.Name')">
+                                    <i class="upload icon"></i> Subir
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Recent Activity -->
+    @if (recentLogs.Any())
+    {
+        <div class="section-title"><i class="clock outline icon"></i> Actividad Reciente</div>
+        <div class="glass-panel" style="overflow-x: auto; margin-bottom: 30px;">
+            <table class="activity-table">
+                <thead>
+                    <tr>
+                        <th>Acción</th>
+                        <th>Producto</th>
+                        <th>Usuario</th>
+                        <th>Detalles</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in recentLogs)
+                    {
+                        var actionClass = log.Action switch {
+                            "Upload" => "action-upload",
+                            "Replace" => "action-replace",
+                            "Download" => "action-download",
+                            _ => ""
+                        };
+                        var actionLabel = log.Action switch {
+                            "Upload" => "Subida",
+                            "Replace" => "Reemplazo",
+                            "Download" => "Descarga",
+                            _ => log.Action
+                        };
+
+                        <tr>
+                            <td><span class="action-badge @actionClass">@actionLabel</span></td>
+                            <td>@log.Product?.Name</td>
+                            <td>@log.UserName</td>
+                            <td style="color: rgba(255,255,255,0.4);">@log.Details</td>
+                            <td>@log.Timestamp.ToString("dd/MM/yyyy HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Upload Modal -->
+@if (canUpload)
+{
+    <div id="uploadModal" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('active')">
+        <div class="modal-card">
+            <h3>📤 Subir Documento</h3>
+            <form method="post" asp-action="Upload" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <label>Producto</label>
+                <select name="productId" id="uploadProductSelect" required>
+                    <option value="">— Seleccionar producto —</option>
+                    @if (products != null)
+                    {
+                        @foreach (var p in products)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    }
+                </select>
+
+                <label>Archivo Excel (.xlsx, .xls, .xlsm)</label>
+                <input type="file" name="file" accept=".xlsx,.xls,.xlsm" required />
+
+                <label>Notas (opcional)</label>
+                <textarea name="notes" placeholder="Ej: Versión corregida del reporte..."></textarea>
+
+                <div class="modal-btns">
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn-primary">Subir Archivo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    function openUpload(productId, productName) {
+        document.getElementById('uploadProductSelect').value = productId;
+        document.getElementById('uploadModal').classList.add('active');
+    }
+</script>
+}
+
+@functions {
+    string FormatSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1) { order++; size /= 1024; }
+        return $"{size:0.##} {sizes[order]}";
+    }
+}

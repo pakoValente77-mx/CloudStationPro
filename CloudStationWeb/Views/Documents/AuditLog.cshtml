@@ -1,0 +1,221 @@
+@{
+    ViewData["Title"] = "Bitácora de Documentos";
+    var logs = Model as List<CloudStationWeb.Models.DocumentAuditLog> ?? new();
+    var products = ViewData["Products"] as List<CloudStationWeb.Models.DocumentProduct> ?? new();
+    var selectedProductId = ViewData["SelectedProductId"] as int?;
+    var selectedAction = ViewData["SelectedAction"] as string;
+    var currentPage = (int)(ViewData["CurrentPage"] ?? 1);
+    var totalPages = (int)(ViewData["TotalPages"] ?? 1);
+}
+
+@section Styles {
+<style>
+    .audit-page {
+        padding: 30px 40px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+    }
+
+    .page-header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+
+    .btn-back {
+        padding: 10px 18px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: rgba(255,255,255,0.6);
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+
+    .btn-back:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .filters {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .filters select {
+        padding: 8px 14px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: #fff;
+        font-size: 13px;
+    }
+
+    .filters select option { background: #1a1f2e; }
+
+    .filters .btn-filter {
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .audit-table th {
+        text-align: left;
+        padding: 10px 14px;
+        color: rgba(255,255,255,0.4);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .audit-table td {
+        padding: 10px 14px;
+        font-size: 13px;
+        color: rgba(255,255,255,0.7);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .action-badge {
+        display: inline-flex;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .action-upload { background: rgba(34,197,94,0.12); color: #86efac; }
+    .action-replace { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .action-download { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 20px;
+    }
+
+    .pagination a, .pagination span {
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .pagination a {
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.6);
+    }
+
+    .pagination a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .pagination .active {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+    }
+</style>
+}
+
+<div class="audit-page">
+    <div class="page-header">
+        <h1>📋 Bitácora de Documentos</h1>
+        <a href="@Url.Action("Index")" class="btn-back">← Volver</a>
+    </div>
+
+    <form method="get" class="filters">
+        <select name="productId">
+            <option value="">Todos los productos</option>
+            @foreach (var p in products)
+            {
+                var sel = selectedProductId == p.Id ? " selected" : "";
+                <option value="@p.Id" selected="@(selectedProductId == p.Id ? "selected" : null)">@p.Name</option>
+            }
+        </select>
+
+        <select name="action">
+            <option value="">Todas las acciones</option>
+            <option value="Upload" selected="@(selectedAction == "Upload" ? "selected" : null)">Subida</option>
+            <option value="Replace" selected="@(selectedAction == "Replace" ? "selected" : null)">Reemplazo</option>
+            <option value="Download" selected="@(selectedAction == "Download" ? "selected" : null)">Descarga</option>
+        </select>
+
+        <button type="submit" class="btn-filter">Filtrar</button>
+    </form>
+
+    <div class="glass-panel" style="overflow-x: auto;">
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Acción</th>
+                    <th>Producto</th>
+                    <th>Usuario</th>
+                    <th>Detalles</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var log in logs)
+                {
+                    var actionClass = log.Action switch {
+                        "Upload" => "action-upload",
+                        "Replace" => "action-replace",
+                        "Download" => "action-download",
+                        _ => ""
+                    };
+                    var actionLabel = log.Action switch {
+                        "Upload" => "Subida",
+                        "Replace" => "Reemplazo",
+                        "Download" => "Descarga",
+                        _ => log.Action
+                    };
+
+                    <tr>
+                        <td>@log.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                        <td><span class="action-badge @actionClass">@actionLabel</span></td>
+                        <td>@log.Product?.Name</td>
+                        <td>@log.UserName</td>
+                        <td style="color: rgba(255,255,255,0.4);">@log.Details</td>
+                    </tr>
+                }
+                @if (!logs.Any())
+                {
+                    <tr>
+                        <td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:40px;">
+                            No hay registros en la bitácora.
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (totalPages > 1)
+    {
+        <div class="pagination">
+            @for (var i = 1; i <= totalPages; i++)
+            {
+                if (i == currentPage)
+                {
+                    <span class="active">@i</span>
+                }
+                else
+                {
+                    <a href="@Url.Action("AuditLog", new { productId = selectedProductId, action = selectedAction, page = i })">@i</a>
+                }
+            }
+        </div>
+    }
+</div>

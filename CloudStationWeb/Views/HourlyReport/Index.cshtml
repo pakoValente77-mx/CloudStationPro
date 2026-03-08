@@ -1,0 +1,1011 @@
+@{
+    ViewData["Title"] = "Cortes Horarios";
+}
+
+@section Styles {
+<style>
+    .hourly-report-container {
+        padding: 15px;
+        max-width: 100%;
+    }
+    
+    /* Compact header with controls in one line (Glassmorphism CFE) */
+    .compact-header {
+        background: rgba(15, 25, 30, 0.85); /* Fondo Dark Slate CFE */
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 12px;
+        padding: 16px 20px; /* Mas padding arriba/abajo */
+        margin-bottom: 15px;
+        border: 1px solid rgba(0, 230, 118, 0.2);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 230, 118, 0.05);
+        display: flex;
+        align-items: center; /* ALINEACION VERTICAL */
+        gap: 16px; /* Separacion de flex groups */
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 1000 !important; /* Extremely high to stay above table headers and scrolling content */
+    }
+
+    /* Ensure dropdown menu also has high z-index */
+    .ui.dropdown .menu {
+        z-index: 1100 !important;
+    }
+    
+    body.dark-theme .compact-header {
+        background: rgba(15, 25, 30, 0.95);
+    }
+    
+    .header-title {
+        font-size: 18px; /* Un poco mas grande */
+        font-weight: 800;
+        color: #e8f5e9;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 15px;
+        text-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+    }
+    
+    .header-title i {
+        font-size: 20px;
+        color: #00e676;
+    }
+    
+    body.dark-theme .header-title {
+        color: #00e676;
+    }
+    
+    .header-controls {
+        display: flex;
+        align-items: flex-end; /* Alinea los inputs en la base */
+        gap: 15px;
+        flex: 1;
+        flex-wrap: wrap;
+    }
+    
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px; /* Espacio entre label e input */
+    }
+    
+    .control-group label {
+        font-size: 9px;
+        font-weight: 700;
+        color: #e8f5e9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0;
+        line-height: 1;
+        text-shadow: 0 0 10px rgba(0, 230, 118, 0.8);
+    }
+    
+    body.dark-theme .control-group label {
+        color: #e8f5e9;
+    }
+    
+    /* Unified styling for all form controls */
+    .control-group select,
+    .control-group input[type="date"],
+    .ui.compact.dropdown {
+        height: 38px; /* Un poco más alto para no cortar texto */
+        padding: 0 14px;
+        border: 1px solid rgba(0, 230, 118, 0.3) !important; /* Borde verde visible desde inicio */
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff !important;
+        background: rgba(255, 255, 255, 0.08) !important; /* Fondo más claro para los inputs */
+        transition: all 0.3s ease;
+        min-width: 150px;
+        cursor: pointer;
+        font-family: inherit;
+        display: flex;
+        align-items: center;
+    }
+    
+    .control-group select:hover,
+    .control-group input[type="date"]:hover,
+    .ui.compact.dropdown:hover {
+        border-color: rgba(0, 230, 118, 0.5) !important;
+    }
+    
+    .control-group select:focus,
+    .control-group input[type="date"]:focus,
+    .ui.compact.dropdown.active {
+        outline: none;
+        border-color: #00e676 !important;
+        box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+    }
+    
+    /* Input date calendar icon invert for dark background */
+    .control-group input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+        opacity: 0.6;
+        cursor: pointer;
+    }
+    .control-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+        opacity: 1;
+    }
+    
+    .control-group input[type="date"]:disabled {
+        background: rgba(255,255,255,0.05) !important;
+        color: #666 !important;
+        cursor: not-allowed;
+        border-color: rgba(255,255,255,0.05) !important;
+        opacity: 0.5;
+    }
+    
+    /* Checkbox Neón styling */
+    .checkboxes-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        height: 38px; /* Debe coincidir con la altura de los dropdowns */
+    }
+
+    .ui.checkbox {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 !important; /* Reseteamos márgenes */
+    }
+    
+    .ui.checkbox label:before {
+        background: rgba(0,0,0,0.5) !important;
+        border: 1px solid rgba(0, 230, 118, 0.4) !important;
+        border-radius: 4px !important;
+        width: 18px !important;
+        height: 18px !important;
+    }
+    
+    .ui.checkbox input:checked ~ label:after {
+        color: #00e676 !important;
+        font-size: 14px !important;
+    }
+    
+    .ui.checkbox input:checked ~ label:before {
+        border-color: #00e676 !important;
+        box-shadow: 0 0 10px rgba(0, 230, 118, 0.6) !important;
+        background: rgba(0, 230, 118, 0.1) !important;
+    }
+    
+    .ui.checkbox label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #e8f5e9 !important;
+        text-transform: none;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        padding-left: 28px !important;
+        padding-top: 1px !important;
+    }
+    
+    body.dark-theme .control-group .ui.checkbox label {
+        color: #e0e0e0 !important;
+    }
+    
+    .header-actions {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+    }
+    
+    /* Button styling CFE (Gold / Neon Green) */
+    .ui.primary.button,
+    .ui.green.button {
+        height: 38px; /* Igual a los dropdowns */
+        padding: 0 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+    }
+    
+    /* Botón Primario (Cargar / Consultar) -> Dorado CFE */
+    .ui.primary.button {
+        background: linear-gradient(135deg, #C2931C 0%, #E6B93F 100%) !important;
+        color: #1a1a1a !important;
+        box-shadow: 0 4px 15px rgba(194, 147, 28, 0.3), inset 0 1px 1px rgba(255,255,255,0.4) !important;
+    }
+    
+    .ui.primary.button:hover {
+        background: linear-gradient(135deg, #d3a42d 0%, #f7ca50 100%) !important;
+        box-shadow: 0 6px 20px rgba(230, 185, 63, 0.6) !important;
+        transform: translateY(-2px);
+    }
+    
+    /* Botón Secundario (Exportar Excel) -> Verde Neón CFE */
+    .ui.green.button {
+        background: linear-gradient(135deg, #007934 0%, #00a84d 100%) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(0, 121, 52, 0.4), inset 0 1px 1px rgba(255,255,255,0.3) !important;
+    }
+    
+    .ui.green.button:hover {
+        background: linear-gradient(135deg, #00a84d 0%, #00e676 100%) !important;
+        box-shadow: 0 6px 20px rgba(0, 230, 118, 0.6) !important;
+        transform: translateY(-2px);
+    }
+    
+    .table-container {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+        overflow-x: auto;
+        background: rgba(15, 25, 30, 0.85); /* Fondo Dark Slate */
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 230, 118, 0.05);
+        border: 1px solid rgba(0, 230, 118, 0.2);
+        position: relative;
+        z-index: 1; /* Stay below compact-header */
+    }
+    
+    body.dark-theme .table-container {
+        background: rgba(15, 25, 30, 0.95);
+    }
+    
+    .hourly-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 11px;
+    }
+    
+    .hourly-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    /* Date group headers (Verde Institutional) */
+    .hourly-table th.date-group {
+        background: #007934; /* Verde Bandera CFE */
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-right: 2px solid rgba(0,0,0,0.5);
+        border-bottom: 2px solid #00e676; /* Accent neon debajo del titulo */
+    }
+    
+    .hourly-table th.date-group:last-child {
+        border-right: none;
+    }
+    
+    /* Hour headers (Slate Lighter) */
+    .hourly-table th.hour-col {
+        background: rgba(30, 45, 50, 0.95);
+        color: #00e676; /* Verde Neon para resaltar las horas */
+        padding: 10px 4px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 10px;
+        white-space: nowrap;
+        border-right: 1px solid rgba(0, 230, 118, 0.15);
+        border-bottom: 1px solid rgba(0, 230, 118, 0.3);
+    }
+    
+    .hourly-table th.hour-col.last-of-group {
+        border-right: 2px solid rgba(0,0,0,0.5);
+    }
+    
+    .hourly-table th.station-col {
+        position: sticky;
+        left: 0;
+        z-index: 11;
+        background: #007934; /* Verde CFE */
+        min-width: 180px;
+        max-width: 180px;
+        text-align: left;
+        padding-left: 20px;
+        color: #fff;
+        border-right: 2px solid #00e676;
+        border-bottom: 2px solid #00e676;
+    }
+    
+    .hourly-table td {
+        padding: 10px 6px;
+        text-align: center;
+        border-bottom: 1px solid rgba(255,255,255,0.05); /* Separador sutil */
+        background: rgba(0, 0, 0, 0.2); /* Oscuro translúcido */
+        color: #e0e0e0;
+    }
+    
+    body.dark-theme .hourly-table td {
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        background: rgba(0, 0, 0, 0.3);
+    }
+    
+    .hourly-table td.station-col {
+        position: sticky;
+        left: 0;
+        background: rgba(15, 25, 30, 0.95); /* Fondo Dark Slate fijo */
+        color: #e8f5e9; /* Texto muy claro casi verde */
+        font-weight: 700;
+        text-align: left;
+        padding-left: 20px;
+        border-right: 2px solid rgba(0, 230, 118, 0.3); /* Borde separador verde neón sutil */
+        min-width: 180px;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 11px;
+    }
+    
+    body.dark-theme .hourly-table td.station-col {
+        background: rgba(15, 25, 30, 0.95);
+        color: #e8f5e9;
+        border-right: 2px solid rgba(0, 230, 118, 0.3);
+    }
+    
+    .hourly-table tbody tr:hover td {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    body.dark-theme .hourly-table tbody tr:hover td {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .hourly-table tbody tr:hover td.station-col {
+        background: rgba(0, 230, 118, 0.1); /* Resaltado verde cfe al hacer hover */
+        border-right-color: #00e676; /* Borde brilla al hover */
+    }
+    
+    body.dark-theme .hourly-table tbody tr:hover td.station-col {
+        background: rgba(0, 230, 118, 0.1);
+        border-right-color: #00e676;
+    }
+    
+    /* Value styling */
+    .value-cell {
+        font-weight: 700;
+        font-size: 11px;
+    }
+    
+    .value-high { color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.4); } /* Soft red neon */
+    .value-medium { color: #E6B93F; text-shadow: 0 0 5px rgba(230, 185, 63, 0.4); } /* Gold CFE */
+    .value-low { color: #60a5fa; text-shadow: 0 0 5px rgba(96, 165, 250, 0.4); } /* Blue */
+    .value-zero { 
+        color: #555; /* Ocultar los ceros o neutros un poco */
+        font-weight: 400;
+    }
+    
+    /* Heatmap styling for Precipitation */
+    .heatmap-none {
+        background: rgba(0, 0, 0, 0.2) !important;
+    }
+    .heatmap-trace {
+        background: rgba(96, 165, 250, 0.15) !important; /* Lluvia ligera: Azul Claro */
+        color: #93c5fd !important;
+    }
+    .heatmap-light {
+        background: rgba(0, 230, 118, 0.2) !important; /* Lluvia moderada: Verde CFE */
+        color: #e8f5e9 !important;
+        font-weight: 800;
+        text-shadow: 0 0 5px rgba(0, 230, 118, 0.5);
+    }
+    .heatmap-moderate {
+        background: rgba(230, 185, 63, 0.3) !important; /* Lluvia fuerte: Dorado CFE */
+        color: #fff !important;
+        font-weight: 800;
+        text-shadow: 0 0 5px rgba(230, 185, 63, 0.6);
+    }
+    .heatmap-heavy {
+        background: rgba(239, 68, 68, 0.4) !important; /* Lluvia torrencial: Rojo Brillante */
+        color: #fff !important;
+        font-weight: 800;
+        text-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+    }
+    
+    /* Cuenca and Subcuenca grouping styles (Gold and Green Variations) */
+    .cuenca-header td {
+        background: rgba(194, 147, 28, 0.8) !important; /* Dorado oscuro */
+        color: white !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 10px 20px !important;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+        border-bottom: 1px solid #E6B93F !important;
+    }
+    
+    .cuenca-header:hover td {
+        background: rgba(194, 147, 28, 0.9) !important;
+    }
+    
+    .subcuenca-header td {
+        background: rgba(0, 121, 52, 0.7) !important; /* Verde oscuro CFE */
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 11px !important;
+        padding: 8px 20px !important;
+        position: sticky;
+        left: 0;
+        z-index: 4;
+        border-bottom: 1px solid rgba(0, 230, 118, 0.4) !important;
+    }
+    
+    .subcuenca-header:hover td {
+        background: rgba(0, 121, 52, 0.9) !important;
+    }
+    
+    .station-row-grouped {
+        font-weight: 600;
+    }
+    
+    
+    /* Info message Stealth / Cyber */
+    .info-message {
+        background: rgba(0,0,0,0.4);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-left: 3px solid #00e676; /* Accent verde */
+        padding: 10px 16px;
+        border-radius: 6px;
+        color: #a5d6a7;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    
+    .info-message i.icon {
+        color: #00e676;
+    }
+    
+    body.dark-theme .info-message {
+        background: rgba(0,0,0,0.4);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-left: 3px solid #00e676;
+        color: #a5d6a7;
+    }
+    
+    /* Semantic UI override menus para dropdowns oscuros */
+    .ui.dropdown .menu {
+        background: rgba(15, 25, 30, 0.95) !important;
+        border: 1px solid rgba(0, 230, 118, 0.3) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.8) !important;
+    }
+    .ui.dropdown .menu > .item {
+        color: #eee !important;
+        font-size: 13px !important;
+        padding: 12px 16px !important;
+    }
+    .ui.dropdown .menu > .item:hover,
+    .ui.dropdown .menu > .item.active,
+    .ui.dropdown .menu > .item.selected {
+        background: rgba(0, 230, 118, 0.15) !important;
+        color: #00e676 !important;
+    }
+    
+    .ui.selection.dropdown .text {
+        font-size: 13px !important;
+        color: #fff !important;
+    }
+
+    /* Quitar defaults de botones antiguos en este css original */
+    /* ... ya reemplazados arriba ... */
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    /* Scrollbar Neón / Oscura */
+    .table-container::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    .table-container::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3);
+        border-radius: 5px;
+    }
+    
+    .table-container::-webkit-scrollbar-thumb {
+        background: rgba(0, 230, 118, 0.4);
+        border-radius: 5px;
+        border: 1px solid rgba(0, 230, 118, 0.2);
+    }
+    
+    .table-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 230, 118, 0.8);
+    }
+</style>
+}
+
+<div class="hourly-report-container">
+    <div class="compact-header">
+        
+        <div class="header-controls">
+            <div class="control-group">
+                <label>Variable</label>
+                <select id="variable-dropdown" class="ui compact dropdown">
+                    <option value="precipitación">Precipitación</option>
+                    <option value="temperatura">Temperatura</option>
+                    <option value="nivel_de_agua">Nivel de Agua</option>
+                    <option value="velocidad_del_viento">Velocidad del Viento</option>
+                    <option value="dirección_del_viento">Dirección del Viento</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Grupo</label>
+                <select id="group-dropdown" class="ui compact dropdown">
+                    <option value="">Todas las Estaciones</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Fecha</label>
+                <input type="date" id="date-picker" class="ui input" />
+            </div>
+            
+            <div class="control-group">
+                <label>Hora de Corte</label>
+                <select id="start-hour-dropdown" class="ui compact dropdown" style="min-width: 100px;">
+                    @for (int i = 0; i < 24; i++)
+                    {
+                        if (i == 6)
+                        {
+                            <option value="@i" selected>@(i.ToString("00")):00</option>
+                        }
+                        else
+                        {
+                            <option value="@i">@(i.ToString("00")):00</option>
+                        }
+                    }
+                </select>
+            </div>
+            
+            <div class="checkboxes-wrapper">
+                <div class="ui checkbox">
+                    <input type="checkbox" id="current-period-toggle">
+                    <label>Periodo Actual</label>
+                </div>
+                
+                <div class="ui checkbox">
+                    <input type="checkbox" id="cfe-only-toggle" checked>
+                    <label>Solo CFE</label>
+                </div>
+                
+                <div class="ui checkbox">
+                    <input type="checkbox" id="group-by-cuenca-toggle">
+                    <label>Agrupar por Cuenca</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-actions">
+            <button id="load-report-btn" class="ui primary button">
+                <i class="refresh icon"></i> Cargar
+            </button>
+            <button id="export-csv-btn" class="ui green button">
+                <i class="file excel icon"></i> Excel
+            </button>
+        </div>
+    </div>
+    
+    <div id="report-info" class="info-message" style="display:none;">
+        <i class="info circle icon"></i>
+        <span id="report-info-text"></span>
+        <span id="last-update" style="margin-left: 20px; color: #00e676; font-size: 12px; opacity: 0.8;"></span>
+    </div>
+
+    <div class="table-container">
+        <table class="hourly-table">
+            <thead id="table-header">
+                <tr>
+                    <th class="station-col" rowspan="2">Estación</th>
+                </tr>
+                <tr id="hour-header-row">
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                <tr>
+                    <td colspan="25" style="text-align:center; padding:40px; color: #a5d6a7; font-weight: 600; font-size: 1.1em;">
+                        <i class="satellite icon" style="font-size: 2em; display:block; margin: 0 auto 10px auto; color: #00e676; opacity: 0.8;"></i>
+                        SELECCIONE UNA VARIABLE Y HAGA CLIC EN "CARGAR"
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay" style="display:none;">
+    <div class="ui active massive loader"></div>
+</div>
+
+@section Scripts {
+<script>
+    let currentData = null;
+    let autoRefreshInterval = null;
+
+    $(document).ready(function() {
+        $('.ui.dropdown').dropdown();
+        $('.ui.checkbox').checkbox();
+        
+        // Set default date to tomorrow (for current period ending tomorrow at 6am)
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        $('#date-picker').val(tomorrow.toISOString().split('T')[0]);
+        
+        // Check "Periodo Actual" by default
+        $('#current-period-toggle').prop('checked', true);
+        $('#date-picker').prop('disabled', true);
+        
+        // Toggle date picker and auto-refresh based on "Periodo Actual"
+        $('#current-period-toggle').change(function() {
+            const isCurrentPeriod = $(this).is(':checked');
+            $('#date-picker').prop('disabled', isCurrentPeriod);
+            if (isCurrentPeriod) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                $('#date-picker').val(tomorrow.toISOString().split('T')[0]);
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+        
+        // Add event listener for grouping toggle
+        $('#group-by-cuenca-toggle').change(function() {
+            // Re-render the table with current data
+            loadReport();
+        });
+        
+        // Cargar reporte automáticamente al cambiar selectores
+        $('#variable-dropdown, #group-dropdown').change(function() {
+            loadReport();
+        });
+        
+        $('#load-report-btn').click(loadReport);
+        $('#export-csv-btn').click(exportExcel);
+        
+        // Load groups via AJAX first, then trigger loadReport()
+        $.ajax({
+            url: '/HourlyReport/GetGroups',
+            method: 'GET',
+            success: function(groups) {
+                const dropdown = $('#group-dropdown');
+                
+                // Add default "All Stations" option first
+                dropdown.empty();
+                dropdown.append('<option value="">Todas las estaciones</option>');
+                
+                groups.forEach(function(g) {
+                    dropdown.append(`<option value="${g.id}">${g.nombre}</option>`);
+                });
+                
+                // Initialize Semantic UI dropdown normally
+                dropdown.dropdown('refresh');
+                
+                // Read last selected group from localStorage
+                const lastSelectedId = localStorage.getItem('lastSelectedHourlyGroup');
+                if (lastSelectedId) {
+                    dropdown.dropdown('set selected', lastSelectedId);
+                } else {
+                    dropdown.dropdown('set selected', ''); // Todas
+                }
+                
+                // Auto-load on page load only after groups are ready
+                loadReport();
+                
+                // Start auto-refresh if periodo actual is checked
+                if ($('#current-period-toggle').is(':checked')) {
+                    startAutoRefresh();
+                }
+            },
+            error: function(xhr) {
+                console.error("No se pudieron cargar los grupos", xhr);
+                // Even on error, trigger initial load for "Todas"
+                loadReport();
+            }
+        });
+    });
+    
+    function startAutoRefresh() {
+        stopAutoRefresh(); // Clear any existing interval
+        // Refresh every 60 seconds (1 minute)
+        autoRefreshInterval = setInterval(function() {
+            if ($('#current-period-toggle').is(':checked')) {
+                loadReport();
+            }
+        }, 60000); // 60 seconds
+    }
+    
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+    
+    function updateLastUpdateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('es-MX', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        $('#last-update').text(`Última actualización: ${timeString}`);
+    }
+
+    function loadReport() {
+        const variable = $('#variable-dropdown').val();
+        const startHour = parseInt($('#start-hour-dropdown').val());
+        const onlyCfe = $('#cfe-only-toggle').is(':checked');
+        const isCurrentPeriod = $('#current-period-toggle').is(':checked');
+        const groupId = $('#group-dropdown').val();
+        
+        // Save current selection to localStorage
+        localStorage.setItem('lastSelectedHourlyGroup', groupId || '');
+        
+        // Build request data
+        const requestData = { 
+            variable: variable, 
+            startHour: startHour, 
+            onlyCfe: onlyCfe 
+        };
+        
+        // If a specific group is selected, add it to request
+        if (groupId) {
+            requestData.groupId = parseInt(groupId);
+        }
+        
+        // Only send date if NOT using current period
+        if (!isCurrentPeriod) {
+            const selectedDate = $('#date-picker').val();
+            if (selectedDate) {
+                requestData.date = selectedDate;
+            }
+        }
+
+        $('#loading-overlay').show();
+
+        $.ajax({
+            url: '/HourlyReport/GetHourlyReport',
+            method: 'GET',
+            data: requestData,
+            success: function(data) {
+                currentData = data;
+                renderTable(data);
+                updateInfo(data);
+                updateLastUpdateTime(); // Update timestamp
+                $('#loading-overlay').hide();
+            },
+            error: function(xhr) {
+                alert('Error al cargar el reporte: ' + (xhr.responseJSON?.error || 'Error desconocido'));
+                $('#loading-overlay').hide();
+            }
+        });
+    }
+
+    function renderTable(data) {
+        const headerRow = $('#table-header tr:first');
+        const hourRow = $('#hour-header-row');
+        const body = $('#table-body');
+
+        // Clear existing headers except station column
+        headerRow.find('th:not(.station-col)').remove();
+        hourRow.empty();
+        body.empty();
+
+        if (!data.stations || data.stations.length === 0) {
+            body.html('<tr><td colspan="25" style="text-align:center; padding:40px; color: #a5d6a7;">No hay datos disponibles</td></tr>');
+            return;
+        }
+
+        const startTime = new Date(data.startTime);
+        const isPrecipitation = data.variable.toLowerCase().includes('precipitación');
+        
+        // Group hours by date
+        const dateGroups = {};
+        for (let i = 1; i <= 24; i++) {
+            const hourTime = new Date(startTime.getTime() + i * 60 * 60 * 1000);
+            const dateKey = hourTime.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+            
+            if (!dateGroups[dateKey]) {
+                dateGroups[dateKey] = [];
+            }
+            dateGroups[dateKey].push({
+                hour: hourTime.getHours(),
+                index: i
+            });
+        }
+        
+        // Create date group headers
+        Object.keys(dateGroups).forEach((dateKey, groupIndex) => {
+            const hoursInGroup = dateGroups[dateKey].length;
+            headerRow.append(`<th class="date-group" colspan="${hoursInGroup}">${dateKey}</th>`);
+        });
+        
+        // Create hour headers
+        let currentGroupIndex = 0;
+        const groupKeys = Object.keys(dateGroups);
+        
+        for (let i = 1; i <= 24; i++) {
+            const hourTime = new Date(startTime.getTime() + i * 60 * 60 * 1000);
+            const hour = hourTime.getHours();
+            const hourLabel = hour.toString().padStart(2, '0') + ':00';
+            
+            // Check if this is the last hour of current group
+            const dateKey = hourTime.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+            const isLastOfGroup = (i === 24 || 
+                new Date(startTime.getTime() + (i + 1) * 60 * 60 * 1000).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) !== dateKey);
+            
+            const lastClass = isLastOfGroup ? ' last-of-group' : '';
+            hourRow.append(`<th class="hour-col${lastClass}">${hourLabel}</th>`);
+        }
+
+        // Check if grouping is enabled
+        const isGrouped = $('#group-by-cuenca-toggle').is(':checked');
+        
+        if (isGrouped) {
+            // Group stations by Cuenca and Subcuenca
+            const grouped = {};
+            data.stations.forEach(station => {
+                const cuenca = station.cuenca || 'Sin Cuenca';
+                const subcuenca = station.subcuenca || 'Sin Subcuenca';
+                
+                if (!grouped[cuenca]) grouped[cuenca] = {};
+                if (!grouped[cuenca][subcuenca]) grouped[cuenca][subcuenca] = [];
+                
+                grouped[cuenca][subcuenca].push(station);
+            });
+
+            // Render grouped rows
+            Object.keys(grouped).sort().forEach(cuenca => {
+                // Add Cuenca header row
+                let cuencaRow = `<tr class="cuenca-header"><td class="station-col" colspan="25">${cuenca}</td></tr>`;
+                body.append(cuencaRow);
+                
+                Object.keys(grouped[cuenca]).sort().forEach(subcuenca => {
+                    // Add Subcuenca header row
+                    let subcuencaRow = `<tr class="subcuenca-header"><td class="station-col" colspan="25">&nbsp;&nbsp;${subcuenca}</td></tr>`;
+                    body.append(subcuencaRow);
+                    
+                    // Add station rows
+                    grouped[cuenca][subcuenca].forEach(station => {
+                        renderStationRow(station, startTime, isPrecipitation, body, '&nbsp;&nbsp;&nbsp;&nbsp;');
+                    });
+                });
+            });
+        } else {
+            // Render flat list (ungrouped)
+            data.stations.forEach(station => {
+                renderStationRow(station, startTime, isPrecipitation, body, '');
+            });
+        }
+    }
+    
+    function renderStationRow(station, startTime, isPrecipitation, body, indent) {
+        const cotaIcon = station.hasCota ? ' <i class="bullseye icon" title="Valores calibrados con Cota" style="color:#ff9800;"></i>' : '';
+        let row = `<tr><td class="station-col" title="${station.stationName}">${indent}${station.stationName}${cotaIcon}</td>`;
+
+        const valueMap = {};
+        station.hourlyValues.forEach(hv => {
+            const hour = new Date(hv.hour).getHours();
+            valueMap[hour] = { value: hv.value, isValid: hv.isValid };
+        });
+
+        // Fill in all 24 hours
+        for (let i = 1; i <= 24; i++) {
+            const hourTime = new Date(startTime.getTime() + i * 60 * 60 * 1000);
+            const hour = hourTime.getHours();
+            const dataPoint = valueMap[hour];
+            const value = dataPoint ? dataPoint.value : null;
+            const isValid = dataPoint ? dataPoint.isValid : true;
+
+            const colorClass = getValueColorClass(value, isPrecipitation);
+
+            if (value !== null && value !== undefined) {
+                const displayValue = isPrecipitation ? value.toFixed(1) : value.toFixed(2);
+                if (!isValid) {
+                     row += `<td class="value-cell ${colorClass}" style="color: #ff5252; text-decoration: line-through; text-shadow: none;" title="Valor Erróneo / Inválido">${displayValue} <i class="exclamation triangle icon" style="font-size: 0.8em; margin-left: 2px;"></i></td>`;
+                } else {
+                     row += `<td class="value-cell ${colorClass}">${displayValue}</td>`;
+                }
+            } else {
+                row += `<td class="value-cell ${colorClass}">-</td>`;
+            }
+        }
+
+        row += '</tr>';
+        body.append(row);
+    }
+
+    function updateInfo(data) {
+        const startDate = new Date(data.startTime);
+        const endDate = new Date(data.endTime);
+        const stationCount = data.stations.filter(s => s.hourlyValues.length > 0).length;
+        
+        const startStr = startDate.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const startTimeStr = (startDate.getHours() + 1).toString().padStart(2, '0') + ':00';
+        const endStr = endDate.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const endTimeStr = endDate.getHours().toString().padStart(2, '0') + ':00';
+        
+        const text = `Mostrando ${stationCount} estaciones con datos de ${data.variable} desde ${startStr} ${startTimeStr} hasta ${endStr} ${endTimeStr}`;
+        $('#report-info-text').text(text);
+        $('#report-info').show();
+    }
+
+    function getValueColorClass(value, isPrecipitation) {
+        if (value === 0 || value === null || value === undefined) {
+            return isPrecipitation ? 'value-zero heatmap-none' : 'value-zero';
+        }
+        
+        if (isPrecipitation) {
+            if (value >= 10) return 'heatmap-heavy';
+            if (value >= 5) return 'heatmap-moderate';
+            if (value >= 0.1) return 'heatmap-light';
+            return 'heatmap-trace';
+        } else {
+            if (value > 30) return 'value-high';
+            if (value > 20) return 'value-medium';
+            return 'value-low';
+        }
+    }
+
+    function exportExcel() {
+        const variable = $('#variable-dropdown').val();
+        const startHour = parseInt($('#start-hour-dropdown').val());
+        const onlyCfe = $('#cfe-only-toggle').is(':checked');
+        const grouped = $('#group-by-cuenca-toggle').is(':checked');
+        const isCurrentPeriod = $('#current-period-toggle').is(':checked');
+        const groupId = $('#group-dropdown').val();
+        
+        // Build URL parameters
+        let params = new URLSearchParams({
+            variable: variable,
+            startHour: startHour,
+            onlyCfe: onlyCfe,
+            grouped: grouped
+        });
+        
+        if (groupId) {
+            params.append('groupId', groupId);
+        }
+        
+        // Only add date if NOT using current period
+        if (!isCurrentPeriod) {
+            const selectedDate = $('#date-picker').val();
+            if (selectedDate) {
+                params.append('date', selectedDate);
+            }
+        }
+        
+        // Trigger download
+        window.location.href = `/HourlyReport/ExportToExcel?${params.toString()}`;
+    }
+</script>
+}
