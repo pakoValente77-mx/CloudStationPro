@@ -1,0 +1,457 @@
+@model List<CloudStationWeb.Models.ApplicationUser>
+@{
+    ViewData["Title"] = "Administración de Usuarios";
+    var userRoles = ViewBag.UserRoles as Dictionary<string, IList<string>>;
+    var roles = ViewBag.Roles as List<string>;
+}
+
+@section Styles {
+<style>
+    .admin-container {
+        padding: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+        overflow: auto;
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .admin-header h2 {
+        font-size: 22px;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .admin-header h2 i { color: #3b82f6; }
+
+    .btn-new-user {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+
+    .btn-new-user:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,0.3); }
+
+    .alert-success, .alert-error {
+        padding: 12px 18px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16,185,129,0.3);
+        color: #6ee7b7;
+    }
+
+    .alert-error {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239,68,68,0.3);
+        color: #fca5a5;
+    }
+
+    .users-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .users-table thead th {
+        padding: 14px 18px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: rgba(255,255,255,0.5);
+        background: rgba(255,255,255,0.03);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .users-table tbody td {
+        padding: 14px 18px;
+        font-size: 14px;
+        color: rgba(255,255,255,0.85);
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .users-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .users-table tbody tr:hover {
+        background: rgba(255,255,255,0.03);
+    }
+
+    .role-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .role-Administrador { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+    .role-Operador { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+    .role-Visualizador { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+
+    .status-active { color: #10b981; }
+    .status-inactive { color: #ef4444; }
+
+    .action-btn {
+        padding: 6px 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.05);
+        color: rgba(255,255,255,0.7);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: 'Inter';
+        margin-right: 4px;
+    }
+
+    .action-btn:hover { background: rgba(255,255,255,0.1); }
+    .action-btn.danger { border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+    .action-btn.danger:hover { background: rgba(239,68,68,0.15); }
+
+    /* Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-card {
+        background: rgba(20, 24, 33, 0.95);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 18px;
+        padding: 36px;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        animation: modalIn 0.3s ease;
+    }
+
+    @@keyframes modalIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-card h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .modal-card h3 i { color: #3b82f6; }
+
+    .modal-group {
+        margin-bottom: 16px;
+    }
+
+    .modal-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.7);
+        margin-bottom: 6px;
+    }
+
+    .modal-group input, .modal-group select {
+        width: 100%;
+        padding: 10px 14px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: #fff;
+        font-family: 'Inter';
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .modal-group select option { background: #1a1f2e; color: #fff; }
+
+    .modal-group input:focus, .modal-group select:focus {
+        border-color: rgba(59,130,246,0.5);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 24px;
+    }
+
+    .modal-btn {
+        padding: 10px 22px;
+        border-radius: 10px;
+        font-family: 'Inter';
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+    }
+
+    .modal-btn.cancel {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+    }
+
+    .modal-btn.submit {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+    }
+
+    .modal-btn:hover { transform: translateY(-1px); }
+
+    @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+}
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h2><i class="users cog icon"></i>Administración de Usuarios</h2>
+        <button class="btn-new-user" onclick="openModal('create')">
+            <i class="plus icon"></i> Nuevo Usuario
+        </button>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert-success"><i class="check circle icon"></i> @TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-error"><i class="exclamation circle icon"></i> @TempData["Error"]</div>
+    }
+
+    <table class="users-table">
+        <thead>
+            <tr>
+                <th>Usuario</th>
+                <th>Nombre Completo</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Creado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in Model)
+            {
+                var role = userRoles![user.Id].FirstOrDefault() ?? "Sin rol";
+                <tr>
+                    <td><strong>@user.UserName</strong></td>
+                    <td>@user.FullName</td>
+                    <td style="color: rgba(255,255,255,0.5);">@user.Email</td>
+                    <td>
+                        <span class="role-badge role-@role">@role</span>
+                    </td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span class="status-active"><i class="circle icon" style="font-size:8px;"></i> Activo</span>
+                        }
+                        else
+                        {
+                            <span class="status-inactive"><i class="circle icon" style="font-size:8px;"></i> Inactivo</span>
+                        }
+                    </td>
+                    <td style="color: rgba(255,255,255,0.4); font-size: 13px;">
+                        @user.CreatedAt.ToString("dd/MM/yyyy")
+                    </td>
+                    <td>
+                        @if (user.UserName != "administrador")
+                        {
+                            <button class="action-btn" onclick="openModal('role', '@user.Id', '@role')" title="Cambiar Rol">
+                                <i class="exchange icon"></i>
+                            </button>
+                            <form method="post" asp-action="ToggleUser" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="userId" value="@user.Id" />
+                                <button type="submit" class="action-btn" title="@(user.IsActive ? "Desactivar" : "Activar")">
+                                    <i class="@(user.IsActive ? "ban" : "check") icon"></i>
+                                </button>
+                            </form>
+                            <button class="action-btn" onclick="openModal('password', '@user.Id')" title="Reset Contraseña">
+                                <i class="key icon"></i>
+                            </button>
+                            <a href="@Url.Action("UserPermissions", "Admin", new { userId = user.Id })" class="action-btn" title="Asignar Productos">
+                                <i class="shield alternate icon"></i>
+                            </a>
+                            <form method="post" asp-action="DeleteUser" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este usuario?')">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="userId" value="@user.Id" />
+                                <button type="submit" class="action-btn danger" title="Eliminar">
+                                    <i class="trash icon"></i>
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span style="color:rgba(255,255,255,0.3); font-size:12px;">Super Admin</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Create User Modal -->
+<div id="createModal" class="modal-overlay">
+    <div class="modal-card">
+        <h3><i class="user plus icon"></i>Nuevo Usuario</h3>
+        <form method="post" asp-action="CreateUser">
+            @Html.AntiForgeryToken()
+            <div class="modal-group">
+                <label>Usuario *</label>
+                <input type="text" name="username" required placeholder="Nombre de usuario" />
+            </div>
+            <div class="modal-group">
+                <label>Nombre Completo</label>
+                <input type="text" name="fullName" placeholder="Nombre completo" />
+            </div>
+            <div class="modal-group">
+                <label>Email</label>
+                <input type="email" name="email" placeholder="correo@ejemplo.com" />
+            </div>
+            <div class="modal-group">
+                <label>Contraseña *</label>
+                <input type="password" name="password" required placeholder="Mínimo 8 caracteres" />
+            </div>
+            <div class="modal-group">
+                <label>Rol *</label>
+                <select name="role" required>
+                    @if (roles != null)
+                    {
+                        @foreach (var r in roles)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeModal('createModal')">Cancelar</button>
+                <button type="submit" class="modal-btn submit">Crear Usuario</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Change Role Modal -->
+<div id="roleModal" class="modal-overlay">
+    <div class="modal-card">
+        <h3><i class="exchange icon"></i>Cambiar Rol</h3>
+        <form method="post" asp-action="ChangeRole">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="userId" id="roleUserId" />
+            <div class="modal-group">
+                <label>Nuevo Rol</label>
+                <select name="newRole" id="roleSelect" required>
+                    @if (roles != null)
+                    {
+                        @foreach (var r in roles)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeModal('roleModal')">Cancelar</button>
+                <button type="submit" class="modal-btn submit">Cambiar Rol</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="passwordModal" class="modal-overlay">
+    <div class="modal-card">
+        <h3><i class="key icon"></i>Restablecer Contraseña</h3>
+        <form method="post" asp-action="ResetPassword">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="userId" id="passwordUserId" />
+            <div class="modal-group">
+                <label>Nueva Contraseña</label>
+                <input type="password" name="newPassword" required placeholder="Mínimo 8 caracteres" />
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeModal('passwordModal')">Cancelar</button>
+                <button type="submit" class="modal-btn submit">Restablecer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function openModal(type, userId, currentRole) {
+        if (type === 'create') {
+            document.getElementById('createModal').classList.add('active');
+        } else if (type === 'role') {
+            document.getElementById('roleUserId').value = userId;
+            document.getElementById('roleSelect').value = currentRole;
+            document.getElementById('roleModal').classList.add('active');
+        } else if (type === 'password') {
+            document.getElementById('passwordUserId').value = userId;
+            document.getElementById('passwordModal').classList.add('active');
+        }
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(m => {
+        m.addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('active');
+        });
+    });
+</script>
+}

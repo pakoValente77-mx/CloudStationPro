@@ -1,0 +1,189 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloudStation Pro - @ViewData["Title"]</title>
+    
+    <!-- Fomantic-UI (Semantic Fork) - Local -->
+    <link rel="stylesheet" href="~/lib/fomantic-ui/dist/semantic.min.css">
+    
+    <!-- Google Fonts: Inter - Local -->
+    <link href="~/lib/fonts/inter/inter.css" rel="stylesheet">
+
+    <!-- Visual Effects CSS -->
+    <link rel="stylesheet" href="~/css/visual-effects.css" />
+
+    <style>
+        body {
+            background-color: #0b0e14;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent body scroll */
+            height: 100vh; /* Full viewport height */
+        }
+
+        /* Main content container */
+        .main-content {
+            height: calc(100vh - 50px); /* Full height minus menu */
+            margin-top: 50px; /* Offset for fixed menu */
+            overflow-y: auto; /* Scroll within content area only */
+            overflow-x: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(20, 24, 33, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+        }
+
+        .ui.inverted.menu {
+            background: rgba(14, 18, 26, 0.9) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            z-index: 9999 !important; /* Ensure menu stays above all panels */
+        }
+
+        /* Mobile Responsive Menu */
+        @@media only screen and (max-width: 991px) {
+            .ui.fixed.menu {
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                white-space: nowrap !important;
+                flex-wrap: nowrap !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            .ui.fixed.menu::-webkit-scrollbar {
+                height: 4px;
+            }
+            .ui.fixed.menu::-webkit-scrollbar-track {
+                background: rgba(0,0,0,0.1);
+            }
+            .ui.fixed.menu::-webkit-scrollbar-thumb {
+                background: rgba(255,255,255,0.2);
+                border-radius: 4px;
+            }
+            .ui.fixed.menu .ui.container {
+                width: max-content !important;
+                display: flex !important;
+                flex-direction: row !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+            .ui.fixed.menu .right.menu {
+                display: flex !important;
+            }
+            .ui.fixed.menu .item {
+                display: flex !important;
+            }
+            
+            /* Give some breathing room for map underneath scrollbar */
+            .main-content {
+                margin-top: 55px; 
+            }
+        }
+
+        #map-container {
+            height: calc(100vh - 50px);
+            width: 100vw;
+        }
+
+        /* Personalización de Highcharts para Dark Mode */
+        .highcharts-container {
+            background: transparent !important;
+        }
+    </style>
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+    <div class="ui inverted borderless fixed large menu">
+        <div class="ui container">
+            <a href="/" class="header item">
+                <i class="bolt blue icon"></i> CloudStation Pro
+            </a>
+            <a href="/Map" class="item">
+                <i class="map icon"></i> Mapa
+            </a>
+            <a href="/HourlyReport" class="item">
+                <i class="clock outline icon"></i> Cortes Horarios
+            </a>
+            <a href="/StationGroup" class="item">
+                <i class="users icon"></i> Mis Grupos
+            </a>
+            <a href="/DataAnalysis" class="item">
+                <i class="chart line icon"></i> Análisis de Datos
+            </a>
+            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GoesMonitoring" ? "active" : "")" href="@Url.Action("Index", "GoesMonitoring")">
+                <i class="satellite icon"></i> Monitoreo GOES
+            </a>
+            
+            @if (User.IsInRole("Administrador"))
+            {
+                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StationAdmin" ? "active" : "")" href="@Url.Action("Index", "StationAdmin")">
+                    <i class="server icon"></i> Administración de Estaciones
+                </a>
+            }
+
+            <a href="/Documents" class="item" id="nav-documents">
+                <i class="folder open icon"></i> Repositorio
+                <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
+            </a>
+            <div class="right menu">
+                <div class="item">
+                    <div class="ui blue label">Real-Time Hybrid Sync</div>
+                </div>
+                @await Html.PartialAsync("_LoginPartial")
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        @RenderBody()
+    </div>
+
+    <!-- Leaflet Maps CSS - Local -->
+    <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
+    
+    <!-- Scripts - Local -->
+    <script src="~/lib/jquery/jquery.min.js"></script>
+    <script src="~/lib/fomantic-ui/dist/semantic.min.js"></script>
+    
+    <!-- Leaflet Maps JS - Local -->
+    <script src="~/lib/leaflet/leaflet.js"></script>
+
+    <!-- Three.js (Para efectos adicionales) - Local -->
+    <script src="~/lib/threejs/three.min.js"></script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+
+    <script>
+        // Document alert badge
+        (function() {
+            function checkDocAlerts() {
+                fetch('/Documents/GetPendingAlerts')
+                    .then(r => r.json())
+                    .then(data => {
+                        var badge = document.getElementById('doc-alert-badge');
+                        if (badge && data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline';
+                        } else if (badge) {
+                            badge.style.display = 'none';
+                        }
+                    })
+                    .catch(() => {});
+            }
+            checkDocAlerts();
+            setInterval(checkDocAlerts, 60000);
+        })();
+    </script>
+
+
+    
+    <!-- Particle Background Component -->
+    <script src="~/js/particle-background.js"></script>
+
+</body>
+</html>

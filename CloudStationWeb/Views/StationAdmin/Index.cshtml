@@ -1,0 +1,118 @@
+@model IEnumerable<CloudStationWeb.Models.EstacionDto>
+@{
+    ViewData["Title"] = "Administración de Estaciones";
+}
+
+<div class="ui container" style="margin-top: 30px; margin-bottom: 50px;">
+    
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="ui positive message">
+            <i class="close icon"></i>
+            <div class="header">Operación Exitosa</div>
+            <p>@TempData["SuccessMessage"]</p>
+        </div>
+    }
+
+    <div class="glass-panel" style="padding: 30px;">
+        <div class="ui grid" style="margin-bottom: 15px;">
+            <div class="eight wide column middle aligned">
+                <h2 class="ui header" style="color: var(--cfe-green); margin:0;">
+                    <i class="server icon"></i>
+                    <div class="content">
+                        Catálogo de Estaciones
+                        <div class="sub header" style="color: #b0b0b0;">Gestiona la telemetría, sensores y bitácora.</div>
+                    </div>
+                </h2>
+            </div>
+            <div class="eight wide column right aligned middle aligned">
+                <div class="ui inverted transparent icon input" style="border: 1px solid rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 20px; width: 300px;">
+                    <input type="text" id="localSearch" placeholder="Buscar nombre o ID..." style="color: white;">
+                    <i class="search icon" style="color: var(--cfe-green);"></i>
+                </div>
+            </div>
+        </div>
+
+        <table class="ui celled selectable inverted table" id="stationsTable">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>ID Asignado</th>
+                    <th>GOES</th>
+                    <th>GPRS</th>
+                    <th>RADIO</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td style="font-weight: bold; color: white;">@item.Nombre</td>
+                        <td style="color: #00ff88;">@(item.IdAsignado ?? "N/A")</td>
+                        <td>
+                            @if(item.GOES) { <div class="ui green horizontal label"><i class="satellite icon"></i>GOES</div> }
+                            else { <div class="ui disabled label">N/A</div> }
+                        </td>
+                        <td>
+                            @if(item.GPRS) { <div class="ui blue horizontal label"><i class="wifi icon"></i>GPRS</div> }
+                            else { <div class="ui disabled label">N/A</div> }
+                        </td>
+                        <td>
+                            @if(item.RADIO) { <div class="ui orange horizontal label"><i class="broadcast tower icon"></i>RADIO</div> }
+                            else { <div class="ui disabled label">N/A</div> }
+                        </td>
+                        <td>
+                            @if (item.Activo)
+                            {
+                                <i class="check circle icon green" title="Activo"></i>
+                            }
+                            else
+                            {
+                                <i class="times circle icon red" title="Inactivo"></i>
+                            }
+                            @if (item.Visible)
+                            {
+                                <i class="eye icon blue" title="Visible"></i>
+                            }
+                            else
+                            {
+                                <i class="eye slash icon grey" title="Oculto"></i>
+                            }
+                        </td>
+                        <td class="center aligned">
+                            <a href="@Url.Action("Edit", "StationAdmin", new { id = item.Id })" class="ui small primary button" style="background-color: var(--cfe-green); color: black;">
+                                <i class="edit icon"></i> Editar
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Dismiss message
+            $('.message .close').on('click', function() {
+                $(this).closest('.message').transition('fade');
+            });
+
+            // Custom local search filter to avoid CDN blocking
+            $('#localSearch').on('keyup', function() {
+                var term = $(this).val().toLowerCase();
+                $('#stationsTable tbody tr').each(function() {
+                    var lineStr = $(this).text().toLowerCase();
+                    if(lineStr.indexOf(term) === -1) {
+                        $(this).hide();
+                    } else {
+                        $(this).show();
+                    }
+                });
+            });
+        });
+    </script>
+}

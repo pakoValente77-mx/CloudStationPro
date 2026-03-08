@@ -1,0 +1,725 @@
+@{
+    ViewData["Title"] = "Mapa de Estaciones";
+}
+
+@section Styles {
+<style>
+    .custom-marker {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #111;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 6px rgba(255,255,255,0.8);
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .custom-marker-triangle {
+        width: 14px;
+        height: 14px;
+        clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    /* Filtro para simular bordes en el clip-path si es necesario o dar drop-shadow */
+    .triangle-wrapper {
+        filter: drop-shadow(0 0 2px rgba(255,255,255,0.8)) drop-shadow(0 0 3px rgba(0,0,0,0.8));
+    }
+    .triangle-wrapper.highlighted {
+        transform: scale(1.8);
+        z-index: 1001 !important;
+        filter: drop-shadow(0 0 6px rgba(0, 195, 255, 0.9));
+    }
+    .custom-marker.highlighted {
+        transform: scale(1.8);
+        z-index: 1001 !important;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
+        border-color: #00c3ff !important;
+        border-width: 3px;
+    }
+    .leaflet-div-icon-container {
+        background: transparent;
+        border: none;
+    }
+    
+    /* Animación de pulso para lluvia activa */
+    @@keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.3);
+            opacity: 0.7;
+        }
+    }
+    
+    .marker-rain-active {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    .glass-panel {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 15px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        transition: all 0.4s ease;
+    }
+    
+    body.light-theme .glass-panel {
+        background: rgba(0, 0, 0, 0.75); /* Más oscuro en día para contrastar con mapa blanco */
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    body.dark-theme .glass-panel {
+        background: rgba(255, 255, 255, 0.1);
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    #real-time-clock, #last-update-text {
+        font-family: monospace;
+        letter-spacing: 1px;
+    }
+    
+    /* Mejorar visibilidad de círculos en mapa claro */
+    body.light-theme .custom-marker {
+        border: 2px solid #333 !important;
+        box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    }
+    /* Estilos Tabla Lateral */
+    .table-container {
+        height: calc(100vh - 200px);
+        overflow-y: auto;
+        margin-top: 15px;
+    }
+    .station-table {
+        width: 100%;
+        border-collapse: collapse;
+        color: white;
+        font-size: 13px;
+    }
+    .station-table th {
+        text-align: left;
+        padding: 10px;
+        border-bottom: 2px solid rgba(255,255,255,0.1);
+        position: sticky;
+        top: 0;
+        background: rgba(0,0,0,0.8);
+        z-index: 1;
+    }
+    .station-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .station-table tr:hover, .station-table tr.highlighted {
+        background: rgba(255,255,255,0.1);
+    }
+    .station-table tr.highlighted {
+        background: rgba(33, 133, 208, 0.3) !important;
+    }
+    .value-cell {
+        font-weight: bold;
+        text-align: right;
+    }
+
+    /* Estilo para las etiquetas permanentes */
+    .custom-tooltip {
+        background: rgba(0, 0, 0, 0.7) !important;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        color: white !important;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        pointer-events: none;
+    }
+    
+    body.light-theme .custom-tooltip {
+        background: rgba(255, 255, 255, 0.85) !important;
+        color: #333 !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .leaflet-tooltip-top:before {
+        border-top-color: rgba(0, 0, 0, 0.7);
+    }
+    
+    body.light-theme .leaflet-tooltip-top:before {
+        border-top-color: rgba(255, 255, 255, 0.85);
+    }
+    
+    .chart-popup-container {
+        width: 320px;
+        height: 260px;
+        overflow: hidden;
+    }
+    .leaflet-popup-content-wrapper {
+        border-radius: 12px;
+        padding: 5px;
+    }
+    .leaflet-popup-content {
+        margin: 10px 15px;
+        line-height: 1.4;
+    }
+</style>
+}
+
+<div style="display: flex; height: 100%; overflow: hidden;">
+    <div id="map-container" style="flex: 1; position: relative;"></div>
+    
+    <!-- Panel Lateral Derecho (Tabla) -->
+    <div class="glass-panel" style="width: 380px; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 1000; overflow: hidden; display: flex; flex-direction: column;">
+        <h3 class="ui inverted header" style="margin-bottom: 15px;">
+            <i class="list icon"></i>
+            Estaciones
+        </h3>
+        
+        <div class="ui inverted transparent left icon input" style="margin-bottom: 10px;">
+            <input type="text" id="station-search" placeholder="Buscar estación...">
+            <i class="search icon"></i>
+        </div>
+
+        <div class="table-container">
+            <table class="station-table" id="station-list-table">
+                <thead>
+                    <tr>
+                        <th>Estación</th>
+                        <th style="width: 80px; text-align: right;">Valor</th>
+                    </tr>
+                </thead>
+                <tbody id="station-table-body">
+                    <!-- Dinámico -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Panel de Control Flotante Izquierdo -->
+<div class="glass-panel" style="position: absolute; top: 70px; left: 20px; width: 280px; padding: 15px; z-index: 1000;">
+    <h3 class="ui inverted header">
+        <i class="filter icon"></i>
+        Visualización
+    </h3>
+    
+    <div class="ui inverted form">
+        <div class="field">
+            <label>Variable del Sensor</label>
+            <div id="variable-dropdown" class="ui inverted selection dropdown">
+                <input type="hidden" name="variable" value="precipitación">
+                <i class="dropdown icon"></i>
+                <div class="default text">Variable</div>
+                <div class="menu">
+                    @foreach (var v in ViewBag.Variables) {
+                        <div class="item" data-value="@v">@v</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="field">
+            <div id="only-cfe-toggle" class="ui inverted checkbox">
+                <input type="checkbox" name="only_cfe" checked>
+                <label>Solo CFE</label>
+            </div>
+        </div>
+
+
+    </div>
+
+    <div id="stat-panel" style="display: none;">
+        <div class="ui inverted statistic mini" style="margin: 0; width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <div class="label" id="avg-label" style="text-transform: none;">Promedio</div>
+            <div class="value" id="avg-value" style="font-size: 1.5rem !important;">--</div>
+        </div>
+    </div>
+</div>
+
+<!-- Leyenda Flotante -->
+<div class="glass-panel" style="position: absolute; bottom: 20px; left: 20px; padding: 15px; z-index: 1000;">
+        <div class="item" id="legend-verde"><i class="circle icon" style="color: #00FF00;"></i> <span class="legend-text">CFE</span></div>
+        <div class="item" id="legend-triangulo"><i class="caret up icon" style="color: #00FF00;"></i> <span class="legend-text">Golfo</span></div>
+        <div class="item" id="legend-azul"><i class="circle icon" style="color: #2185d0;"></i> <span class="legend-text">Conagua</span></div>
+        <div class="item" id="legend-negro"><i class="circle icon" style="color: #333333; border: 1px solid white; border-radius: 50%;"></i> <span class="legend-text">Sin datos</span></div>
+    
+    <div class="ui inverted divider" style="margin: 10px 0;"></div>
+    
+    <div style="font-size: 11px; opacity: 0.9; color: white;">
+        <div id="real-time-clock" style="margin-bottom: 5px;"><i class="clock outline icon"></i> --:--:--</div>
+        <div id="last-update-text"><i class="sync icon"></i> --:--:--</div>
+    </div>
+</div>
+
+<!-- Highcharts scripts - Local -->
+<script src="~/lib/highcharts/highcharts.js" asp-append-version="true"></script>
+<script src="~/lib/highcharts/highcharts-more.js" asp-append-version="true"></script>
+<script src="~/lib/highcharts/modules/exporting.js" asp-append-version="true"></script>
+<script src="~/lib/highcharts/modules/accessibility.js" asp-append-version="true"></script>
+
+@section Scripts {
+    <script>
+        let map;
+        let markersLayer = L.layerGroup();
+        let sensorData = [];
+        let markersMap = {}; // Para búsqueda rápida Marker -> ID
+        let shouldFitBounds = true;
+        window.currentVar = 'precipitación'; // Global state
+
+
+        $(document).ready(function() {
+            $('.ui.dropdown').dropdown({
+                onChange: function(value) {
+                    shouldFitBounds = false; // No mover el mapa al cambiar variable
+                    loadData(value);
+                }
+            });
+
+            $('#only-cfe-toggle').checkbox({
+                onChange: function() {
+                    window.currentVar = $('#variable-dropdown').dropdown('get value') || 'precipitación';
+                    shouldFitBounds = true;
+                    loadData(window.currentVar);
+                }
+            });
+
+            $('#station-search').on('input', function() {
+                const term = $(this).val().toLowerCase();
+                filterTable(term);
+            });
+
+            initMap();
+            
+            // Configurar Highcharts para usar zona horaria de CDMX (UTC-6)
+            Highcharts.setOptions({
+                time: {
+                    timezoneOffset: 6 * 60 // CDMX es UTC-6, offset en minutos
+                }
+            });
+            
+            loadData('precipitación');
+            
+            // Auto-actualizar cada 5 minutos
+            setInterval(function() {
+                window.currentVar = $('#variable-dropdown').dropdown('get value') || 'precipitación';
+                shouldFitBounds = false; // No mover el mapa en auto-actualización
+                loadData(window.currentVar);
+            }, 300000); 
+
+            // Iniciar Reloj
+            setInterval(updateClock, 1000);
+            updateClock();
+            
+            // Aplicar tema inicial y verificar cada minuto
+            updateTheme();
+            setInterval(updateTheme, 60000); // Verificar cada minuto si cambió día/noche
+
+
+        });
+
+        let currentMapTheme = null; // Track current map theme
+
+
+        function updateTheme() {
+            // El mapa de relieve siempre será "light" para apreciar los detalles topográficos.
+            $('body').addClass('light-theme').removeClass('dark-theme');
+            
+            if (map && currentMapTheme !== 'topo') {
+                currentMapTheme = 'topo';
+                updateMapTiles();
+            }
+        }
+        
+        function updateMapTiles() {
+            // Remove existing tile layer
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.TileLayer) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Usar Google Maps Terrain para relieve moderno
+            const tileLayerUrl = 'http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}';
+            
+            L.tileLayer(tileLayerUrl, {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: '&copy; Google Maps'
+            }).addTo(map);
+            
+            // Ensure markers stay on top
+            if (markersLayer) {
+                markersLayer.bringToFront();
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            $('#real-time-clock').html('<i class="clock outline icon"></i> ' + now.toLocaleTimeString());
+        }
+
+        function initMap() {
+            // Inicializar el mapa centrado en México
+            map = L.map('map-container', {
+                center: [23.6345, -102.5528],
+                zoom: 5,
+                zoomControl: false
+            });
+
+            // Añadir control de zoom en la parte inferior derecha
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            currentMapTheme = 'topo';
+            
+            // Mapa Base: Google Maps Terrain (Relieve muy visual e intuitivo)
+            const tileLayerUrl = 'http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}';
+
+            L.tileLayer(tileLayerUrl, {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: '&copy; Google Maps'
+            }).addTo(map);
+
+            markersLayer.addTo(map);
+        }
+
+
+        function loadData(variable) {
+            window.currentVar = variable; // Update global state
+            const onlyCfe = $('#only-cfe-toggle').checkbox('is checked');
+            $.getJSON('/Map/GetMapData', { variable: variable, onlyCfe: onlyCfe }, function(data) {
+                sensorData = data;
+                renderPoints();
+                renderTable();
+                updateStats();
+                
+                const now = new Date();
+                $('#last-update-text').html('<i class="sync icon"></i> ' + now.toLocaleTimeString());
+            });
+        }
+
+        function getIconForVariable(variable) {
+            const v = variable.toLowerCase();
+            if (v.includes('nivel')) return 'tint';
+            if (v.includes('precipitación')) return 'cloud rain';
+            if (v.includes('temperatura')) return 'thermometer half';
+            if (v.includes('velocidad') || v.includes('viento')) return 'wind';
+            if (v.includes('voltaje') || v.includes('batería')) return 'bolt';
+            if (v.includes('radiación')) return 'sun';
+            if (v.includes('presión')) return 'compress arrows alternate';
+            if (v.includes('humedad')) return 'water';
+            return 'dot circle';
+        }
+
+        function renderPoints() {
+            markersLayer.clearLayers();
+            markersMap = {};
+
+            const points = sensorData.filter(d => d.lat && d.lon);
+            const latLngs = [];
+            
+            points.forEach(d => {
+                let color;
+                let statusText;
+                const iconName = getIconForVariable(d.variableActual);
+                
+                latLngs.push([d.lat, d.lon]);
+
+                color = d.valorActual === null ? '#333333' : '#2185d0';
+                statusText = d.valorActual === null ? 'N/A' : (d.valorActual.toFixed(2));
+
+                let shapeClass = 'custom-marker'; // Circle by default
+                let wrapperClass = '';
+
+                // Colorear dependiendo del organismo
+                if (d.valorActual !== null) {
+                    if (d.isGolfoCentro) {
+                        color = '#00FF00'; // Golfo es Verde siempre
+                        shapeClass = 'custom-marker-triangle';
+                        wrapperClass = 'triangle-wrapper';
+                    } else if (d.isCfe) {
+                        color = '#00FF00'; // CFE es Verde siempre
+                    } else {
+                        color = '#2185d0'; // Otras (Conagua, etc) son Azul
+                    }
+                }
+
+                const isRain = d.variableActual.toLowerCase().includes('precipitaci');
+                const rainClass = (isRain && d.valorActual > 0) 
+                    ? 'marker-rain-active' 
+                    : '';
+
+                const customIcon = L.divIcon({
+                    html: `
+                        <div id="wrapper-${d.id}" class="${wrapperClass}">
+                            <div id="marker-${d.id}" class="${shapeClass} ${rainClass}" style="background-color: ${color};"></div>
+                        </div>
+                    `,
+                    className: 'leaflet-div-icon-container',
+                    iconSize: d.isGolfoCentro ? [16, 16] : [14, 14],
+                    iconAnchor: d.isGolfoCentro ? [8, 8] : [7, 7]
+                });
+
+                const marker = L.marker([d.lat, d.lon], { icon: customIcon });
+
+                // Etiqueta al pasar el cursor (hover)
+                const timeText = d.ultimaTx ? 
+                    new Date(d.ultimaTx).toLocaleString('default', {
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        hour12: false
+                    }).replace(',', '') : 'N/A';
+                const labelText = `${d.nombre}<br/><b>${statusText}</b><br/><span style="font-size: 10px; font-weight: normal;">${timeText}</span>`;
+                marker.bindTooltip(labelText, { 
+                    permanent: false, 
+                    direction: 'top', 
+                    offset: [0, -10],
+                    className: 'custom-tooltip'
+                });
+
+                marker.on('mouseover', function() {
+                    highlightRow(d.id, true);
+                    const el = document.getElementById(`wrapper-${d.id}`) || document.getElementById(`marker-${d.id}`);
+                    if (el) el.classList.add('highlighted');
+                });
+
+                marker.on('mouseout', function() {
+                    highlightRow(d.id, false);
+                    const el = document.getElementById(`wrapper-${d.id}`) || document.getElementById(`marker-${d.id}`);
+                    if (el) el.classList.remove('highlighted');
+                });
+
+                const popupId = `popup-chart-${d.id}`;
+                const cotaBadge = d.hasCota ? '<span style="background-color:#ff9800; color:white; padding:2px 4px; border-radius:3px; font-size:9px; margin-left:5px; font-weight:bold;">[COTA APLICADA]</span>' : '';
+
+                const popupContent = `
+                    <div style="color: #333; width: 350px;">
+                        <h4 style="margin: 0 0 8px 0; color: #1a1a1a; font-family: sans-serif;">${d.nombre}</h4>
+                        <div id="${popupId}" class="chart-popup-container">
+                            <i class="notched circle loading icon"></i> Cargando historial...
+                        </div>
+                        <hr/>
+                        <div style="font-size: 11px;">
+                            <b>ID:</b> ${d.id}<br/>
+                            <b>${d.variableActual}:</b> ${statusText} ${cotaBadge}
+                            ${(d.variableActual.toLowerCase().includes('precipitación') && d.valorAuxiliar !== null) ? ` <b>(Hr: ${d.valorAuxiliar.toFixed(2)} mm)</b>` : ''}<br/>
+                            <small><b>Última Tx:</b> ${d.ultimaTx ? new Date(d.ultimaTx).toLocaleString() : 'Nunca'}</small>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                
+                marker.on('popupopen', function() {
+                    loadAndRenderChart(d.id, d.variableActual, popupId);
+                });
+
+                markersLayer.addLayer(marker);
+                markersMap[d.id] = marker;
+            });
+
+            if (shouldFitBounds && latLngs.length > 0) {
+                map.fitBounds(latLngs, { padding: [20, 20], maxZoom: 12 });
+                shouldFitBounds = false;
+            }
+
+
+        }
+
+        function renderTable() {
+            const container = $('#station-table-body');
+            container.empty();
+
+            const normalizedVar = (window.currentVar || 'precipitación').toLowerCase();
+            const showOnlyRain = normalizedVar.includes('precipitacion') || normalizedVar.includes('precipitación');
+
+            sensorData.forEach(d => {
+                // Aplicar el filtro solicitado por el usuario: estaciones con lluvia > 0
+                if (showOnlyRain && (d.valorActual === null || d.valorActual <= 0)) {
+                    return;
+                }
+
+                const val = (d.valorActual === null ? 'N/A' : d.valorActual.toFixed(2));
+                const cotaLabel = d.hasCota ? ' <i class="bullseye icon" title="Valor calculado con cota compensatoria" style="color:#ff9800;"></i>' : '';
+                
+                const row = $(`
+                    <tr id="row-${d.id}" data-id="${d.id}">
+                        <td>${d.nombre}</td>
+                        <td class="value-cell">${val}${cotaLabel}</td>
+                    </tr>
+                `);
+
+                row.on('mouseenter', function() {
+                    const id = $(this).data('id');
+                    const el = document.getElementById(`wrapper-${id}`) || document.getElementById(`marker-${id}`);
+                    if (el) el.classList.add('highlighted');
+                });
+
+                row.on('mouseleave', function() {
+                    const id = $(this).data('id');
+                    const el = document.getElementById(`wrapper-${id}`) || document.getElementById(`marker-${id}`);
+                    if (el) el.classList.remove('highlighted');
+                });
+
+                row.on('click', function() {
+                    const id = $(this).data('id');
+                    const marker = markersMap[id];
+                    if (marker) {
+                        map.setView(marker.getLatLng(), 12);
+                        marker.openPopup();
+                    }
+                });
+
+                container.append(row);
+            });
+        }
+
+        function highlightRow(id, active) {
+            const row = $(`#row-${id}`);
+            if (row.length) {
+                if (active) {
+                    row.addClass('highlighted');
+                    row[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    row.removeClass('highlighted');
+                }
+            }
+        }
+
+        function filterTable(term) {
+            $('#station-table-body tr').each(function() {
+                const name = $(this).find('td:first').text().toLowerCase();
+                $(this).toggle(name.includes(term));
+            });
+        }
+
+        function updateStats() {
+            const values = sensorData.filter(d => d.valorActual !== null).map(d => d.valorActual);
+            if (values.length > 0) {
+                const avg = values.reduce((a, b) => a + b, 0) / values.length;
+                $('#avg-value').text(avg.toFixed(2));
+                $('#stat-panel').fadeIn();
+            } else {
+                $('#stat-panel').fadeOut();
+            }
+        }
+
+        function loadAndRenderChart(stationId, variable, containerId) {
+            $.getJSON('/Map/GetStationHistory', { stationId: stationId, variable: variable }, function(data) {
+                renderHistoryChart(containerId, data, variable);
+            });
+        }
+
+        function renderHistoryChart(containerId, data, variable) {
+            const normalizedVar = variable.toLowerCase();
+            const isRain = normalizedVar.includes('precipitacion') || normalizedVar.includes('precipitación');
+            const isWind = normalizedVar.includes('viento');
+            
+            const commonOptions = {
+                chart: { 
+                    backgroundColor: 'transparent', 
+                    height: 250,
+                    width: 310,
+                    spacingBottom: 20,
+                    spacingTop: 5,
+                    spacingLeft: 5,
+                    spacingRight: 5
+                },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: { 
+                    type: 'datetime',
+                    labels: { style: { fontSize: '10px' } }
+                },
+                yAxis: { 
+                    title: { text: null },
+                    labels: { style: { fontSize: '10px' } }
+                },
+                legend: { enabled: false }
+            };
+
+            if (isWind) {
+                renderWindRose(containerId, data);
+            } else if (isRain) {
+                Highcharts.chart(containerId, {
+                    ...commonOptions,
+                    chart: { ...commonOptions.chart, type: 'column' },
+                    series: [{
+                        name: 'Lluvia',
+                        data: data.map(d => [new Date(d.ts).getTime(), d.valor]),
+                        color: '#2185d0',
+                        borderRadius: 3
+                    }]
+                });
+            } else {
+                Highcharts.chart(containerId, {
+                    ...commonOptions,
+                    chart: { ...commonOptions.chart, type: 'spline' },
+                    series: [{
+                        name: variable,
+                        data: data.map(d => [new Date(d.ts).getTime(), d.valor]),
+                        color: '#00c3ff',
+                        lineWidth: 3,
+                        marker: { enabled: false, states: { hover: { enabled: true } } }
+                    }]
+                });
+            }
+        }
+
+        function renderWindRose(containerId, data) {
+            // Agrupar datos por dirección (8 rumbos)
+            // Filtrar valores nulos o anómalos (sensores dañados suelen dar -13107.2)
+            const speedData = data.filter(d => d.variable === 'velocidad_del_viento' && d.valor !== null && d.valor >= 0);
+            const dirData = data.filter(d => d.variable === 'dirección_del_viento' && d.valor !== null && d.valor >= 0);
+            
+            const roseData = [0,0,0,0,0,0,0,0]; // N, NE, E, SE, S, SW, W, NW
+            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+            speedData.forEach(s => {
+                const d = dirData.find(dd => Math.abs(new Date(dd.ts) - new Date(s.ts)) < 600000);
+                if (d) {
+                    const angle = d.valor;
+                    const index = Math.round(angle / 45) % 8;
+                    roseData[index] += s.valor;
+                }
+            });
+
+            Highcharts.chart(containerId, {
+                chart: { polar: true, type: 'column', backgroundColor: 'transparent', height: 250 },
+                title: { text: null },
+                credits: { enabled: false },
+                pane: { size: '85%' },
+                legend: { enabled: false },
+                xAxis: {
+                    categories: directions,
+                    tickmarkPlacement: 'on',
+                    lineWidth: 0
+                },
+                yAxis: {
+                    min: 0,
+                    endOnTick: false,
+                    showLastLabel: true,
+                    title: { text: null },
+                    labels: { enabled: false },
+                    gridLineInterpolation: 'polygon'
+                },
+                series: [{
+                    name: 'Viento',
+                    data: roseData,
+                    pointPlacement: 'on',
+                    color: '#fbbd08'
+                }]
+            });
+        }
+    </script>
+}

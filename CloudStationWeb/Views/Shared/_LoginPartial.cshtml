@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<CloudStationWeb.Models.ApplicationUser> SignInManager
+@inject UserManager<CloudStationWeb.Models.ApplicationUser> UserManager
+
+@if (SignInManager.IsSignedIn(User))
+{
+    var user = await UserManager.GetUserAsync(User);
+    var isAdmin = User.IsInRole("Administrador");
+
+    if (isAdmin)
+    {
+        <a href="/Admin" class="item" style="color: #fbbf24 !important;">
+            <i class="users cog icon"></i> Admin
+        </a>
+    }
+
+    <div class="ui simple dropdown item">
+        <i class="user circle icon"></i>
+        @(user?.FullName ?? user?.UserName)
+        <i class="dropdown icon"></i>
+        <div class="menu" style="background: rgba(14,18,26,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+            <div class="item" style="color: rgba(255,255,255,0.5); pointer-events: none; font-size: 12px;">
+                <i class="shield icon"></i>@(User.IsInRole("Administrador") ? "Administrador" : User.IsInRole("Operador") ? "Operador" : "Visualizador")
+            </div>
+            <div class="divider" style="border-color: rgba(255,255,255,0.08);"></div>
+            <form method="post" asp-action="Logout" asp-controller="Account" id="logoutForm">
+                @Html.AntiForgeryToken()
+                <a class="item" style="color: #fca5a5;" href="javascript:document.getElementById('logoutForm').submit();">
+                    <i class="sign out icon"></i> Cerrar Sesión
+                </a>
+            </form>
+        </div>
+    </div>
+}
+else
+{
+    <a href="/Account/Login" class="item">
+        <i class="sign in icon"></i> Iniciar Sesión
+    </a>
+}

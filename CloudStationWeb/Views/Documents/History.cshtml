@@ -1,0 +1,556 @@
+@{
+    ViewData["Title"] = "Historial";
+    var entries = Model as List<CloudStationWeb.Models.DocumentEntry> ?? new();
+    var product = ViewData["Product"] as CloudStationWeb.Models.DocumentProduct;
+    var isAdmin = (bool)(ViewData["IsAdmin"] ?? false);
+    var isOperador = (bool)(ViewData["IsOperador"] ?? false);
+    var canUpload = isAdmin || isOperador;
+    var selectedYear = (ViewData["SelectedYear"] as int?) ?? DateTime.UtcNow.Year;
+    var selectedMonth = (ViewData["SelectedMonth"] as int?) ?? DateTime.UtcNow.Month;
+    var availableYears = ViewData["AvailableYears"] as List<int> ?? new();
+    var months = new[] { "Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre" };
+
+    // Build a dictionary of entries by day
+    var entriesByDay = entries
+        .Where(e => e.UploadedAt.Year == selectedYear && e.UploadedAt.Month == selectedMonth)
+        .GroupBy(e => e.UploadedAt.Day)
+        .ToDictionary(g => g.Key, g => g.OrderByDescending(e => e.UploadedAt).First());
+
+    var daysInMonth = DateTime.DaysInMonth(selectedYear, selectedMonth);
+    var firstDayOfWeek = (int)new DateTime(selectedYear, selectedMonth, 1).DayOfWeek;
+    // Adjust to start on Monday (0=Mon, 6=Sun)
+    firstDayOfWeek = firstDayOfWeek == 0 ? 6 : firstDayOfWeek - 1;
+    var today = DateTime.UtcNow;
+    var isCurrentMonth = today.Year == selectedYear && today.Month == selectedMonth;
+
+    // Count stats - coverage is over ALL days of the month
+    var totalDocs = entriesByDay.Count;
+
+    // Ensure current year is in available years
+    if (!availableYears.Contains(DateTime.UtcNow.Year))
+        availableYears.Insert(0, DateTime.UtcNow.Year);
+}
+
+@section Styles {
+<style>
+    .history-page {
+        padding: 24px 32px;
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+
+    .page-header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+    .page-header .subtitle { color: rgba(255,255,255,0.4); font-size: 13px; margin-top: 4px; }
+
+    .btn-back {
+        padding: 10px 18px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: rgba(255,255,255,0.6);
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+    .btn-back:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .btn-upload-hist {
+        padding: 10px 18px;
+        background: rgba(34,197,94,0.12);
+        border: 1px solid rgba(34,197,94,0.2);
+        border-radius: 10px;
+        color: #86efac;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .btn-upload-hist:hover { background: rgba(34,197,94,0.2); }
+
+    /* Navigation controls */
+    .month-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .month-nav .nav-btn {
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        color: rgba(255,255,255,0.6);
+        text-decoration: none;
+        font-size: 16px;
+        transition: all 0.2s;
+    }
+    .month-nav .nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .month-nav .current-month {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+        min-width: 200px;
+        text-align: center;
+    }
+
+    /* Stats */
+    .stats-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        flex: 1;
+        padding: 14px 18px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        text-align: center;
+    }
+
+    .stat-card .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .stat-card .stat-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.4);
+        margin-top: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .stat-help {
+        font-size: 10px;
+        color: rgba(255,255,255,0.25);
+        margin-top: 6px;
+        font-style: italic;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    /* Calendar */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 24px;
+    }
+
+    .day-header {
+        padding: 10px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.35);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .day-cell {
+        position: relative;
+        min-height: 80px;
+        padding: 8px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 10px;
+        transition: all 0.2s;
+    }
+
+    .day-cell:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+    .day-cell.empty { background: transparent; border: none; min-height: 0; }
+    .day-cell.today { border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.05); }
+
+    .day-cell.has-doc {
+        border-color: rgba(34,197,94,0.2);
+        background: rgba(34,197,94,0.04);
+    }
+
+    .day-cell.has-doc:hover {
+        border-color: rgba(34,197,94,0.35);
+        background: rgba(34,197,94,0.08);
+    }
+
+    .day-cell.weekend {
+        background: rgba(139,92,246,0.03);
+        border-color: rgba(139,92,246,0.1);
+    }
+
+    .day-cell.weekend .day-number {
+        color: rgba(196,181,253,0.5);
+    }
+    .day-cell.future { opacity: 0.3; }
+
+    .day-number {
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.5);
+    }
+
+    .day-cell.today .day-number {
+        color: #a5b4fc;
+        background: rgba(99,102,241,0.2);
+        width: 24px; height: 24px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+    }
+
+    .day-cell.has-doc .day-number { color: #86efac; }
+
+    .day-file {
+        margin-top: 6px;
+    }
+
+    .day-file .file-name {
+        font-size: 10px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.7);
+        font-family: monospace;
+        line-height: 1.3;
+        word-break: break-all;
+    }
+
+    .day-file .file-meta {
+        font-size: 9px;
+        color: rgba(255,255,255,0.3);
+        margin-top: 2px;
+    }
+
+    .day-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+    }
+
+    .day-actions a {
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .day-actions .act-view {
+        background: rgba(168,85,247,0.15);
+        color: #c084fc;
+    }
+    .day-actions .act-view:hover { background: rgba(168,85,247,0.25); }
+
+    .day-actions .act-dl {
+        background: rgba(59,130,246,0.15);
+        color: #60a5fa;
+    }
+    .day-actions .act-dl:hover { background: rgba(59,130,246,0.25); }
+
+    .day-cell.missing {
+        border-color: rgba(239,68,68,0.12);
+    }
+
+    .day-cell.missing .day-number { color: rgba(248,113,113,0.5); }
+
+    /* List view for all entries */
+    .entries-section {
+        margin-top: 24px;
+    }
+
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 12px;
+    }
+
+    .entry-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .entry-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 10px;
+        transition: all 0.2s;
+    }
+
+    .entry-row:hover { background: rgba(255,255,255,0.04); }
+
+    .entry-row .entry-info {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .entry-row .entry-date {
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.5);
+        min-width: 90px;
+    }
+
+    .entry-row .entry-file {
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        font-family: monospace;
+    }
+
+    .entry-row .entry-meta {
+        font-size: 11px;
+        color: rgba(255,255,255,0.3);
+    }
+
+    .entry-row .entry-user {
+        font-size: 12px;
+        color: rgba(255,255,255,0.4);
+    }
+
+    .entry-actions { display: flex; gap: 6px; }
+
+    .entry-actions a {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .btn-view {
+        background: rgba(168,85,247,0.12);
+        color: #c084fc;
+    }
+    .btn-view:hover { background: rgba(168,85,247,0.2); }
+
+    .btn-dl {
+        background: rgba(59,130,246,0.12);
+        color: #60a5fa;
+    }
+    .btn-dl:hover { background: rgba(59,130,246,0.2); }
+
+    .badge-latest {
+        display: inline-flex;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        background: rgba(34,197,94,0.12);
+        color: #86efac;
+        margin-left: 8px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: rgba(255,255,255,0.3);
+        font-size: 13px;
+    }
+</style>
+}
+
+<div class="history-page">
+    <div class="page-header">
+        <div>
+            <h1>📋 @product?.Name</h1>
+            <div class="subtitle">
+                Historial de documentos
+                @if (product != null && !string.IsNullOrEmpty(product.FilePrefix))
+                {
+                    <span>• Prefijo: <strong style="color:#a5b4fc;">@product.FilePrefix</strong></span>
+                }
+            </div>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            @if (canUpload)
+            {
+                <button onclick="document.getElementById('uploadHistModal').style.display='flex'" class="btn-upload-hist">
+                    📤 Cargar Histórico
+                </button>
+            }
+            <a href="@Url.Action("Index")" class="btn-back">← Volver</a>
+        </div>
+    </div>
+
+    <!-- Month Navigation -->
+    @{
+        var prevMonth = selectedMonth - 1;
+        var prevYear = selectedYear;
+        if (prevMonth < 1) { prevMonth = 12; prevYear--; }
+        var nextMonth = selectedMonth + 1;
+        var nextYear = selectedYear;
+        if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+    }
+
+    <div class="month-nav">
+        <a href="@Url.Action("History", new { id = product?.Id, year = prevYear, month = prevMonth })" class="nav-btn">‹</a>
+        <div class="current-month">@months[selectedMonth - 1] @selectedYear</div>
+        <a href="@Url.Action("History", new { id = product?.Id, year = nextYear, month = nextMonth })" class="nav-btn">›</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">@totalDocs</div>
+            <div class="stat-label">Documentos del mes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">@daysInMonth</div>
+            <div class="stat-label">Días del mes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color: @(totalDocs >= daysInMonth ? "#86efac" : (totalDocs > 0 ? "#fbbf24" : "#f87171"))">@((totalDocs * 100 / Math.Max(daysInMonth, 1)))%</div>
+            <div class="stat-label">Cobertura</div>
+            <div class="stat-help">Documentos subidos / Total de días</div>
+        </div>
+    </div>
+
+    <!-- Calendar Grid -->
+    <div class="calendar-grid">
+        @foreach (var dayName in new[] { "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom" })
+        {
+            <div class="day-header">@dayName</div>
+        }
+
+        @for (var i = 0; i < firstDayOfWeek; i++)
+        {
+            <div class="day-cell empty"></div>
+        }
+
+        @for (var day = 1; day <= daysInMonth; day++)
+        {
+            var dt = new DateTime(selectedYear, selectedMonth, day);
+            var isWeekend = dt.DayOfWeek == DayOfWeek.Saturday || dt.DayOfWeek == DayOfWeek.Sunday;
+            var isFuture = dt > today.Date;
+            var isToday = isCurrentMonth && day == today.Day;
+            var hasDoc = entriesByDay.ContainsKey(day);
+            var entry = hasDoc ? entriesByDay[day] : null;
+            var isMissing = !hasDoc && !isWeekend && !isFuture;
+
+            var classes = "day-cell";
+            if (isWeekend) classes += " weekend";
+            if (isFuture) classes += " future";
+            if (isToday) classes += " today";
+            if (hasDoc) classes += " has-doc";
+            if (isMissing) classes += " missing";
+
+            <div class="@classes">
+                <div class="day-number">@day</div>
+                @if (hasDoc && entry != null)
+                {
+                    <div class="day-file">
+                        <div class="file-name">@entry.StoredFileName</div>
+                        <div class="file-meta">@entry.UploadedBy?.FullName</div>
+                    </div>
+                    <div class="day-actions">
+                        <a href="@Url.Action("Download", new { id = entry.Id })" class="act-dl">⬇</a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- List view below calendar -->
+    @if (entriesByDay.Any())
+    {
+        <div class="entries-section">
+            <div class="section-title">📄 Documentos de @months[selectedMonth - 1] @selectedYear</div>
+            <div class="entry-list">
+                @foreach (var kv in entriesByDay.OrderByDescending(kv => kv.Key))
+                {
+                    var entry = kv.Value;
+                    var dayStr = entry.UploadedAt.ToString("dd/MM/yyyy");
+                    <div class="entry-row">
+                        <div class="entry-info">
+                            <div class="entry-date">@dayStr</div>
+                            <div>
+                                <span class="entry-file">@entry.StoredFileName</span>
+                                @if (entry.IsLatest) { <span class="badge-latest">Vigente</span> }
+                                <div class="entry-meta">Original: @entry.FileName • @FormatSize(entry.FileSize)</div>
+                            </div>
+                            <div class="entry-user">@entry.UploadedBy?.FullName</div>
+                        </div>
+                        <div class="entry-actions">
+                            <a href="@Url.Action("Download", new { id = entry.Id })" class="btn-dl">⬇ Descargar</a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <p style="font-size: 36px; margin-bottom: 10px;">📭</p>
+            <p>No hay documentos registrados para este mes.</p>
+        </div>
+    }
+</div>
+
+<!-- Upload Historical Modal -->
+@if (canUpload)
+{
+    <div id="uploadHistModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:#1e293b; border-radius:16px; padding:32px; max-width:500px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <h2 style="color:#fff; font-size:20px; margin:0 0 8px 0;">📤 Cargar Reporte Histórico</h2>
+        <p style="color:rgba(255,255,255,0.4); font-size:13px; margin:0 0 24px 0;">Sube un documento con una fecha personalizada</p>
+        
+        <form action="@Url.Action("UploadHistorical")" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="productId" value="@product?.Id" />
+            
+            <div style="margin-bottom:20px;">
+                <label style="display:block; color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:8px; font-weight:500;">Fecha del Reporte</label>
+                <input type="date" name="reportDate" required 
+                       style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; font-size:14px;" />
+            </div>
+            
+            <div style="margin-bottom:24px;">
+                <label style="display:block; color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:8px; font-weight:500;">Archivo Excel (.xlsx)</label>
+                <input type="file" name="file" accept=".xlsx" required 
+                       style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; font-size:14px;" />
+            </div>
+            
+            <div style="display:flex; gap:12px; justify-content:flex-end;">
+                <button type="button" onclick="document.getElementById('uploadHistModal').style.display='none'" 
+                        style="padding:10px 20px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:rgba(255,255,255,0.6); font-size:13px; cursor:pointer;">
+                    Cancelar
+                </button>
+                <button type="submit" 
+                        style="padding:10px 20px; background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); border-radius:8px; color:#86efac; font-size:13px; font-weight:500; cursor:pointer;">
+                    📤 Subir
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+}
+
+@functions {
+    string FormatSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1) { order++; size /= 1024; }
+        return $"{size:0.##} {sizes[order]}";
+    }
+}
