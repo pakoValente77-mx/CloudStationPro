@@ -157,6 +157,29 @@ def setup_database_definitive():
         """)
         cur.execute("SELECT create_hypertable('public.resumen_diario', 'fecha');")
 
+        # 8.5 Tabla lluvia_acumulada (precipitación 24h y periodo actual)
+        print("[*] Creando lluvia_acumulada...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.lluvia_acumulada (
+                id_asignado     CHARACTER VARYING(50) NOT NULL,
+                dcp_id          CHARACTER VARYING(20) NOT NULL,
+                sensor_id       CHARACTER VARYING(20) NOT NULL,
+                variable        CHARACTER VARYING(50),
+                periodo_inicio  TIMESTAMP WITH TIME ZONE NOT NULL,
+                periodo_fin     TIMESTAMP WITH TIME ZONE NOT NULL,
+                tipo_periodo    CHARACTER VARYING(10) NOT NULL,
+                acumulado       REAL DEFAULT 0,
+                horas_con_dato  INTEGER DEFAULT 0,
+                ultima_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                CONSTRAINT lluvia_acumulada_pkey 
+                    PRIMARY KEY (id_asignado, sensor_id, tipo_periodo)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_lluvia_tipo_periodo 
+            ON public.lluvia_acumulada (tipo_periodo);
+        """)
+
         # 9. Tabla ultimas_mediciones
         print("[*] Creando ultimas_mediciones...")
         cur.execute("""

@@ -387,6 +387,35 @@
         font-weight: 400;
     }
     
+    /* Total column styling */
+    .hourly-table th.total-col {
+        background: rgba(194, 147, 28, 0.85);
+        color: #fff;
+        font-weight: 800;
+        font-size: 11px;
+        text-align: center;
+        padding: 10px 8px;
+        border-left: 2px solid #E6B93F;
+        border-bottom: 1px solid #E6B93F;
+        white-space: nowrap;
+        letter-spacing: 0.5px;
+    }
+    
+    .hourly-table td.total-col {
+        background: rgba(194, 147, 28, 0.15) !important;
+        color: #E6B93F;
+        font-weight: 800;
+        font-size: 12px;
+        text-align: center;
+        border-left: 2px solid rgba(194, 147, 28, 0.4);
+        text-shadow: 0 0 8px rgba(230, 185, 63, 0.5);
+        white-space: nowrap;
+    }
+    
+    .hourly-table tbody tr:hover td.total-col {
+        background: rgba(194, 147, 28, 0.25) !important;
+    }
+    
     /* Heatmap styling for Precipitation */
     .heatmap-none {
         background: rgba(0, 0, 0, 0.2) !important;
@@ -554,6 +583,9 @@
                     <option value="nivel_de_agua">Nivel de Agua</option>
                     <option value="velocidad_del_viento">Velocidad del Viento</option>
                     <option value="dirección_del_viento">Dirección del Viento</option>
+                    <option value="voltaje_de_batería">Voltaje de Batería</option>
+                    <option value="radiación_solar">Radiación Solar</option>
+                    <option value="presión_atmosférica">Presión Atmosférica</option>
                 </select>
             </div>
             
@@ -631,7 +663,7 @@
             </thead>
             <tbody id="table-body">
                 <tr>
-                    <td colspan="25" style="text-align:center; padding:40px; color: #a5d6a7; font-weight: 600; font-size: 1.1em;">
+                    <td colspan="26" style="text-align:center; padding:40px; color: #a5d6a7; font-weight: 600; font-size: 1.1em;">
                         <i class="satellite icon" style="font-size: 2em; display:block; margin: 0 auto 10px auto; color: #00e676; opacity: 0.8;"></i>
                         SELECCIONE UNA VARIABLE Y HAGA CLIC EN "CARGAR"
                     </td>
@@ -821,7 +853,7 @@
         body.empty();
 
         if (!data.stations || data.stations.length === 0) {
-            body.html('<tr><td colspan="25" style="text-align:center; padding:40px; color: #a5d6a7;">No hay datos disponibles</td></tr>');
+            body.html('<tr><td colspan="26" style="text-align:center; padding:40px; color: #a5d6a7;">No hay datos disponibles</td></tr>');
             return;
         }
 
@@ -848,6 +880,8 @@
             const hoursInGroup = dateGroups[dateKey].length;
             headerRow.append(`<th class="date-group" colspan="${hoursInGroup}">${dateKey}</th>`);
         });
+        // Total header (spans both header rows)
+        headerRow.append(`<th class="total-col" rowspan="2">TOTAL</th>`);
         
         // Create hour headers
         let currentGroupIndex = 0;
@@ -866,7 +900,6 @@
             const lastClass = isLastOfGroup ? ' last-of-group' : '';
             hourRow.append(`<th class="hour-col${lastClass}">${hourLabel}</th>`);
         }
-
         // Check if grouping is enabled
         const isGrouped = $('#group-by-cuenca-toggle').is(':checked');
         
@@ -886,12 +919,12 @@
             // Render grouped rows
             Object.keys(grouped).sort().forEach(cuenca => {
                 // Add Cuenca header row
-                let cuencaRow = `<tr class="cuenca-header"><td class="station-col" colspan="25">${cuenca}</td></tr>`;
+                let cuencaRow = `<tr class="cuenca-header"><td class="station-col" colspan="26">${cuenca}</td></tr>`;
                 body.append(cuencaRow);
                 
                 Object.keys(grouped[cuenca]).sort().forEach(subcuenca => {
                     // Add Subcuenca header row
-                    let subcuencaRow = `<tr class="subcuenca-header"><td class="station-col" colspan="25">&nbsp;&nbsp;${subcuenca}</td></tr>`;
+                    let subcuencaRow = `<tr class="subcuenca-header"><td class="station-col" colspan="26">&nbsp;&nbsp;${subcuenca}</td></tr>`;
                     body.append(subcuencaRow);
                     
                     // Add station rows
@@ -912,23 +945,30 @@
         const cotaIcon = station.hasCota ? ' <i class="bullseye icon" title="Valores calibrados con Cota" style="color:#ff9800;"></i>' : '';
         let row = `<tr><td class="station-col" title="${station.stationName}">${indent}${station.stationName}${cotaIcon}</td>`;
 
+        // Use date+hour key to avoid cross-day collisions
+        function dtKey(d) { return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'-'+d.getHours(); }
         const valueMap = {};
         station.hourlyValues.forEach(hv => {
-            const hour = new Date(hv.hour).getHours();
-            valueMap[hour] = { value: hv.value, isValid: hv.isValid };
+            valueMap[dtKey(new Date(hv.hour))] = { value: hv.value, isValid: hv.isValid };
         });
 
-        // Fill in all 24 hours
+        // Fill in all 24 hours and calculate total
+        let rowTotal = 0;
+        let hasAnyValue = false;
+        
         for (let i = 1; i <= 24; i++) {
             const hourTime = new Date(startTime.getTime() + i * 60 * 60 * 1000);
-            const hour = hourTime.getHours();
-            const dataPoint = valueMap[hour];
+            const dataPoint = valueMap[dtKey(hourTime)];
             const value = dataPoint ? dataPoint.value : null;
             const isValid = dataPoint ? dataPoint.isValid : true;
 
             const colorClass = getValueColorClass(value, isPrecipitation);
 
             if (value !== null && value !== undefined) {
+                if (isValid) {
+                    rowTotal += value;
+                }
+                hasAnyValue = true;
                 const displayValue = isPrecipitation ? value.toFixed(1) : value.toFixed(2);
                 if (!isValid) {
                      row += `<td class="value-cell ${colorClass}" style="color: #ff5252; text-decoration: line-through; text-shadow: none;" title="Valor Erróneo / Inválido">${displayValue} <i class="exclamation triangle icon" style="font-size: 0.8em; margin-left: 2px;"></i></td>`;
@@ -939,6 +979,10 @@
                 row += `<td class="value-cell ${colorClass}">-</td>`;
             }
         }
+        
+        // Total column
+        const totalDisplay = hasAnyValue ? (isPrecipitation ? rowTotal.toFixed(1) : rowTotal.toFixed(2)) : '-';
+        row += `<td class="total-col">${totalDisplay}</td>`;
 
         row += '</tr>';
         body.append(row);

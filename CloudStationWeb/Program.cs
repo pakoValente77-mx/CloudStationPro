@@ -1,6 +1,7 @@
 using OfficeOpenXml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.StaticFiles;
 using CloudStationWeb.Data;
 using CloudStationWeb.Models;
 
@@ -99,7 +100,15 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
 }
-app.UseStaticFiles();
+
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".kml"] = "application/vnd.google-earth.kml+xml";
+provider.Mappings[".kmz"] = "application/vnd.google-earth.kmz";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider
+});
 
 app.UseRouting();
 

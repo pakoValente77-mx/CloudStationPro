@@ -482,3 +482,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Python virtual environments
+.venv/
+*.zip
+Datos/
+_analyze_excel.py
