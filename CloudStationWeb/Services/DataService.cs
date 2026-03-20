@@ -14,9 +14,11 @@ namespace CloudStationWeb.Services
     {
         private readonly string _sqlServerConn;
         private readonly string _postgresConn;
+        private readonly IConfiguration _configuration;
 
         public DataService(IConfiguration configuration)
         {
+            _configuration = configuration;
             _sqlServerConn = configuration.GetConnectionString("SqlServer") ?? "";
             _postgresConn = configuration.GetConnectionString("PostgreSQL") ?? "";
         }
@@ -65,6 +67,70 @@ namespace CloudStationWeb.Services
                     .GroupBy(m => m.id_asignado!.Trim())
                     .ToDictionary(g => g.Key, g => g.First().dcp_id!.Trim());
 
+                // Load cotas for the stations shown on the map (use measurement timespan for window)
+                var sqlVariable = GetSqlVariableName(variable);
+                var stationIdsForCotas = sqlStations.Select(s => s.IdAsignado).Where(id => !string.IsNullOrEmpty(id));
+                DateTime windowStartUtc = DateTime.UtcNow.AddDays(-30);
+                DateTime windowEndUtc = DateTime.UtcNow.AddDays(1);
+
+                if (postgresMeasurements.Any())
+                {
+                    var minTs = postgresMeasurements.Min(m => m.ts);
+                    var maxTs = postgresMeasurements.Max(m => m.ts);
+                    windowStartUtc = minTs.AddHours(-6);
+                    windowEndUtc = maxTs.AddHours(6);
+                }
+
+                var cotasByStation = await LoadCotasForStationsAsync(stationIdsForCotas, sqlVariable, windowStartUtc, windowEndUtc);
+
+                // Pre-compute bimodal thresholds for stations with significant cota
+                // by querying recent dcp_datos values (needed because ultimas_mediciones has only 1 value)
+                var bimodalThresholds = new Dictionary<string, float>();
+                var stationsWithBigCota = cotasByStation
+                    .Select(kv => new { StationId = kv.Key, Cota = GetEffectiveCota(kv.Key, cotasByStation) })
+                    .Where(x => x.Cota.HasValue && Math.Abs(x.Cota.Value) >= 2.0f)
+                    .ToList();
+
+                if (stationsWithBigCota.Count > 0)
+                {
+                    // Build dcp_id lookup for these stations
+                    var cotaDcpIds = new List<(string stationId, string dcpId, float cotaVal)>();
+                    foreach (var sc in stationsWithBigCota)
+                    {
+                        var st = sqlStations.FirstOrDefault(s => s.IdAsignado == sc.StationId);
+                        if (st == null) continue;
+                        string sid = !string.IsNullOrEmpty(st.IdSatelital)
+                            ? st.IdSatelital
+                            : ((st.IdAsignado != null && idMap.ContainsKey(st.IdAsignado))
+                                ? idMap[st.IdAsignado]
+                                : (st.IdAsignado ?? ""));
+                        if (!string.IsNullOrEmpty(sid))
+                            cotaDcpIds.Add((sc.StationId, sid, sc.Cota!.Value));
+                    }
+
+                    if (cotaDcpIds.Count > 0)
+                    {
+                        var dcpList = cotaDcpIds.Select(x => x.dcpId).Distinct().ToList();
+                        var recentSamples = await pgDb.QueryAsync<(string dcp_id, float valor)>(
+                            @"SELECT dcp_id, valor FROM public.dcp_datos
+                              WHERE dcp_id = ANY(@DcpIds) AND variable = @Var
+                              AND ts >= now() - interval '6 hours'",
+                            new { DcpIds = dcpList.ToArray(), Var = variable });
+
+                        var samplesByDcp = recentSamples.GroupBy(s => s.dcp_id).ToDictionary(g => g.Key, g => g.Select(x => x.valor).ToList());
+
+                        foreach (var (stationId2, dcpId2, cotaVal2) in cotaDcpIds)
+                        {
+                            if (samplesByDcp.TryGetValue(dcpId2, out var vals) && vals.Count >= 4)
+                            {
+                                var thr = ComputeBimodalThreshold(vals, cotaVal2);
+                                if (thr.HasValue)
+                                    bimodalThresholds[stationId2] = thr.Value;
+                            }
+                        }
+                    }
+                }
+
                 // Unir datos y filtrar valores malos
                 var result = sqlStations.Select(s => {
                     string searchId = !string.IsNullOrEmpty(s.IdSatelital) 
@@ -76,9 +142,9 @@ namespace CloudStationWeb.Services
                     var status = postgresStatuses.FirstOrDefault(p => p.dcp_id == searchId);
                     var measure = postgresMeasurements.FirstOrDefault(p => p.dcp_id == searchId);
 
-
                     float? validatedValue = measure?.valor;
-                    
+                    var measureTs = measure?.ts;
+
                     if (validatedValue.HasValue)
                     {
                         if (variable.ToLower().Contains("precipitación"))
@@ -99,6 +165,16 @@ namespace CloudStationWeb.Services
                         {
                             validatedValue = null;
                         }
+                    }
+
+                    if (validatedValue.HasValue && measureTs.HasValue && !string.IsNullOrEmpty(s.IdAsignado))
+                    {
+                        float? cotaValMap = GetEffectiveCota(s.IdAsignado, cotasByStation);
+                        bool skip = cotaValMap.HasValue
+                            && bimodalThresholds.TryGetValue(s.IdAsignado, out var thr)
+                            && IsValuePreAdjusted(validatedValue.Value, thr, cotaValMap.Value);
+                        if (!skip)
+                            validatedValue = ApplyCota(validatedValue.Value, measureTs.Value, s.IdAsignado, cotasByStation);
                     }
 
                     return new StationMapData
@@ -185,8 +261,35 @@ namespace CloudStationWeb.Services
                         ORDER BY ts ASC";
                 }
 
-                var history = await pgDb.QueryAsync<HistoricalMeasurement>(query, new { DcpId = dcpId, Var = variable });
-                return history.ToList();
+                var history = (await pgDb.QueryAsync<HistoricalMeasurement>(query, new { DcpId = dcpId, Var = variable })).ToList();
+
+                // Apply cotas (offsets) based on timestamp and validity ranges
+                var sqlVariable = GetSqlVariableName(variable);
+                var endUtc = DateTime.UtcNow;
+                var startUtc = endUtc.AddHours(-hours);
+
+                var cotasByStation = await LoadCotasForStationsAsync(new[] { stationId }, sqlVariable, startUtc, endUtc);
+
+                // Detect bimodal pattern to avoid double-cota
+                float? cotaVal = GetEffectiveCota(stationId, cotasByStation);
+                float? threshold = null;
+                if (cotaVal.HasValue)
+                {
+                    var vals = history.Select(h => h.Valor);
+                    threshold = ComputeBimodalThreshold(vals, cotaVal.Value);
+                }
+
+                foreach (var h in history)
+                {
+                    if (h.Ts != default)
+                    {
+                        bool skip = cotaVal.HasValue && IsValuePreAdjusted(h.Valor, threshold, cotaVal.Value);
+                        if (!skip)
+                            h.Valor = ApplyCota(h.Valor, h.Ts, stationId, cotasByStation);
+                    }
+                }
+
+                return history;
             }
         }
 
@@ -213,9 +316,11 @@ namespace CloudStationWeb.Services
             var startTimeCdmx = endDateCdmx.AddDays(-1).AddHours(startHour); // Previous day at startHour
             var endTimeCdmx = endDateCdmx.AddHours(startHour); // End date at startHour
             
-            // Convert to UTC for database query (add 6 hours)
-            var startTimeUtc = startTimeCdmx.AddHours(6);
-            var endTimeUtc = endTimeCdmx.AddHours(6);
+            // Convert to UTC for database query (add 6 hours for CDMX→UTC)
+            // SpecifyKind=Utc ensures Npgsql sends as UTC regardless of DateTime source Kind
+            var startTimeUtc = DateTime.SpecifyKind(startTimeCdmx.AddHours(6), DateTimeKind.Utc);
+            // +1 hour extra so ts < endTimeUtc includes the last hour boundary (e.g. 06:00 of cut day)
+            var endTimeUtc = DateTime.SpecifyKind(endTimeCdmx.AddHours(6 + 1), DateTimeKind.Utc);
 
             var sqlVariable = GetSqlVariableName(variable);
             
@@ -316,6 +421,13 @@ namespace CloudStationWeb.Services
                 // Group by DCP ID
                 var dataByDcp = hourlyData.GroupBy(d => d.dcp_id).ToDictionary(g => g.Key, g => g.ToList());
 
+                // Load cotas (offsets) for the stations in the report window.
+                var cotasByStation = await LoadCotasForStationsAsync(
+                    sqlStations.Select(s => s.IdAsignado),
+                    sqlVariable,
+                    startTimeUtc,
+                    endTimeUtc);
+
                 // Build response
                 var stations = sqlStations.Select(s => {
                     // Si la estación tiene IdSatelital oficial (GOES), lo usamos estrictamente.
@@ -330,13 +442,33 @@ namespace CloudStationWeb.Services
                     
                     if (dataByDcp.ContainsKey(searchId))
                     {
+                        var rawData = dataByDcp[searchId];
+
+                        // Detect dual-calibration bimodal pattern to avoid double-cota
+                        float? cotaVal = GetEffectiveCota(s.IdAsignado ?? "", cotasByStation);
+                        float? threshold = null;
+                        if (cotaVal.HasValue)
+                        {
+                            var vals = rawData.Where(d => d.value.HasValue).Select(d => d.value!.Value);
+                            threshold = ComputeBimodalThreshold(vals, cotaVal.Value);
+                        }
+
                         // Convert UTC timestamps back to CDMX local time and format as strings
-                        hourlyValues = dataByDcp[searchId].Select(d => {
+                        hourlyValues = rawData.Select(d => {
+                            float? value = d.value;
+
+                            if (value.HasValue && !string.IsNullOrEmpty(s.IdAsignado))
+                            {
+                                bool skip = cotaVal.HasValue && IsValuePreAdjusted(value.Value, threshold, cotaVal.Value);
+                                if (!skip)
+                                    value = ApplyCota(value.Value, d.hour, s.IdAsignado, cotasByStation);
+                            }
+
                             return new HourlyValue
                             {
                                 // Format as ISO string without timezone (yyyy-MM-ddTHH:mm:ss)
                                 Hour = d.hour.AddHours(-6).ToString("yyyy-MM-ddTHH:mm:ss"),
-                                Value = d.value,
+                                Value = value,
                                 IsValid = d.is_valid
                             };
                         }).ToList();
@@ -591,6 +723,9 @@ namespace CloudStationWeb.Services
                 sqlStations = basicStations.Select(s => (s.IdAsignado ?? "", s.IdSatelital, s.Nombre ?? "", (double?)null, (double?)null)).ToList();
             }
 
+            // Preload cotas for the requested range (if any)
+            var cotasByStation = await LoadCotasForStationsAsync(request.StationIds, sqlVariable, request.StartDate, request.EndDate);
+
             using (IDbConnection pgDb = new NpgsqlConnection(_postgresConn))
             {
                 // ... postgres logic ...
@@ -646,6 +781,28 @@ namespace CloudStationWeb.Services
                             new { DcpId = dcpId, Variable = request.Variable, StartDate = request.StartDate, EndDate = request.EndDate });
 
                         dataPoints = aggData.Select(d => new DataPoint { Timestamp = d.ts, Value = d.value }).ToList();
+                    }
+
+                    // Apply cota adjustment per timestamp (if any)
+                    if (!string.IsNullOrEmpty(station.IdAsignado))
+                    {
+                        float? cotaValDA = GetEffectiveCota(station.IdAsignado, cotasByStation);
+                        float? thresholdDA = null;
+                        if (cotaValDA.HasValue)
+                        {
+                            var vals = dataPoints.Where(dp => dp.Value.HasValue).Select(dp => dp.Value!.Value);
+                            thresholdDA = ComputeBimodalThreshold(vals, cotaValDA.Value);
+                        }
+
+                        foreach (var dp in dataPoints)
+                        {
+                            if (dp.Value.HasValue)
+                            {
+                                bool skip = cotaValDA.HasValue && IsValuePreAdjusted(dp.Value.Value, thresholdDA, cotaValDA.Value);
+                                if (!skip)
+                                    dp.Value = ApplyCota(dp.Value.Value, dp.Timestamp, station.IdAsignado, cotasByStation);
+                            }
+                        }
                     }
 
                     // Apply limits from map
@@ -756,9 +913,153 @@ namespace CloudStationWeb.Services
                 "humedad_relativa" => "Humedad relativa",
                 "presión_atmosférica" => "Presión Atmosférica",
                 "radiación_solar" => "Radiación Solar",
-                "voltaje_batería" => "Voltaje de batería",
+                "voltaje_de_batería" => "Voltaje de batería",
                 _ => postgresVar // Fallback
             };
+        }
+
+        private class CotaEntry
+        {
+            public DateTime? Start { get; set; }
+            public DateTime? End { get; set; }
+            public float Valor { get; set; }
+            public string Operador { get; set; } = "+";
+            public DateTime Registro { get; set; }
+        }
+
+        private async Task<Dictionary<string, List<CotaEntry>>> LoadCotasForStationsAsync(IEnumerable<string?> stationIds, string sqlVariable, DateTime windowStartUtc, DateTime windowEndUtc)
+        {
+            var result = new Dictionary<string, List<CotaEntry>>();
+
+            if (stationIds == null) return result;
+            var ids = stationIds.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+            if (ids.Count == 0 || string.IsNullOrEmpty(sqlVariable)) return result;
+
+            try
+            {
+                using (IDbConnection sqlDb = new SqlConnection(_sqlServerConn))
+                {
+                    var cotas = await sqlDb.QueryAsync<(string StationId, decimal ValorCota, string Operador, DateTime? FechaInicio, DateTime? FechaFinal, DateTime FechaRegistro)>(
+                        @"SELECT e.IdAsignado AS StationId,
+                                 cs.ValorCota,
+                                 cs.Operador,
+                                 cs.FechaInicio,
+                                 cs.FechaFinal,
+                                 cs.FechaRegistro
+                           FROM Estacion e
+                           JOIN Sensor s ON s.IdEstacion = e.Id
+                           JOIN TipoSensor ts ON ts.Id = s.IdTipoSensor
+                           JOIN CotaSensor cs ON cs.IdSensor = s.Id
+                           WHERE e.IdAsignado IN @StationIds
+                             AND ts.Nombre = @SqlVar
+                             AND s.Visible = 1
+                             AND (cs.FechaFinal IS NULL OR cs.FechaFinal >= @WindowStart)
+                             AND (cs.FechaInicio IS NULL OR cs.FechaInicio <= @WindowEnd)
+                           ORDER BY e.IdAsignado, cs.FechaRegistro DESC",
+                        new { StationIds = ids, SqlVar = sqlVariable, WindowStart = windowStartUtc, WindowEnd = windowEndUtc });
+
+                    foreach (var c in cotas)
+                    {
+                        if (string.IsNullOrEmpty(c.StationId)) continue;
+
+                        if (!result.ContainsKey(c.StationId))
+                            result[c.StationId] = new List<CotaEntry>();
+
+                        result[c.StationId].Add(new CotaEntry
+                        {
+                            Start = c.FechaInicio,
+                            End = c.FechaFinal,
+                            Valor = (float)c.ValorCota,
+                            Operador = string.IsNullOrEmpty(c.Operador) ? "+" : c.Operador,
+                            Registro = c.FechaRegistro
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // Failure to load cotas should not block report generation.
+            }
+
+            return result;
+        }
+
+        private float ApplyCota(float rawValue, DateTime timestampUtc, string stationId, Dictionary<string, List<CotaEntry>> cotasByStation)
+        {
+            if (string.IsNullOrEmpty(stationId) || cotasByStation == null || !cotasByStation.TryGetValue(stationId, out var cotas))
+                return rawValue;
+
+            var matching = cotas
+                .Where(c => (!c.Start.HasValue || timestampUtc >= c.Start.Value)
+                         && (!c.End.HasValue || timestampUtc <= c.End.Value))
+                .OrderByDescending(c => c.Registro)
+                .FirstOrDefault();
+
+            if (matching == null)
+                return rawValue;
+
+            var adjustment = matching.Valor;
+            if (!string.IsNullOrEmpty(matching.Operador) && matching.Operador.Trim().StartsWith("-"))
+                adjustment = -adjustment;
+
+            return rawValue + adjustment;
+        }
+
+        /// <summary>
+        /// Gets the effective signed cota value for a station. Returns null if no cota found.
+        /// </summary>
+        private static float? GetEffectiveCota(string stationId, Dictionary<string, List<CotaEntry>> cotasByStation)
+        {
+            if (string.IsNullOrEmpty(stationId)
+                || cotasByStation == null
+                || !cotasByStation.TryGetValue(stationId, out var cotas)
+                || cotas.Count == 0)
+                return null;
+
+            var firstCota = cotas.OrderByDescending(c => c.Registro).FirstOrDefault();
+            if (firstCota == null) return null;
+
+            float val = firstCota.Valor;
+            if (!string.IsNullOrEmpty(firstCota.Operador) && firstCota.Operador.Trim().StartsWith("-"))
+                val = -val;
+            return val;
+        }
+
+        /// <summary>
+        /// Examines a set of raw values for a bimodal gap matching the cota magnitude.
+        /// Returns a threshold that separates raw from pre-adjusted values, or null if
+        /// no bimodal pattern is detected. Only triggers for |cota| >= 2.
+        /// </summary>
+        private static float? ComputeBimodalThreshold(IEnumerable<float> rawValues, float cotaVal)
+        {
+            if (Math.Abs(cotaVal) < 2.0f) return null;
+
+            var sorted = rawValues.OrderBy(v => v).ToList();
+            if (sorted.Count < 4) return null;
+
+            float biggestGap = 0;
+            int gapIdx = -1;
+            for (int i = 0; i < sorted.Count - 1; i++)
+            {
+                float gap = sorted[i + 1] - sorted[i];
+                if (gap > biggestGap) { biggestGap = gap; gapIdx = i; }
+            }
+            if (gapIdx < 0) return null;
+
+            if (Math.Abs(biggestGap - Math.Abs(cotaVal)) > Math.Abs(cotaVal) * 0.20f)
+                return null;
+
+            return (sorted[gapIdx] + sorted[gapIdx + 1]) / 2;
+        }
+
+        /// <summary>
+        /// Returns true if the value appears to already have the cota applied
+        /// (it sits on the "adjusted" side of the bimodal threshold).
+        /// </summary>
+        private static bool IsValuePreAdjusted(float value, float? threshold, float cotaVal)
+        {
+            if (!threshold.HasValue) return false;
+            return cotaVal > 0 ? value > threshold.Value : value < threshold.Value;
         }
 
         public async Task<object> GetTableSchemaAsync()
@@ -829,6 +1130,244 @@ namespace CloudStationWeb.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Returns CFE (or all) station IDs with their cuenca/subcuenca from SQL Server.
+        /// </summary>
+        private async Task<List<(string IdAsignado, string Cuenca, string Subcuenca)>> GetStationCuencaMappingAsync(bool onlyCfe)
+        {
+            using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
+            string sql = @"
+                SELECT e.IdAsignado,
+                       ISNULL(c.Nombre, '') AS Cuenca,
+                       ISNULL(sc.Nombre, '') AS Subcuenca
+                FROM Estacion e
+                LEFT JOIN Cuenca c ON e.IdCuenca = c.Id
+                LEFT JOIN Subcuenca sc ON e.IdSubcuenca = sc.Id
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                WHERE e.Activo = 1";
+            if (onlyCfe)
+                sql += " AND o.Nombre = 'Comisión Federal de Electricidad'";
+
+            var rows = await sqlDb.QueryAsync(sql);
+            return rows
+                .Where(r => r.IdAsignado != null)
+                .Select(r => (
+                    IdAsignado: ((string)r.IdAsignado).Trim(),
+                    Cuenca: ((string)(r.Cuenca ?? "")).Trim(),
+                    Subcuenca: ((string)(r.Subcuenca ?? "")).Trim()
+                ))
+                .ToList();
+        }
+
+        public async Task<List<CuencaSemaforo>> GetCuencaSemaforoAsync(bool onlyCfe = true)
+        {
+            // 1) Get station → cuenca mapping from SQL Server
+            var stationMapping = await GetStationCuencaMappingAsync(onlyCfe);
+            var stationIds = stationMapping.Select(s => s.IdAsignado).ToArray();
+
+            // 2) Read CuencasKml config for code/label/color mapping
+            var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
+            var configByCuenca = kmlConfig.ToDictionary(c => c.CuencaDb, c => c, StringComparer.OrdinalIgnoreCase);
+
+            // 3) Get last hour precipitation per station from PostgreSQL
+            using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
+            var nowUtc = DateTime.UtcNow;
+            var tsHora = new DateTime(nowUtc.Year, nowUtc.Month, nowUtc.Day, nowUtc.Hour, 0, 0, DateTimeKind.Utc);
+            var desde = tsHora.AddHours(-1);
+
+            var precipRows = (await pgDb.QueryAsync<(string id_asignado, float precip_mm)>(
+                @"SELECT id_asignado, COALESCE(SUM(acumulado), 0)::real AS precip_mm
+                  FROM resumen_horario
+                  WHERE variable = 'precipitación'
+                    AND ts >= @Desde AND ts < @Hasta
+                    AND id_asignado = ANY(@Ids)
+                  GROUP BY id_asignado",
+                new { Desde = desde, Hasta = tsHora, Ids = stationIds })).ToList();
+
+            var precipByStation = precipRows.ToDictionary(r => r.id_asignado, r => r.precip_mm);
+
+            // 3b) Get station IDs with active suspicious events to exclude from average
+            var suspiciousIds = (await pgDb.QueryAsync<string>(
+                @"SELECT DISTINCT id_asignado FROM eventos_lluvia
+                  WHERE sospechoso = true
+                    AND id_asignado = ANY(@Ids)
+                    AND inicio <= @Hasta
+                    AND (fin IS NULL OR fin >= @Desde)",
+                new { Ids = stationIds, Desde = desde, Hasta = tsHora })).ToHashSet();
+
+            // 4) Group by cuenca name from DB
+            var cuencaGroups = stationMapping
+                .Where(s => !string.IsNullOrWhiteSpace(s.Cuenca) &&
+                            !s.Cuenca.Equals("Indefinida", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(s => s.Cuenca, StringComparer.OrdinalIgnoreCase);
+
+            var result = new List<CuencaSemaforo>();
+            foreach (var group in cuencaGroups)
+            {
+                string cuencaName = group.Key;
+                int totalEst = group.Count();
+                var valores = new List<float>();
+                foreach (var s in group)
+                {
+                    if (suspiciousIds.Contains(s.IdAsignado)) continue;
+                    if (precipByStation.TryGetValue(s.IdAsignado, out var pv))
+                        valores.Add(pv);
+                }
+
+                float promedio = valores.Count > 0 ? valores.Average() : 0;
+                float maxMm = valores.Count > 0 ? valores.Max() : 0;
+                string sem = promedio < 2.5f ? "verde"
+                           : promedio < 7.5f ? "amarillo"
+                           : promedio < 15f  ? "naranja"
+                           : "rojo";
+
+                // Use config for code/label if available, otherwise derive from cuenca name
+                string code = cuencaName;
+                string label = cuencaName;
+                if (configByCuenca.TryGetValue(cuencaName, out var cfg))
+                {
+                    code = cfg.Code;
+                    label = cfg.Label;
+                }
+
+                result.Add(new CuencaSemaforo
+                {
+                    Code = code, Nombre = label, Semaforo = sem,
+                    PromedioMm = promedio, MaxMm = maxMm,
+                    EstacionesConDato = valores.Count, EstacionesTotal = totalEst
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<EventoLluviaDto>> GetEventosLluvia24hAsync(bool onlyCfe = true)
+        {
+            // Get station IDs to filter by
+            string[] stationIds = Array.Empty<string>();
+            if (onlyCfe)
+            {
+                using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
+                var ids = await sqlDb.QueryAsync<string>(
+                    @"SELECT e.IdAsignado FROM Estacion e
+                      LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                      WHERE e.Activo = 1 AND o.Nombre = 'Comisión Federal de Electricidad'");
+                stationIds = ids.Where(id => !string.IsNullOrEmpty(id)).Select(id => id.Trim()).ToArray();
+            }
+
+            using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
+
+            string sql = @"SELECT id_asignado, estacion_nombre, inicio, fin, acumulado_mm, intensidad_max_mmh,
+                                  duracion_minutos, estado, sospechoso
+                           FROM eventos_lluvia
+                           WHERE inicio >= NOW() - INTERVAL '24 hours'
+                             AND sospechoso = false";
+            if (onlyCfe)
+                sql += " AND id_asignado = ANY(@Ids)";
+            sql += " ORDER BY inicio DESC LIMIT 50";
+
+            var rows = (await pgDb.QueryAsync<EventoLluviaPgRow>(sql,
+                onlyCfe ? new { Ids = stationIds } : null)).ToList();
+
+            return rows.Select(r => new EventoLluviaDto
+            {
+                IdAsignado = r.id_asignado,
+                EstacionNombre = r.estacion_nombre,
+                Inicio = r.inicio,
+                Fin = r.fin,
+                AcumuladoMm = r.acumulado_mm,
+                IntensidadMaxMmh = r.intensidad_max_mmh,
+                DuracionMinutos = r.duracion_minutos,
+                Estado = r.estado,
+                Sospechoso = r.sospechoso
+            }).ToList();
+        }
+
+        public async Task<List<HistoricalMeasurement>> GetStationHyetographAsync(string stationId, int hours = 24)
+        {
+            using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
+
+            // Get hourly accumulated precipitation from resumen_horario
+            var data = (await pgDb.QueryAsync<HistoricalMeasurement>(
+                @"SELECT ts AS ""Ts"", COALESCE(acumulado, 0) AS ""Valor"", 'precipitación' AS ""Variable""
+                  FROM resumen_horario
+                  WHERE id_asignado = @Id
+                    AND variable = 'precipitación'
+                    AND ts >= NOW() - make_interval(hours => @Hours)
+                  ORDER BY ts ASC",
+                new { Id = stationId, Hours = hours })).ToList();
+
+            return data;
+        }
+
+        public async Task<List<CuencaEstacionPrecip>> GetCuencaEstacionesAsync(string cuencaName, bool onlyCfe = true)
+        {
+            // Resolve cuenca DB name: if a KML code was passed, look up in config
+            var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
+            var byCode = kmlConfig.FirstOrDefault(c => c.Code.Equals(cuencaName, StringComparison.OrdinalIgnoreCase));
+            string dbCuencaName = byCode?.CuencaDb ?? cuencaName;
+
+            // Get stations from SQL Server filtered by cuenca
+            using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
+            string sql = @"
+                SELECT e.IdAsignado, e.Nombre,
+                       ISNULL(c.Nombre, '') AS Cuenca,
+                       ISNULL(sc.Nombre, '') AS Subcuenca
+                FROM Estacion e
+                LEFT JOIN Cuenca c ON e.IdCuenca = c.Id
+                LEFT JOIN Subcuenca sc ON e.IdSubcuenca = sc.Id
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                WHERE e.Activo = 1 AND c.Nombre = @CuencaName";
+            if (onlyCfe)
+                sql += " AND o.Nombre = 'Comisión Federal de Electricidad'";
+
+            var matchedStations = (await sqlDb.QueryAsync(sql, new { CuencaName = dbCuencaName }))
+                .Where(s => s.IdAsignado != null)
+                .Select(s => new {
+                    IdAsignado = ((string)s.IdAsignado).Trim(),
+                    Nombre = ((string)(s.Nombre ?? "")).Trim(),
+                    Subcuenca = ((string)(s.Subcuenca ?? "")).Trim()
+                }).ToList();
+
+            if (matchedStations.Count == 0)
+                return new List<CuencaEstacionPrecip>();
+
+            // Get last hour precipitation
+            var ids = matchedStations.Select(s => s.IdAsignado).ToArray();
+            using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
+            var nowUtc = DateTime.UtcNow;
+            var tsHora = new DateTime(nowUtc.Year, nowUtc.Month, nowUtc.Day, nowUtc.Hour, 0, 0, DateTimeKind.Utc);
+            var desde = tsHora.AddHours(-1);
+
+            var precipRows = (await pgDb.QueryAsync<(string id_asignado, float precip_mm)>(
+                @"SELECT id_asignado, COALESCE(SUM(acumulado), 0)::real AS precip_mm
+                  FROM resumen_horario
+                  WHERE variable = 'precipitación'
+                    AND ts >= @Desde AND ts < @Hasta
+                    AND id_asignado = ANY(@Ids)
+                  GROUP BY id_asignado",
+                new { Desde = desde, Hasta = tsHora, Ids = ids })).ToDictionary(r => r.id_asignado, r => r.precip_mm);
+
+            // Flag stations with active suspicious events
+            var suspiciousIds = (await pgDb.QueryAsync<string>(
+                @"SELECT DISTINCT id_asignado FROM eventos_lluvia
+                  WHERE sospechoso = true
+                    AND id_asignado = ANY(@Ids)
+                    AND inicio <= @Hasta
+                    AND (fin IS NULL OR fin >= @Desde)",
+                new { Ids = ids, Desde = desde, Hasta = tsHora })).ToHashSet();
+
+            return matchedStations.Select(s => new CuencaEstacionPrecip
+            {
+                IdAsignado = s.IdAsignado,
+                Nombre = s.Nombre,
+                Subcuenca = s.Subcuenca,
+                PrecipMm = precipRows.TryGetValue(s.IdAsignado, out var v) ? v : 0,
+                ConDato = precipRows.ContainsKey(s.IdAsignado),
+                Sospechoso = suspiciousIds.Contains(s.IdAsignado)
+            }).OrderByDescending(s => s.PrecipMm).ToList();
         }
     }
 }

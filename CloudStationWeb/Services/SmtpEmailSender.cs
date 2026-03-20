@@ -22,7 +22,7 @@ namespace CloudStationWeb.Services
             var username = smtpSection["Username"];
             var password = smtpSection["Password"];
             var fromEmail = smtpSection["From"] ?? username;
-            var fromName = smtpSection["FromName"] ?? "CloudStation Pro";
+            var fromName = smtpSection["FromName"] ?? "Plataforma Integral Hidrometeorológica";
             var enableSsl = bool.Parse(smtpSection["EnableSsl"] ?? "true");
 
             if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(username))

@@ -47,18 +47,72 @@
     
     /* Animación de pulso para lluvia activa */
     @@keyframes pulse {
-        0%, 100% {
+        0% {
             transform: scale(1);
-            opacity: 1;
+            box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.7);
         }
         50% {
-            transform: scale(1.3);
-            opacity: 0.7;
+            transform: scale(1.4);
+            box-shadow: 0 0 12px 4px rgba(0, 200, 83, 0.4);
+        }
+        100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(0, 200, 83, 0);
         }
     }
     
+    @@keyframes rain-ripple {
+        0% {
+            box-shadow: 0 0 0 0 rgba(0, 200, 255, 0.6), 0 0 0 0 rgba(0, 200, 255, 0.3);
+        }
+        50% {
+            box-shadow: 0 0 8px 4px rgba(0, 200, 255, 0.3), 0 0 16px 8px rgba(0, 200, 255, 0.1);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(0, 200, 255, 0), 0 0 0 0 rgba(0, 200, 255, 0);
+        }
+    }
+
+    @@keyframes rain-glow {
+        0%, 100% { filter: brightness(1) drop-shadow(0 0 3px rgba(0, 200, 255, 0.5)); }
+        50% { filter: brightness(1.5) drop-shadow(0 0 8px rgba(0, 200, 255, 0.9)); }
+    }
+    
     .marker-rain-active {
-        animation: pulse 2s ease-in-out infinite;
+        animation: pulse 1.5s ease-in-out infinite, rain-ripple 2s ease-out infinite;
+        border-color: #00e5ff !important;
+        border-width: 2.5px !important;
+        position: relative;
+    }
+
+    .marker-rain-active::after {
+        content: '⚡';
+        position: absolute;
+        top: -16px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        line-height: 1;
+        animation: bolt-flash 2.5s ease-in-out infinite;
+        pointer-events: none;
+        filter: drop-shadow(0 0 3px rgba(255, 230, 0, 0.8));
+        z-index: 10;
+    }
+
+    @@keyframes bolt-flash {
+        0%, 100%  { opacity: 0; transform: translateX(-50%) scale(0.7); }
+        15%       { opacity: 1; transform: translateX(-50%) scale(1.2); }
+        25%       { opacity: 0.2; transform: translateX(-50%) scale(0.9); }
+        35%       { opacity: 1; transform: translateX(-50%) scale(1.1); }
+        55%       { opacity: 0; transform: translateX(-50%) scale(0.7); }
+    }
+
+    .triangle-wrapper .marker-rain-active {
+        animation: pulse 1.5s ease-in-out infinite, rain-glow 2s ease-out infinite;
+    }
+
+    .triangle-wrapper .marker-rain-active::after {
+        top: -14px;
     }
     .glass-panel {
         backdrop-filter: blur(12px);
@@ -93,9 +147,10 @@
     }
     /* Estilos Tabla Lateral */
     .table-container {
-        height: calc(100vh - 200px);
+        flex: 1;
         overflow-y: auto;
-        margin-top: 15px;
+        margin-top: 5px;
+        min-height: 0;
     }
     .station-table {
         width: 100%;
@@ -169,6 +224,23 @@
         margin: 10px 15px;
         line-height: 1.4;
     }
+    
+    /* Animación de Flujo para Ríos (KML) */
+    .river-flow {
+        stroke-dasharray: 10, 15;
+        animation: flowAnimation 2s linear infinite;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    @@keyframes flowAnimation {
+        from {
+            stroke-dashoffset: 25;
+        }
+        to {
+            stroke-dashoffset: 0;
+        }
+    }
 </style>
 }
 
@@ -177,7 +249,69 @@
     
     <!-- Panel Lateral Derecho (Tabla) -->
     <div class="glass-panel" style="width: 380px; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 1000; overflow: hidden; display: flex; flex-direction: column;">
-        <h3 class="ui inverted header" style="margin-bottom: 15px;">
+        
+        <!-- Secciones de Precipitación (solo visibles con variable precipitación) -->
+        <div id="precip-right-panel">
+
+        <!-- Subcuencas Lluvia Promedio -->
+        <div id="cuenca-precip-section" style="margin-bottom: 10px; flex-shrink: 0;">
+            <h4 class="ui inverted header" style="margin-bottom: 8px; font-size: 13px; cursor: pointer;" onclick="$('#cuenca-precip-body').toggle(); $(this).find('i.caret').toggleClass('down right');">
+                <i class="cloud rain icon"></i>
+                Lluvia por Cuenca (últ. hora)
+                <i class="caret down icon" style="float: right; font-size: 11px;"></i>
+            </h4>
+            <table class="station-table" style="font-size: 11px; margin-bottom: 0;">
+                <thead>
+                    <tr>
+                        <th style="padding: 4px 6px;">Cuenca</th>
+                        <th style="width: 60px; text-align: right; padding: 4px 6px;">Prom</th>
+                        <th style="width: 55px; text-align: right; padding: 4px 6px;">Máx</th>
+                        <th style="width: 40px; text-align: center; padding: 4px 6px;">Est.</th>
+                    </tr>
+                </thead>
+                <tbody id="cuenca-precip-body">
+                    <tr><td colspan="4" style="text-align:center; opacity:0.5; padding: 4px;">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ui inverted divider" style="margin: 5px 0;"></div>
+
+        <!-- Eventos de Lluvia 24h -->
+        <div id="eventos-lluvia-section" style="margin-bottom: 10px; flex-shrink: 0; max-height: 180px; overflow: hidden;">
+            <h4 class="ui inverted header" style="margin-bottom: 8px; font-size: 13px; cursor: pointer;">
+                <span onclick="var b=$('#eventos-lluvia-body').parent().parent(); b.toggle(); $(this).closest('h4').find('i.caret').toggleClass('down right');">
+                    <i class="bolt icon"></i>
+                    Eventos Lluvia (24h)
+                    <span id="eventos-count" class="ui mini circular label" style="margin-left: 5px; background: rgba(255,255,255,0.2); color: white;">0</span>
+                </span>
+                <span style="float:right; display:flex; align-items:center; gap:6px;">
+                    <span onclick="event.stopPropagation(); openEventosModal(null, null);" style="font-size:10px; opacity:0.7; font-weight:normal; text-decoration:underline; cursor:pointer;" title="Ver todos los eventos">Ver todos</span>
+                    <i class="caret down icon" style="font-size: 11px;"></i>
+                </span>
+            </h4>
+            <div style="max-height: 140px; overflow-y: auto;">
+                <table class="station-table" style="font-size: 11px; margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 4px 6px;">Estación</th>
+                            <th style="width: 50px; text-align: right; padding: 4px 6px;">mm</th>
+                            <th style="width: 45px; text-align: right; padding: 4px 6px;">min</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventos-lluvia-body">
+                        <tr><td colspan="3" style="text-align:center; opacity:0.5; padding: 4px;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="ui inverted divider" style="margin: 5px 0;"></div>
+
+        </div><!-- /precip-right-panel -->
+
+        <!-- Estaciones -->
+        <h3 class="ui inverted header" style="margin-bottom: 10px; font-size: 14px;">
             <i class="list icon"></i>
             Estaciones
         </h3>
@@ -187,7 +321,7 @@
             <i class="search icon"></i>
         </div>
 
-        <div class="table-container">
+        <div class="table-container" style="flex: 1; overflow-y: auto;">
             <table class="station-table" id="station-list-table">
                 <thead>
                     <tr>
@@ -198,6 +332,75 @@
                 <tbody id="station-table-body">
                     <!-- Dinámico -->
                 </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Eventos de Lluvia -->
+<div id="eventos-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div style="background:#1b1c1d; border-radius:16px; width:90%; max-width:780px; max-height:85vh; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column;">
+        <!-- Header -->
+        <div style="padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="margin:0; color:white; font-size:16px;">
+                <i class="bolt icon" style="color:#FFD600;"></i>
+                Eventos de Lluvia (últimas 24h)
+            </h3>
+            <i class="close icon" style="color:rgba(255,255,255,0.6); cursor:pointer; font-size:18px;" onclick="$('#eventos-modal').fadeOut(200);"></i>
+        </div>
+        <!-- Content -->
+        <div style="padding:20px 24px; overflow-y:auto; flex:1;">
+            <!-- Tabla completa -->
+            <table class="station-table" style="font-size:12px; width:100%; margin-bottom:18px;">
+                <thead>
+                    <tr>
+                        <th style="padding:8px 10px;">Estación</th>
+                        <th style="padding:8px 10px; text-align:center;">Inicio</th>
+                        <th style="padding:8px 10px; text-align:center;">Fin</th>
+                        <th style="padding:8px 10px; text-align:right;">Acum. (mm)</th>
+                        <th style="padding:8px 10px; text-align:right;">Intens. máx</th>
+                        <th style="padding:8px 10px; text-align:right;">Duración</th>
+                        <th style="padding:8px 10px; text-align:center;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="modal-eventos-body"></tbody>
+            </table>
+            <!-- Hietograma -->
+            <div id="modal-hietograma-wrap" style="display:none;">
+                <h4 style="margin:0 0 8px 0; color:white; font-size:14px;">
+                    <i class="chart bar icon" style="color:#2185d0;"></i>
+                    Hietograma: <span id="modal-hietograma-title" style="color:#00e5ff;"></span>
+                </h4>
+                <div id="modal-hietograma-chart" style="width:100%; height:220px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Estaciones de Cuenca -->
+<div id="cuenca-estaciones-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div style="background:#1b1c1d; border-radius:16px; width:90%; max-width:620px; max-height:80vh; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column;">
+        <div style="padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="margin:0; color:white; font-size:16px;">
+                <i class="cloud rain icon" style="color:#2185d0;"></i>
+                <span id="cuenca-modal-title">Estaciones</span>
+            </h3>
+            <i class="close icon" style="color:rgba(255,255,255,0.6); cursor:pointer; font-size:18px;" onclick="$('#cuenca-estaciones-modal').fadeOut(200);"></i>
+        </div>
+        <div style="padding:16px 24px 8px 24px;">
+            <div id="cuenca-modal-summary" style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;"></div>
+        </div>
+        <div style="padding:0 24px 20px 24px; overflow-y:auto; flex:1;">
+            <table class="station-table" style="font-size:12px; width:100%;">
+                <thead>
+                    <tr>
+                        <th style="padding:8px 10px;">Estación</th>
+                        <th style="padding:8px 10px;">Subcuenca</th>
+                        <th style="padding:8px 10px; text-align:right;">Precip (mm/h)</th>
+                        <th style="padding:8px 10px; text-align:center;">Dato</th>
+                    </tr>
+                </thead>
+                <tbody id="cuenca-estaciones-body"></tbody>
             </table>
         </div>
     </div>
@@ -232,6 +435,22 @@
             </div>
         </div>
 
+        <div id="cuencas-left-panel">
+        <div class="ui inverted divider"></div>
+        <div style="font-size: 11px; margin-bottom: 5px;"><strong>Cuencas KML</strong></div>
+        
+        <div id="semaforo-toggle-wrap" class="field" style="margin-bottom: 5px;">
+            <div id="semaforo-cuencas-toggle" class="ui inverted checkbox">
+                <input type="checkbox" checked>
+                <label>Semáforo Lluvia</label>
+            </div>
+        </div>
+
+        <div id="cuenca-toggles-container">
+            <!-- Cuenca toggles rendered dynamically from /Map/GetCuencasKml -->
+        </div>
+        </div><!-- /cuencas-left-panel -->
+
 
     </div>
 
@@ -251,6 +470,15 @@
         <div class="item" id="legend-negro"><i class="circle icon" style="color: #333333; border: 1px solid white; border-radius: 50%;"></i> <span class="legend-text">Sin datos</span></div>
     
     <div class="ui inverted divider" style="margin: 10px 0;"></div>
+    <div id="semaforo-legend" style="font-size: 11px;">
+        <div style="margin-bottom: 3px;"><strong>Semáforo Lluvia (mm/h)</strong></div>
+        <div><i class="square icon" style="color: #00C853;"></i> Verde: &lt; 2.5</div>
+        <div><i class="square icon" style="color: #FFD600;"></i> Amarillo: 2.5 - 7.5</div>
+        <div><i class="square icon" style="color: #FF6D00;"></i> Naranja: 7.5 - 15</div>
+        <div><i class="square icon" style="color: #D50000;"></i> Rojo: &ge; 15</div>
+    </div>
+
+    <div class="ui inverted divider" style="margin: 10px 0;"></div>
     
     <div style="font-size: 11px; opacity: 0.9; color: white;">
         <div id="real-time-clock" style="margin-bottom: 5px;"><i class="clock outline icon"></i> --:--:--</div>
@@ -265,6 +493,8 @@
 <script src="~/lib/highcharts/modules/accessibility.js" asp-append-version="true"></script>
 
 @section Scripts {
+    <script src="~/lib/leaflet/L.KML.js"></script>
+    <script src="~/lib/leaflet/leaflet-omnivore.min.js"></script>
     <script>
         let map;
         let markersLayer = L.layerGroup();
@@ -272,6 +502,19 @@
         let markersMap = {}; // Para búsqueda rápida Marker -> ID
         let shouldFitBounds = true;
         window.currentVar = 'precipitación'; // Global state
+        
+        let cuencaLayers = {};   // { code: L.polygon }
+        let cuencaBaseColors = {}; // { code: '#hex' } — original color per cuenca
+
+        let semaforoCuencasEnabled = true;
+        let cuencaSemaforoData = {}; // { code: {...}, ... }
+
+        const semaforoColors = {
+            'verde':    '#00C853',
+            'amarillo': '#FFD600',
+            'naranja':  '#FF6D00',
+            'rojo':     '#D50000'
+        };
 
 
         $(document).ready(function() {
@@ -279,6 +522,7 @@
                 onChange: function(value) {
                     shouldFitBounds = false; // No mover el mapa al cambiar variable
                     loadData(value);
+                    updatePrecipSections(value);
                 }
             });
 
@@ -287,8 +531,26 @@
                     window.currentVar = $('#variable-dropdown').dropdown('get value') || 'precipitación';
                     shouldFitBounds = true;
                     loadData(window.currentVar);
+                    if (isPrecipVar(window.currentVar)) {
+                        loadCuencaSemaforo();
+                        loadEventosLluvia();
+                    }
                 }
             });
+
+            // Configurar Toggle de Semáforo de Cuencas
+            $('#semaforo-cuencas-toggle').checkbox({
+                onChecked: function() {
+                    semaforoCuencasEnabled = true;
+                    applyCuencaSemaforo();
+                },
+                onUnchecked: function() {
+                    semaforoCuencasEnabled = false;
+                    clearCuencaSemaforo();
+                }
+            });
+
+            // Configurar Toggles de Cuencas dinámicamente (se inicializan en loadCuencasKml)
 
             $('#station-search').on('input', function() {
                 const term = $(this).val().toLowerCase();
@@ -296,6 +558,11 @@
             });
 
             initMap();
+
+            // Cerrar modal al hacer clic fuera del contenido
+            $('#eventos-modal, #cuenca-estaciones-modal').on('click', function(e) {
+                if (e.target === this) $(this).fadeOut(200);
+            });
             
             // Configurar Highcharts para usar zona horaria de CDMX (UTC-6)
             Highcharts.setOptions({
@@ -305,12 +572,17 @@
             });
             
             loadData('precipitación');
+            updatePrecipSections('precipitación');
             
             // Auto-actualizar cada 5 minutos
             setInterval(function() {
                 window.currentVar = $('#variable-dropdown').dropdown('get value') || 'precipitación';
                 shouldFitBounds = false; // No mover el mapa en auto-actualización
                 loadData(window.currentVar);
+                if (isPrecipVar(window.currentVar)) {
+                    loadCuencaSemaforo();
+                    loadEventosLluvia();
+                }
             }, 300000); 
 
             // Iniciar Reloj
@@ -388,6 +660,465 @@
             }).addTo(map);
 
             markersLayer.addTo(map);
+
+            // Cargar Capa KML
+            fetch('/kml/Red_Rios_Cuencas_Grijalva.kml')
+                .then(res => res.text())
+                .then(kmltext => {
+                    const parser = new DOMParser();
+                    const kml = parser.parseFromString(kmltext, 'text/xml');
+                    const track = new L.KML(kml);
+                    
+                    // Aplicar estilo azul animado a los elementos de la red de ríos
+                    track.setStyle({
+                        color: '#4fc3f7', // Azul claro/eléctrico que parece agua brillando
+                        weight: 4,
+                        opacity: 0.9,
+                        className: 'river-flow'
+                    });
+
+                    // Leaflet KML a veces no pasa el className directo, forzamos la clase al path SVG
+                    track.eachLayer(function(layer) {
+                        if (layer.setStyle && layer.getElement) {
+                            var el = layer.getElement();
+                            if (el) {
+                                el.classList.add('river-flow');
+                            }
+                        }
+                    });
+
+                    map.addLayer(track);
+                    
+                    // Ajustar bounds si se requiere, pero dejaremos los marcadores controlar
+                    // map.fitBounds(track.getBounds());
+                })
+                .catch(err => console.error('Error al cargar KML de ríos:', err));
+                
+            // Cargar cuencas KML dinámicamente desde la configuración
+            loadCuencasKml();
+        }
+        
+        function loadCuencasKml() {
+            $.getJSON('/Map/GetCuencasKml', function(cuencas) {
+                const container = $('#cuenca-toggles-container');
+                cuencas.forEach(function(c) {
+                    // Create toggle checkbox
+                    const field = $(`
+                        <div class="field" style="margin-bottom: 5px;">
+                            <div id="cuenca-${c.code}-toggle" class="ui inverted checkbox">
+                                <input type="checkbox">
+                                <label>${c.label} (${c.code.toUpperCase()})</label>
+                            </div>
+                        </div>
+                    `);
+                    container.append(field);
+                    
+                    // Initialize Fomantic checkbox
+                    $(`#cuenca-${c.code}-toggle`).checkbox({
+                        onChecked: function() { toggleCuencaLayer(c.code, true); },
+                        onUnchecked: function() { toggleCuencaLayer(c.code, false); }
+                    });
+                    
+                    // Load KML polygon
+                    loadCuencaKml(c.kmlFile, c.code, c.color);
+                });
+            });
+        }
+
+        function loadCuencaKml(filename, key, color) {
+            fetch('/kml/' + filename)
+                .then(res => res.text())
+                .then(kmltext => {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(kmltext, 'text/xml');
+                    
+                    // Extraer manualmente los polígonos del KML de Cuencas
+                    const placemarks = xmlDoc.getElementsByTagName('Placemark');
+                    let latlngs = [];
+                    
+                    for (let i = 0; i < placemarks.length; i++) {
+                        const coordsNode = placemarks[i].getElementsByTagName('coordinates');
+                        if (coordsNode.length > 0) {
+                            const coordsString = coordsNode[0].textContent.trim();
+                            const coordPairs = coordsString.split(/\s+/);
+                            
+                            coordPairs.forEach(pair => {
+                                const parts = pair.split(',');
+                                if (parts.length >= 2) {
+                                    // KML es Longitud, Latitud. Leaflet requiere Latitud, Longitud
+                                    latlngs.push([parseFloat(parts[1]), parseFloat(parts[0])]);
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Crear un Polígono de Leaflet con las coordenadas y forzar el sombreado
+                    if (latlngs.length > 0) {
+                        const polygon = L.polygon(latlngs, {
+                            color: color,
+                            weight: 2,
+                            opacity: 0.9,
+                            fillColor: color,
+                            fillOpacity: 0.3,
+                            className: 'cuenca-polygon'
+                        });
+                        
+                        cuencaLayers[key] = polygon;
+                        cuencaBaseColors[key] = color;
+                        
+                        // Si el checkbox ya estaba marcado, dibujarlo inmediatamente
+                        if ($('#cuenca-' + key + '-toggle').checkbox('is checked')) {
+                            map.addLayer(polygon);
+                        }
+                    }
+                })
+                .catch(err => console.error('Error al cargar Cuenca ' + key + ':', err));
+        }
+
+        function toggleCuencaLayer(key, isVisible) {
+            const layer = cuencaLayers[key];
+            if (!layer) return;
+            const baseColor = cuencaBaseColors[key] || '#666';
+            
+            if (isVisible) {
+                map.addLayer(layer);
+                if (semaforoCuencasEnabled && cuencaSemaforoData[key]) {
+                    const info = cuencaSemaforoData[key];
+                    const semColor = semaforoColors[info.semaforo] || '#00C853';
+                    layer.setStyle({ color: baseColor, weight: 3, opacity: 1, fillColor: semColor, fillOpacity: 0.30 });
+                } else {
+                    layer.setStyle({ color: baseColor, weight: 2, opacity: 0.9, fillColor: baseColor, fillOpacity: 0.15 });
+                }
+            } else {
+                if (!semaforoCuencasEnabled) {
+                    map.removeLayer(layer);
+                } else {
+                    // Semáforo activo: solo quitar si no hay dato semáforo
+                    layer.setStyle({ color: baseColor, weight: 2, opacity: 0.5, fillColor: baseColor, fillOpacity: 0.08 });
+                }
+            }
+        }
+
+        function isPrecipVar(v) {
+            return v && v.toLowerCase().includes('precipitaci');
+        }
+
+        function updatePrecipSections(variable) {
+            const show = isPrecipVar(variable);
+            if (show) {
+                $('#precip-right-panel').show();
+                $('#semaforo-toggle-wrap').show();
+                $('#semaforo-legend').show();
+                loadCuencaSemaforo();
+                loadEventosLluvia();
+                if (semaforoCuencasEnabled) applyCuencaSemaforo();
+            } else {
+                $('#precip-right-panel').hide();
+                $('#semaforo-toggle-wrap').hide();
+                $('#semaforo-legend').hide();
+                clearCuencaSemaforo();
+            }
+        }
+
+        function loadCuencaSemaforo() {
+            const onlyCfe = $('#only-cfe-toggle').checkbox('is checked');
+            $.getJSON('/Map/GetCuencaPrecipitacion', { onlyCfe: onlyCfe }, function(data) {
+                cuencaSemaforoData = {};
+                data.forEach(d => {
+                    cuencaSemaforoData[d.code] = d;
+                });
+                if (semaforoCuencasEnabled) {
+                    applyCuencaSemaforo();
+                }
+                renderCuencaPrecipTable(data);
+            });
+        }
+
+        function renderCuencaPrecipTable(data) {
+            const body = $('#cuenca-precip-body');
+            body.empty();
+            if (!data || data.length === 0) {
+                body.append('<tr><td colspan="4" style="text-align:center; opacity:0.5; padding: 4px;">Sin datos</td></tr>');
+                return;
+            }
+            data.forEach(d => {
+                const color = semaforoColors[d.semaforo] || '#00C853';
+                const row = $(`
+                    <tr style="cursor:pointer;" title="Clic para ver estaciones de ${d.nombre}">
+                        <td style="padding: 4px 6px;"><span style="color:${color}; font-size:10px;">&#9679;</span> ${d.nombre}</td>
+                        <td style="text-align: right; padding: 4px 6px; font-weight: bold; color:${color};">${d.promedioMm.toFixed(1)}</td>
+                        <td style="text-align: right; padding: 4px 6px;">${d.maxMm.toFixed(1)}</td>
+                        <td style="text-align: center; padding: 4px 6px; font-size: 10px;">${d.estacionesConDato}/${d.estacionesTotal}</td>
+                    </tr>
+                `);
+                row.on('click', function() {
+                    openCuencaEstacionesModal(d.code, d.nombre, d);
+                });
+                body.append(row);
+            });
+        }
+
+        function openCuencaEstacionesModal(code, nombre, cuencaInfo) {
+            $('#cuenca-modal-title').text('Estaciones — ' + nombre);
+            const summary = $('#cuenca-modal-summary');
+            const semColor = cuencaInfo ? (semaforoColors[cuencaInfo.semaforo] || '#00C853') : '#00C853';
+            summary.html(`
+                <div style="background:rgba(255,255,255,0.06); border-radius:8px; padding:8px 14px; font-size:12px; color:white;">
+                    <b>Promedio:</b> <span style="color:${semColor}; font-weight:bold;">${cuencaInfo ? cuencaInfo.promedioMm.toFixed(1) : '—'} mm/h</span>
+                </div>
+                <div style="background:rgba(255,255,255,0.06); border-radius:8px; padding:8px 14px; font-size:12px; color:white;">
+                    <b>Máximo:</b> ${cuencaInfo ? cuencaInfo.maxMm.toFixed(1) : '—'} mm
+                </div>
+                <div style="background:rgba(255,255,255,0.06); border-radius:8px; padding:8px 14px; font-size:12px; color:white;">
+                    <b>Estaciones:</b> ${cuencaInfo ? cuencaInfo.estacionesConDato + '/' + cuencaInfo.estacionesTotal : '—'}
+                </div>
+                <div style="background:rgba(255,255,255,0.06); border-radius:8px; padding:8px 14px; font-size:12px; color:white;">
+                    <span style="color:${semColor};">&#9632;</span> <b>${cuencaInfo ? cuencaInfo.semaforo.toUpperCase() : ''}</b>
+                </div>
+            `);
+            const body = $('#cuenca-estaciones-body');
+            body.html('<tr><td colspan="4" style="text-align:center; padding:16px;"><i class="notched circle loading icon"></i> Cargando estaciones...</td></tr>');
+            $('#cuenca-estaciones-modal').css('display', 'flex').hide().fadeIn(250);
+
+            const onlyCfe = $('#only-cfe-toggle').checkbox('is checked');
+            $.getJSON('/Map/GetCuencaEstaciones', { code: code, onlyCfe: onlyCfe }, function(data) {
+                body.empty();
+                if (!data || data.length === 0) {
+                    body.append('<tr><td colspan="4" style="text-align:center; padding:12px; opacity:0.5;">Sin estaciones</td></tr>');
+                    return;
+                }
+                data.forEach(s => {
+                    const isSuspect = s.sospechoso === true;
+                    const pColor = isSuspect ? 'rgba(255,255,255,0.3)' : s.precipMm >= 15 ? '#D50000' : s.precipMm >= 7.5 ? '#FF6D00' : s.precipMm >= 2.5 ? '#FFD600' : s.precipMm > 0 ? '#00C853' : 'inherit';
+                    const datoIcon = isSuspect
+                        ? '<i class="exclamation triangle icon" style="color:#FF6D00;" title="Dato sospechoso — sensor no confiable"></i>'
+                        : s.conDato
+                        ? '<i class="check circle icon" style="color:#00C853;"></i>'
+                        : '<i class="times circle outline icon" style="color:rgba(255,255,255,0.3);"></i>';
+                    const nameStyle = isSuspect ? 'text-decoration:line-through; opacity:0.5;' : '';
+                    const row = $(`
+                        <tr style="cursor:pointer;${isSuspect ? ' opacity:0.6;' : ''}" title="${isSuspect ? 'Dato sospechoso — excluida del promedio' : 'Clic para ver hietograma de ' + s.nombre}">
+                            <td style="padding:6px 10px;${nameStyle}">${s.nombre}</td>
+                            <td style="padding:6px 10px; font-size:11px; opacity:0.7;">${s.subcuenca}</td>
+                            <td style="text-align:right; padding:6px 10px; font-weight:bold; color:${pColor};">${isSuspect ? '<s>' + s.precipMm.toFixed(2) + '</s>' : s.precipMm.toFixed(2)}</td>
+                            <td style="text-align:center; padding:6px 10px;">${datoIcon}</td>
+                        </tr>
+                    `);
+                    row.on('click', function() {
+                        // Navigate to station on map and show popup
+                        const marker = markersMap[s.idAsignado];
+                        if (marker) {
+                            $('#cuenca-estaciones-modal').fadeOut(200);
+                            map.setView(marker.getLatLng(), 12);
+                            marker.openPopup();
+                        }
+                    });
+                    body.append(row);
+                });
+            });
+        }
+
+        let lastEventosData = []; // Store for modal
+
+        function loadEventosLluvia() {
+            const onlyCfe = $('#only-cfe-toggle').checkbox('is checked');
+            $.getJSON('/Map/GetEventosLluvia', { onlyCfe: onlyCfe }, function(data) {
+                lastEventosData = data || [];
+                renderEventosTable(data);
+            });
+        }
+
+        function renderEventosTable(data) {
+            const body = $('#eventos-lluvia-body');
+            body.empty();
+            $('#eventos-count').text(data ? data.length : 0);
+            if (!data || data.length === 0) {
+                body.append('<tr><td colspan="3" style="text-align:center; opacity:0.5; padding: 4px;">Sin eventos</td></tr>');
+                return;
+            }
+            data.forEach(d => {
+                const hora = new Date(d.inicio).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const activo = !d.fin;
+                const acumColor = d.acumuladoMm >= 15 ? '#D50000' : d.acumuladoMm >= 7.5 ? '#FF6D00' : d.acumuladoMm >= 2.5 ? '#FFD600' : 'inherit';
+                const row = $(`
+                    <tr style="cursor:pointer;" title="${d.estacionNombre} | ${hora} | ${d.duracionMinutos}min | Imax: ${d.intensidadMaxMmh.toFixed(1)} mm/h${activo ? ' | EN CURSO' : ''}">
+                        <td style="padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;">
+                            ${activo ? '<i class="circle icon" style="color:#00C853; font-size:8px;"></i> ' : ''}${d.estacionNombre}
+                        </td>
+                        <td style="text-align: right; padding: 3px 6px; font-weight: bold; color: ${acumColor};">${d.acumuladoMm.toFixed(1)}</td>
+                        <td style="text-align: right; padding: 3px 6px; font-size: 10px;">${d.duracionMinutos}</td>
+                    </tr>
+                `);
+                row.on('click', function() {
+                    openEventosModal(d.idAsignado, d.estacionNombre);
+                });
+                body.append(row);
+            });
+        }
+
+        function openEventosModal(highlightStationId, highlightName) {
+            const body = $('#modal-eventos-body');
+            body.empty();
+            const data = lastEventosData;
+            if (!data || data.length === 0) {
+                body.append('<tr><td colspan="7" style="text-align:center; padding:12px; opacity:0.5;">Sin eventos</td></tr>');
+            } else {
+                data.forEach(d => {
+                    const inicioStr = new Date(d.inicio).toLocaleString('es-MX', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).replace(',','');
+                    const finStr = d.fin ? new Date(d.fin).toLocaleString('es-MX', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).replace(',','') : '—';
+                    const activo = !d.fin;
+                    const acumColor = d.acumuladoMm >= 15 ? '#D50000' : d.acumuladoMm >= 7.5 ? '#FF6D00' : d.acumuladoMm >= 2.5 ? '#FFD600' : 'inherit';
+                    const isHighlighted = highlightStationId && d.idAsignado === highlightStationId;
+                    const rowBg = isHighlighted ? 'background:rgba(33,133,208,0.25);' : '';
+                    const estadoBadge = activo
+                        ? '<span style="background:#00C853; color:#000; padding:2px 6px; border-radius:10px; font-size:10px; font-weight:bold;">Activo</span>'
+                        : '<span style="opacity:0.5; font-size:10px;">Finalizado</span>';
+                    const row = $(`
+                        <tr style="cursor:pointer; ${rowBg}" class="modal-evento-row" data-station="${d.idAsignado || ''}" data-name="${d.estacionNombre}">
+                            <td style="padding:6px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">
+                                ${activo ? '<i class="circle icon" style="color:#00C853; font-size:8px;"></i> ' : ''}${d.estacionNombre}
+                            </td>
+                            <td style="text-align:center; padding:6px 8px; font-size:11px;">${inicioStr}</td>
+                            <td style="text-align:center; padding:6px 8px; font-size:11px;">${finStr}</td>
+                            <td style="text-align:right; padding:6px 8px; font-weight:bold; color:${acumColor};">${d.acumuladoMm.toFixed(1)}</td>
+                            <td style="text-align:right; padding:6px 8px;">${d.intensidadMaxMmh.toFixed(1)} mm/h</td>
+                            <td style="text-align:right; padding:6px 8px;">${d.duracionMinutos} min</td>
+                            <td style="text-align:center; padding:6px 8px;">${estadoBadge}</td>
+                        </tr>
+                    `);
+                    row.on('click', function() {
+                        $('.modal-evento-row').css('background', '');
+                        $(this).css('background', 'rgba(33,133,208,0.25)');
+                        const sid = $(this).data('station');
+                        const sname = $(this).data('name');
+                        if (sid) loadModalHyetograph(sid, sname);
+                    });
+                    body.append(row);
+                });
+            }
+
+            // Show modal
+            $('#eventos-modal').css('display', 'flex').hide().fadeIn(250);
+
+            // Load hyetograph for highlighted station
+            if (highlightStationId) {
+                loadModalHyetograph(highlightStationId, highlightName);
+            } else {
+                $('#modal-hietograma-wrap').hide();
+            }
+        }
+
+        function loadModalHyetograph(stationId, stationName) {
+            $('#modal-hietograma-wrap').show();
+            $('#modal-hietograma-title').text(stationName || stationId);
+            $('#modal-hietograma-chart').html('<div style="text-align:center; padding:40px;"><i class="notched circle loading icon"></i> Cargando hietograma...</div>');
+            $.getJSON('/Map/GetStationHyetograph', { stationId: stationId, hours: 24 }, function(data) {
+                renderHyetograph('modal-hietograma-chart', data, stationName);
+            });
+        }
+
+        function renderHyetograph(containerId, data, stationName) {
+            if (!data || data.length === 0) {
+                $(`#${containerId}`).html('<div style="text-align:center; padding:30px; opacity:0.5; color:white;">Sin datos de precipitación horaria</div>');
+                return;
+            }
+            const categories = data.map(d => {
+                const dt = new Date(d.ts);
+                return dt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+            });
+            const values = data.map(d => Math.round(d.valor * 100) / 100);
+
+            Highcharts.chart(containerId, {
+                chart: { type: 'column', backgroundColor: 'transparent', height: 220 },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: {
+                    categories: categories,
+                    labels: { style: { color: '#aaa', fontSize: '9px' }, rotation: -45, step: Math.max(1, Math.floor(categories.length / 12)) },
+                    lineColor: 'rgba(255,255,255,0.1)',
+                    tickColor: 'rgba(255,255,255,0.1)'
+                },
+                yAxis: {
+                    title: { text: 'mm', style: { color: '#aaa' } },
+                    labels: { style: { color: '#aaa' } },
+                    gridLineColor: 'rgba(255,255,255,0.05)',
+                    min: 0,
+                    reversed: true // Hietograma: barras hacia abajo
+                },
+                legend: { enabled: false },
+                tooltip: {
+                    formatter: function() { return `<b>${this.x}</b><br/>${this.y.toFixed(2)} mm`; },
+                    backgroundColor: 'rgba(0,0,0,0.8)', style: { color: '#fff' }
+                },
+                plotOptions: {
+                    column: {
+                        borderWidth: 0,
+                        borderRadius: 2,
+                        colorByPoint: true,
+                        colors: values.map(v => v >= 15 ? '#D50000' : v >= 7.5 ? '#FF6D00' : v >= 2.5 ? '#FFD600' : '#2185d0')
+                    }
+                },
+                series: [{ name: 'Precipitación', data: values }]
+            });
+        }
+
+        function applyCuencaSemaforo() {
+            Object.keys(cuencaLayers).forEach(key => {
+                const layer = cuencaLayers[key];
+                const info = cuencaSemaforoData[key];
+                const baseColor = cuencaBaseColors[key] || '#666';
+                if (!layer) return;
+
+                if (info) {
+                    const semColor = semaforoColors[info.semaforo] || '#00C853';
+                    layer.setStyle({
+                        color: baseColor,
+                        weight: 3,
+                        opacity: 1,
+                        fillColor: semColor,
+                        fillOpacity: 0.30
+                    });
+
+                    // Tooltip con info de lluvia
+                    layer.unbindTooltip();
+                    layer.bindTooltip(
+                        `<b>${info.nombre}</b><br/>` +
+                        `Lluvia prom: ${info.promedioMm.toFixed(1)} mm/h<br/>` +
+                        `Máx: ${info.maxMm.toFixed(1)} mm<br/>` +
+                        `Est. con dato: ${info.estacionesConDato}/${info.estacionesTotal}<br/>` +
+                        `<span style="color:${semColor}; font-weight:bold;">&#9632;</span> ${info.semaforo.toUpperCase()}`,
+                        { sticky: true, className: 'custom-tooltip' }
+                    );
+
+                    // Asegurar que esté visible en el mapa
+                    if (!map.hasLayer(layer)) {
+                        map.addLayer(layer);
+                    }
+                }
+            });
+        }
+
+        function clearCuencaSemaforo() {
+            Object.keys(cuencaLayers).forEach(key => {
+                const layer = cuencaLayers[key];
+                if (!layer) return;
+                const baseColor = cuencaBaseColors[key] || '#666';
+
+                // Remover del mapa solo si no está activado manualmente
+                if (!$('#cuenca-' + key + '-toggle').checkbox('is checked')) {
+                    map.removeLayer(layer);
+                } else {
+                    // Restaurar color original de la cuenca
+                    layer.setStyle({
+                        color: baseColor,
+                        weight: 2,
+                        opacity: 0.9,
+                        fillColor: baseColor,
+                        fillOpacity: 0.15
+                    });
+                    layer.unbindTooltip();
+                }
+            });
         }
 
 

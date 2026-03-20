@@ -124,7 +124,7 @@ namespace CloudStationWeb.Controllers
                 <div style='font-family: Inter, Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1f2e; border-radius: 16px; padding: 40px; color: #ffffff;'>
                     <div style='text-align: center; margin-bottom: 30px;'>
                         <div style='display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6, #6366f1); border-radius: 12px; line-height: 48px; font-size: 24px;'>⚡</div>
-                        <h2 style='color: #ffffff; margin-top: 16px;'>CloudStation Pro</h2>
+                        <h2 style='color: #ffffff; margin-top: 16px;'>PIH</h2>
                     </div>
                     <p style='color: rgba(255,255,255,0.7); font-size: 14px;'>Hola <strong style='color:#fff;'>{user.FullName}</strong>,</p>
                     <p style='color: rgba(255,255,255,0.7); font-size: 14px;'>Recibimos una solicitud para restablecer su contraseña. Haga clic en el siguiente botón para crear una nueva contraseña:</p>
@@ -133,10 +133,10 @@ namespace CloudStationWeb.Controllers
                     </div>
                     <p style='color: rgba(255,255,255,0.4); font-size: 12px;'>Si no solicitó este cambio, puede ignorar este correo. El enlace expirará automáticamente.</p>
                     <hr style='border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 24px 0;'>
-                    <p style='color: rgba(255,255,255,0.3); font-size: 11px; text-align: center;'>© 2026 CloudStation Pro • CFE</p>
+                    <p style='color: rgba(255,255,255,0.3); font-size: 11px; text-align: center;'>© 2026 Plataforma Integral Hidrometeorológica • CFE</p>
                 </div>";
 
-            await _emailSender.SendEmailAsync(email, "Restablecer Contraseña - CloudStation Pro", htmlBody);
+            await _emailSender.SendEmailAsync(email, "Restablecer Contraseña - PIH", htmlBody);
 
             return View("ForgotPasswordConfirmation");
         }

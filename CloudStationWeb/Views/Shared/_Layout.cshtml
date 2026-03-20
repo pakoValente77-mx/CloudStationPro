@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CloudStation Pro - @ViewData["Title"]</title>
+    <title>PIH - @ViewData["Title"]</title>
+    <link rel="icon" type="image/x-icon" href="~/favicon.ico?v=2" />
     
     <!-- Fomantic-UI (Semantic Fork) - Local -->
     <link rel="stylesheet" href="~/lib/fomantic-ui/dist/semantic.min.css">
@@ -26,10 +27,38 @@
 
         /* Main content container */
         .main-content {
-            height: calc(100vh - 50px); /* Full height minus menu */
+            height: calc(100vh - 50px - 28px); /* Full height minus menu minus footer */
             margin-top: 50px; /* Offset for fixed menu */
             overflow-y: auto; /* Scroll within content area only */
             overflow-x: hidden;
+        }
+
+        /* Fixed footer bar */
+        .pih-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: linear-gradient(90deg, #1b5e20, #2e7d32, #1b5e20);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            z-index: 9999;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            color: #ffffff;
+            letter-spacing: 0.3px;
+            border-top: 1px solid rgba(76, 175, 80, 0.4);
+            box-shadow: 0 -2px 12px rgba(27, 94, 32, 0.5);
+        }
+        .pih-footer .pih-name {
+            font-weight: 700;
+            color: #81c784;
+        }
+        .pih-footer .pih-copy {
+            color: rgba(255,255,255,0.7);
         }
 
         .glass-panel {
@@ -81,12 +110,22 @@
             
             /* Give some breathing room for map underneath scrollbar */
             .main-content {
-                margin-top: 55px; 
+                margin-top: 55px;
+                height: calc(100vh - 55px - 28px);
             }
+            #map-container {
+                height: calc(100vh - 55px - 28px);
+            }
+            .pih-footer .pih-full { display: none; }
+            .pih-footer .pih-short { display: inline; }
+        }
+
+        @@media only screen and (min-width: 992px) {
+            .pih-footer .pih-short { display: none; }
         }
 
         #map-container {
-            height: calc(100vh - 50px);
+            height: calc(100vh - 50px - 28px);
             width: 100vw;
         }
 
@@ -98,10 +137,10 @@
     @RenderSection("Styles", required: false)
 </head>
 <body>
-    <div class="ui inverted borderless fixed large menu">
-        <div class="ui container">
-            <a href="/" class="header item">
-                <i class="bolt blue icon"></i> CloudStation Pro
+    <div class="ui inverted borderless fixed menu" style="padding:0 8px;">
+            <a href="/" class="header item" style="padding:8px 14px 8px 10px;gap:8px;">
+                <img src="/img/logo-pih.svg" alt="PIH" style="width:30px;height:30px;" />
+                <span style="font-weight:700;letter-spacing:0.5px;font-size:15px;">PIH</span>
             </a>
             <a href="/Map" class="item">
                 <i class="map icon"></i> Mapa
@@ -113,16 +152,16 @@
                 <i class="users icon"></i> Mis Grupos
             </a>
             <a href="/DataAnalysis" class="item">
-                <i class="chart line icon"></i> Análisis de Datos
+                <i class="chart line icon"></i> Análisis
             </a>
             <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GoesMonitoring" ? "active" : "")" href="@Url.Action("Index", "GoesMonitoring")">
-                <i class="satellite icon"></i> Monitoreo GOES
+                <i class="satellite icon"></i> GOES
             </a>
             
             @if (User.IsInRole("Administrador"))
             {
                 <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StationAdmin" ? "active" : "")" href="@Url.Action("Index", "StationAdmin")">
-                    <i class="server icon"></i> Administración de Estaciones
+                    <i class="server icon"></i> Estaciones
                 </a>
             }
 
@@ -131,16 +170,20 @@
                 <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
             </a>
             <div class="right menu">
-                <div class="item">
-                    <div class="ui blue label">Real-Time Hybrid Sync</div>
-                </div>
                 @await Html.PartialAsync("_LoginPartial")
             </div>
-        </div>
     </div>
 
     <div class="main-content">
         @RenderBody()
+    </div>
+
+    <!-- Footer Bar -->
+    <div class="pih-footer">
+        <span class="pih-name pih-full">Plataforma Integral Hidrometeorológica</span>
+        <span class="pih-name pih-short">PIH</span>
+        <span class="pih-copy">|</span>
+        <span class="pih-copy">© 2026 CFE — Todos los derechos reservados</span>
     </div>
 
     <!-- Leaflet Maps CSS - Local -->
