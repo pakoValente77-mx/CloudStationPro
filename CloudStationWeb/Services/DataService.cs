@@ -83,54 +83,6 @@ namespace CloudStationWeb.Services
 
                 var cotasByStation = await LoadCotasForStationsAsync(stationIdsForCotas, sqlVariable, windowStartUtc, windowEndUtc);
 
-                // Pre-compute bimodal thresholds for stations with significant cota
-                // by querying recent dcp_datos values (needed because ultimas_mediciones has only 1 value)
-                var bimodalThresholds = new Dictionary<string, float>();
-                var stationsWithBigCota = cotasByStation
-                    .Select(kv => new { StationId = kv.Key, Cota = GetEffectiveCota(kv.Key, cotasByStation) })
-                    .Where(x => x.Cota.HasValue && Math.Abs(x.Cota.Value) >= 2.0f)
-                    .ToList();
-
-                if (stationsWithBigCota.Count > 0)
-                {
-                    // Build dcp_id lookup for these stations
-                    var cotaDcpIds = new List<(string stationId, string dcpId, float cotaVal)>();
-                    foreach (var sc in stationsWithBigCota)
-                    {
-                        var st = sqlStations.FirstOrDefault(s => s.IdAsignado == sc.StationId);
-                        if (st == null) continue;
-                        string sid = !string.IsNullOrEmpty(st.IdSatelital)
-                            ? st.IdSatelital
-                            : ((st.IdAsignado != null && idMap.ContainsKey(st.IdAsignado))
-                                ? idMap[st.IdAsignado]
-                                : (st.IdAsignado ?? ""));
-                        if (!string.IsNullOrEmpty(sid))
-                            cotaDcpIds.Add((sc.StationId, sid, sc.Cota!.Value));
-                    }
-
-                    if (cotaDcpIds.Count > 0)
-                    {
-                        var dcpList = cotaDcpIds.Select(x => x.dcpId).Distinct().ToList();
-                        var recentSamples = await pgDb.QueryAsync<(string dcp_id, float valor)>(
-                            @"SELECT dcp_id, valor FROM public.dcp_datos
-                              WHERE dcp_id = ANY(@DcpIds) AND variable = @Var
-                              AND ts >= now() - interval '6 hours'",
-                            new { DcpIds = dcpList.ToArray(), Var = variable });
-
-                        var samplesByDcp = recentSamples.GroupBy(s => s.dcp_id).ToDictionary(g => g.Key, g => g.Select(x => x.valor).ToList());
-
-                        foreach (var (stationId2, dcpId2, cotaVal2) in cotaDcpIds)
-                        {
-                            if (samplesByDcp.TryGetValue(dcpId2, out var vals) && vals.Count >= 4)
-                            {
-                                var thr = ComputeBimodalThreshold(vals, cotaVal2);
-                                if (thr.HasValue)
-                                    bimodalThresholds[stationId2] = thr.Value;
-                            }
-                        }
-                    }
-                }
-
                 // Unir datos y filtrar valores malos
                 var result = sqlStations.Select(s => {
                     string searchId = !string.IsNullOrEmpty(s.IdSatelital) 
@@ -169,12 +121,7 @@ namespace CloudStationWeb.Services
 
                     if (validatedValue.HasValue && measureTs.HasValue && !string.IsNullOrEmpty(s.IdAsignado))
                     {
-                        float? cotaValMap = GetEffectiveCota(s.IdAsignado, cotasByStation);
-                        bool skip = cotaValMap.HasValue
-                            && bimodalThresholds.TryGetValue(s.IdAsignado, out var thr)
-                            && IsValuePreAdjusted(validatedValue.Value, thr, cotaValMap.Value);
-                        if (!skip)
-                            validatedValue = ApplyCota(validatedValue.Value, measureTs.Value, s.IdAsignado, cotasByStation);
+                        validatedValue = ApplyCota(validatedValue.Value, measureTs.Value, s.IdAsignado, cotasByStation);
                     }
 
                     return new StationMapData
@@ -270,23 +217,10 @@ namespace CloudStationWeb.Services
 
                 var cotasByStation = await LoadCotasForStationsAsync(new[] { stationId }, sqlVariable, startUtc, endUtc);
 
-                // Detect bimodal pattern to avoid double-cota
-                float? cotaVal = GetEffectiveCota(stationId, cotasByStation);
-                float? threshold = null;
-                if (cotaVal.HasValue)
-                {
-                    var vals = history.Select(h => h.Valor);
-                    threshold = ComputeBimodalThreshold(vals, cotaVal.Value);
-                }
-
                 foreach (var h in history)
                 {
                     if (h.Ts != default)
-                    {
-                        bool skip = cotaVal.HasValue && IsValuePreAdjusted(h.Valor, threshold, cotaVal.Value);
-                        if (!skip)
-                            h.Valor = ApplyCota(h.Valor, h.Ts, stationId, cotasByStation);
-                    }
+                        h.Valor = ApplyCota(h.Valor, h.Ts, stationId, cotasByStation);
                 }
 
                 return history;
@@ -444,25 +378,12 @@ namespace CloudStationWeb.Services
                     {
                         var rawData = dataByDcp[searchId];
 
-                        // Detect dual-calibration bimodal pattern to avoid double-cota
-                        float? cotaVal = GetEffectiveCota(s.IdAsignado ?? "", cotasByStation);
-                        float? threshold = null;
-                        if (cotaVal.HasValue)
-                        {
-                            var vals = rawData.Where(d => d.value.HasValue).Select(d => d.value!.Value);
-                            threshold = ComputeBimodalThreshold(vals, cotaVal.Value);
-                        }
-
                         // Convert UTC timestamps back to CDMX local time and format as strings
                         hourlyValues = rawData.Select(d => {
                             float? value = d.value;
 
                             if (value.HasValue && !string.IsNullOrEmpty(s.IdAsignado))
-                            {
-                                bool skip = cotaVal.HasValue && IsValuePreAdjusted(value.Value, threshold, cotaVal.Value);
-                                if (!skip)
-                                    value = ApplyCota(value.Value, d.hour, s.IdAsignado, cotasByStation);
-                            }
+                                value = ApplyCota(value.Value, d.hour, s.IdAsignado, cotasByStation);
 
                             return new HourlyValue
                             {
@@ -699,8 +620,8 @@ namespace CloudStationWeb.Services
                 try 
                 {
                     // sqlVariable already declared outside
-                    var limits = await sqlDb.QueryAsync<(string IdAsignado, double? ValorMin, double? ValorMax)>(
-                        $@"SELECT e.IdAsignado, s.ValorMin, s.ValorMax 
+                    var limits = await sqlDb.QueryAsync<(string IdAsignado, double? ValorMinimo, double? ValorMaximo)>(
+                        $@"SELECT e.IdAsignado, s.ValorMinimo, s.ValorMaximo 
                            FROM Estacion e
                            JOIN Sensor s ON s.IdEstacion = e.Id
                            JOIN TipoSensor t ON s.IdTipoSensor = t.Id
@@ -711,7 +632,7 @@ namespace CloudStationWeb.Services
                     
                     foreach (var l in limits)
                     {
-                        if (l.IdAsignado != null) limitsMap[l.IdAsignado] = (l.ValorMin, l.ValorMax);
+                        if (l.IdAsignado != null) limitsMap[l.IdAsignado] = (l.ValorMinimo, l.ValorMaximo);
                     }
                 }
                 catch (Exception ex)
@@ -786,22 +707,10 @@ namespace CloudStationWeb.Services
                     // Apply cota adjustment per timestamp (if any)
                     if (!string.IsNullOrEmpty(station.IdAsignado))
                     {
-                        float? cotaValDA = GetEffectiveCota(station.IdAsignado, cotasByStation);
-                        float? thresholdDA = null;
-                        if (cotaValDA.HasValue)
-                        {
-                            var vals = dataPoints.Where(dp => dp.Value.HasValue).Select(dp => dp.Value!.Value);
-                            thresholdDA = ComputeBimodalThreshold(vals, cotaValDA.Value);
-                        }
-
                         foreach (var dp in dataPoints)
                         {
                             if (dp.Value.HasValue)
-                            {
-                                bool skip = cotaValDA.HasValue && IsValuePreAdjusted(dp.Value.Value, thresholdDA, cotaValDA.Value);
-                                if (!skip)
-                                    dp.Value = ApplyCota(dp.Value.Value, dp.Timestamp, station.IdAsignado, cotasByStation);
-                            }
+                                dp.Value = ApplyCota(dp.Value.Value, dp.Timestamp, station.IdAsignado, cotasByStation);
                         }
                     }
 
@@ -924,7 +833,6 @@ namespace CloudStationWeb.Services
             public DateTime? End { get; set; }
             public float Valor { get; set; }
             public string Operador { get; set; } = "+";
-            public DateTime Registro { get; set; }
         }
 
         private async Task<Dictionary<string, List<CotaEntry>>> LoadCotasForStationsAsync(IEnumerable<string?> stationIds, string sqlVariable, DateTime windowStartUtc, DateTime windowEndUtc)
@@ -939,7 +847,7 @@ namespace CloudStationWeb.Services
             {
                 using (IDbConnection sqlDb = new SqlConnection(_sqlServerConn))
                 {
-                    var cotas = await sqlDb.QueryAsync<(string StationId, decimal ValorCota, string Operador, DateTime? FechaInicio, DateTime? FechaFinal, DateTime FechaRegistro)>(
+                    var cotas = await sqlDb.QueryAsync<(string StationId, decimal ValorCota, string Operador, DateTime? FechaInicio, DateTime? FechaFinal, string FechaRegistro)>(
                         @"SELECT e.IdAsignado AS StationId,
                                  cs.ValorCota,
                                  cs.Operador,
@@ -955,7 +863,7 @@ namespace CloudStationWeb.Services
                              AND s.Visible = 1
                              AND (cs.FechaFinal IS NULL OR cs.FechaFinal >= @WindowStart)
                              AND (cs.FechaInicio IS NULL OR cs.FechaInicio <= @WindowEnd)
-                           ORDER BY e.IdAsignado, cs.FechaRegistro DESC",
+                           ORDER BY e.IdAsignado, cs.FechaInicio DESC",
                         new { StationIds = ids, SqlVar = sqlVariable, WindowStart = windowStartUtc, WindowEnd = windowEndUtc });
 
                     foreach (var c in cotas)
@@ -970,15 +878,15 @@ namespace CloudStationWeb.Services
                             Start = c.FechaInicio,
                             End = c.FechaFinal,
                             Valor = (float)c.ValorCota,
-                            Operador = string.IsNullOrEmpty(c.Operador) ? "+" : c.Operador,
-                            Registro = c.FechaRegistro
+                            Operador = string.IsNullOrEmpty(c.Operador) ? "+" : c.Operador
                         });
+                        Console.WriteLine($"[COTA] Loaded: Station={c.StationId} Valor={c.ValorCota} Op={c.Operador} Start={c.FechaInicio?.ToString("u") ?? "NULL"} End={c.FechaFinal?.ToString("u") ?? "NULL"}");
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Failure to load cotas should not block report generation.
+                Console.WriteLine($"[COTA] ERROR loading cotas: {ex.Message}");
             }
 
             return result;
@@ -992,7 +900,7 @@ namespace CloudStationWeb.Services
             var matching = cotas
                 .Where(c => (!c.Start.HasValue || timestampUtc >= c.Start.Value)
                          && (!c.End.HasValue || timestampUtc <= c.End.Value))
-                .OrderByDescending(c => c.Registro)
+                .OrderByDescending(c => c.Start)
                 .FirstOrDefault();
 
             if (matching == null)
@@ -1003,63 +911,6 @@ namespace CloudStationWeb.Services
                 adjustment = -adjustment;
 
             return rawValue + adjustment;
-        }
-
-        /// <summary>
-        /// Gets the effective signed cota value for a station. Returns null if no cota found.
-        /// </summary>
-        private static float? GetEffectiveCota(string stationId, Dictionary<string, List<CotaEntry>> cotasByStation)
-        {
-            if (string.IsNullOrEmpty(stationId)
-                || cotasByStation == null
-                || !cotasByStation.TryGetValue(stationId, out var cotas)
-                || cotas.Count == 0)
-                return null;
-
-            var firstCota = cotas.OrderByDescending(c => c.Registro).FirstOrDefault();
-            if (firstCota == null) return null;
-
-            float val = firstCota.Valor;
-            if (!string.IsNullOrEmpty(firstCota.Operador) && firstCota.Operador.Trim().StartsWith("-"))
-                val = -val;
-            return val;
-        }
-
-        /// <summary>
-        /// Examines a set of raw values for a bimodal gap matching the cota magnitude.
-        /// Returns a threshold that separates raw from pre-adjusted values, or null if
-        /// no bimodal pattern is detected. Only triggers for |cota| >= 2.
-        /// </summary>
-        private static float? ComputeBimodalThreshold(IEnumerable<float> rawValues, float cotaVal)
-        {
-            if (Math.Abs(cotaVal) < 2.0f) return null;
-
-            var sorted = rawValues.OrderBy(v => v).ToList();
-            if (sorted.Count < 4) return null;
-
-            float biggestGap = 0;
-            int gapIdx = -1;
-            for (int i = 0; i < sorted.Count - 1; i++)
-            {
-                float gap = sorted[i + 1] - sorted[i];
-                if (gap > biggestGap) { biggestGap = gap; gapIdx = i; }
-            }
-            if (gapIdx < 0) return null;
-
-            if (Math.Abs(biggestGap - Math.Abs(cotaVal)) > Math.Abs(cotaVal) * 0.20f)
-                return null;
-
-            return (sorted[gapIdx] + sorted[gapIdx + 1]) / 2;
-        }
-
-        /// <summary>
-        /// Returns true if the value appears to already have the cota applied
-        /// (it sits on the "adjusted" side of the bimodal threshold).
-        /// </summary>
-        private static bool IsValuePreAdjusted(float value, float? threshold, float cotaVal)
-        {
-            if (!threshold.HasValue) return false;
-            return cotaVal > 0 ? value > threshold.Value : value < threshold.Value;
         }
 
         public async Task<object> GetTableSchemaAsync()
@@ -1167,7 +1018,17 @@ namespace CloudStationWeb.Services
             var stationMapping = await GetStationCuencaMappingAsync(onlyCfe);
             var stationIds = stationMapping.Select(s => s.IdAsignado).ToArray();
 
-            // 2) Read CuencasKml config for code/label/color mapping
+            // 2) Read cuenca code/color from DB Cuenca table
+            using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
+            var cuencaRows = await sqlDb.QueryAsync("SELECT Nombre, Codigo, Color FROM Cuenca WHERE Activo = 1");
+            var cuencaInfoByName = cuencaRows
+                .GroupBy(r => ((string)r.Nombre).Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new { Codigo = ((string)(g.First().Codigo ?? "")).Trim(), Color = ((string)(g.First().Color ?? "")).Trim() },
+                    StringComparer.OrdinalIgnoreCase);
+
+            // Fallback: read CuencasKml config for legacy entries not yet in DB
             var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
             var configByCuenca = kmlConfig.ToDictionary(c => c.CuencaDb, c => c, StringComparer.OrdinalIgnoreCase);
 
@@ -1223,10 +1084,14 @@ namespace CloudStationWeb.Services
                            : promedio < 15f  ? "naranja"
                            : "rojo";
 
-                // Use config for code/label if available, otherwise derive from cuenca name
+                // Use DB Cuenca table for code/label, fallback to appsettings config
                 string code = cuencaName;
                 string label = cuencaName;
-                if (configByCuenca.TryGetValue(cuencaName, out var cfg))
+                if (cuencaInfoByName.TryGetValue(cuencaName, out var dbInfo) && !string.IsNullOrEmpty(dbInfo.Codigo))
+                {
+                    code = dbInfo.Codigo;
+                }
+                else if (configByCuenca.TryGetValue(cuencaName, out var cfg))
                 {
                     code = cfg.Code;
                     label = cfg.Label;
@@ -1304,13 +1169,27 @@ namespace CloudStationWeb.Services
 
         public async Task<List<CuencaEstacionPrecip>> GetCuencaEstacionesAsync(string cuencaName, bool onlyCfe = true)
         {
-            // Resolve cuenca DB name: if a KML code was passed, look up in config
-            var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
-            var byCode = kmlConfig.FirstOrDefault(c => c.Code.Equals(cuencaName, StringComparison.OrdinalIgnoreCase));
-            string dbCuencaName = byCode?.CuencaDb ?? cuencaName;
+            // Resolve cuenca DB name: if a KML code was passed, look up in Cuenca table first, then fallback to config
+            using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
+            string dbCuencaName = cuencaName;
+
+            // Try resolving code from DB
+            var dbCuenca = await sqlDb.QueryFirstOrDefaultAsync<string>(
+                "SELECT Nombre FROM Cuenca WHERE Codigo = @Code AND Activo = 1",
+                new { Code = cuencaName });
+            if (!string.IsNullOrEmpty(dbCuenca))
+            {
+                dbCuencaName = dbCuenca;
+            }
+            else
+            {
+                // Fallback: appsettings config
+                var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
+                var byCode = kmlConfig.FirstOrDefault(c => c.Code.Equals(cuencaName, StringComparison.OrdinalIgnoreCase));
+                if (byCode != null) dbCuencaName = byCode.CuencaDb;
+            }
 
             // Get stations from SQL Server filtered by cuenca
-            using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
             string sql = @"
                 SELECT e.IdAsignado, e.Nombre,
                        ISNULL(c.Nombre, '') AS Cuenca,

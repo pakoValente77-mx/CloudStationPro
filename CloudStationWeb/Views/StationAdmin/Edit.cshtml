@@ -599,20 +599,28 @@
                     </div>
                 </div>
 
-                <div class="three fields">
-                    <div class="field">
-                        <label>Fecha y Hora de Inicio</label>
-                        <input type="datetime-local" id="cFechaInicio">
+                <div class="fields">
+                    <div class="five wide field">
+                        <label>Fecha de Inicio</label>
+                        <input type="date" id="cFechaInicioDate">
                     </div>
-                    <div class="field" style="display:flex; align-items:flex-end; padding-bottom:10px;">
+                    <div class="three wide field">
+                        <label>Hora de Inicio</label>
+                        <input type="time" id="cFechaInicioTime" value="00:00">
+                    </div>
+                    <div class="two wide field" style="display:flex; align-items:flex-end; padding-bottom:10px;">
                         <div class="ui checkbox" id="chkFinVigencia">
                             <input type="checkbox" id="cFin">
-                            <label style="color:white !important;">Tiene Fin de Vigencia</label>
+                            <label style="color:white !important;">Fin de Vigencia</label>
                         </div>
                     </div>
-                    <div class="field disabled" id="fieldFechaFin">
-                        <label>Fecha y Hora Final</label>
-                        <input type="datetime-local" id="cFechaFinal">
+                    <div class="four wide field disabled" id="fieldFechaFin">
+                        <label>Fecha Final</label>
+                        <input type="date" id="cFechaFinalDate">
+                    </div>
+                    <div class="two wide field disabled" id="fieldHoraFin">
+                        <label>Hora Final</label>
+                        <input type="time" id="cFechaFinalTime" value="00:00">
                     </div>
                 </div>
 
@@ -920,9 +928,12 @@
         $('#cFin').on('change', function() {
             if($(this).is(':checked')) {
                 $('#fieldFechaFin').removeClass('disabled');
+                $('#fieldHoraFin').removeClass('disabled');
             } else {
                 $('#fieldFechaFin').addClass('disabled');
-                $('#cFechaFinal').val('');
+                $('#fieldHoraFin').addClass('disabled');
+                $('#cFechaFinalDate').val('');
+                $('#cFechaFinalTime').val('00:00');
             }
         });
 
@@ -994,20 +1005,26 @@
             $('#cId').val('');
             $('#cValor').val('');
             $('#cOperadorSelect').dropdown('clear');
-            $('#cFechaInicio').val('');
+            $('#cFechaInicioDate').val('');
+            $('#cFechaInicioTime').val('00:00');
             
             $('#cFin').prop('checked', false);
             $('#fieldFechaFin').addClass('disabled');
-            $('#cFechaFinal').val('');
+            $('#fieldHoraFin').addClass('disabled');
+            $('#cFechaFinalDate').val('');
+            $('#cFechaFinalTime').val('00:00');
             $('#cotaFormTitle').text('Registrar Nueva Cota / Desfase');
         }
 
-        function formatDateTimeLocal(dateString) {
-            if(!dateString) return '';
+        function parseDateParts(dateString) {
+            if(!dateString) return { date: '', time: '00:00' };
             var d = new Date(dateString);
-            var tzoffset = (new Date()).getTimezoneOffset() * 60000;
-            var localISOTime = (new Date(d - tzoffset)).toISOString().slice(0, 16);
-            return localISOTime;
+            var year = d.getFullYear();
+            var month = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            var hours = String(d.getHours()).padStart(2, '0');
+            var mins = String(d.getMinutes()).padStart(2, '0');
+            return { date: year + '-' + month + '-' + day, time: hours + ':' + mins };
         }
 
         function editCota(id, valorCota, operador, fechaInicio, fin, fechaFinal) {
@@ -1016,50 +1033,70 @@
             $('#cOperadorSelect').dropdown('set selected', operador);
             
             if(fechaInicio) {
-                $('#cFechaInicio').val(formatDateTimeLocal(fechaInicio));
+                var fi = parseDateParts(fechaInicio);
+                $('#cFechaInicioDate').val(fi.date);
+                $('#cFechaInicioTime').val(fi.time);
+            } else {
+                $('#cFechaInicioDate').val('');
+                $('#cFechaInicioTime').val('00:00');
             }
             
             if(fin) {
                 $('#cFin').prop('checked', true);
                 $('#fieldFechaFin').removeClass('disabled');
+                $('#fieldHoraFin').removeClass('disabled');
                 if(fechaFinal) {
-                    $('#cFechaFinal').val(formatDateTimeLocal(fechaFinal));
+                    var ff = parseDateParts(fechaFinal);
+                    $('#cFechaFinalDate').val(ff.date);
+                    $('#cFechaFinalTime').val(ff.time);
                 }
             } else {
                 $('#cFin').prop('checked', false);
                 $('#fieldFechaFin').addClass('disabled');
-                $('#cFechaFinal').val('');
+                $('#fieldHoraFin').addClass('disabled');
+                $('#cFechaFinalDate').val('');
+                $('#cFechaFinalTime').val('00:00');
             }
             
             $('#cotaFormTitle').text('Editar Cota / Desfase');
+        }
+
+        function combineDatetime(dateVal, timeVal) {
+            if (!dateVal) return null;
+            var t = timeVal || '00:00';
+            return dateVal + 'T' + t + ':00';
         }
 
         function saveCota() {
             var sensorId = $('#currentCotaSensorId').val();
             var valor = $('#cValor').val();
             var operador = $('#cOperadorSelect').dropdown('get value');
-            var fechaInicio = $('#cFechaInicio').val();
+            var fechaInicioDate = $('#cFechaInicioDate').val();
+            var fechaInicioTime = $('#cFechaInicioTime').val();
             var isFin = $('#cFin').is(':checked');
-            var fechaFin = $('#cFechaFinal').val();
+            var fechaFinDate = $('#cFechaFinalDate').val();
+            var fechaFinTime = $('#cFechaFinalTime').val();
             
             if(!valor || !operador) {
                 alert("Los campos Valor y Operador son obligatorios.");
                 return;
             }
-            if(isFin && !fechaFin) {
+            if(isFin && !fechaFinDate) {
                 alert("Has indicado que tiene Fin de Vigencia, debes seleccionar la Fecha Final.");
                 return;
             }
 
             var payload = {
-                Id: parseInt($('#cId').val() || "0"),
-                IdSensor: sensorId,
-                ValorCota: parseFloat(valor),
-                Operador: operador,
-                FechaInicio: fechaInicio ? fechaInicio : null,
-                Fin: isFin,
-                FechaFinal: isFin ? fechaFin : null
+                id: parseInt($('#cId').val() || "0"),
+                idSensor: sensorId,
+                valorCota: parseFloat(valor),
+                operador: operador,
+                fechaInicio: combineDatetime(fechaInicioDate, fechaInicioTime),
+                fin: isFin,
+                fechaFinal: isFin ? combineDatetime(fechaFinDate, fechaFinTime) : null
             };
+
+            console.log('SaveCota payload:', JSON.stringify(payload));
 
             $.ajax({
                 type: "POST",
@@ -1070,12 +1107,15 @@
                 success: function (r) {
                     if (r.success) {
                         resetCotaForm();
-                        loadCotasTable(sensorId); // Refresca listado local
+                        loadCotasTable(sensorId);
                     } else {
                         alert("Error: " + r.message);
                     }
                 },
-                error: function() { alert("Falla de red al guardar."); }
+                error: function(xhr) { 
+                    console.error('SaveCota error:', xhr.status, xhr.responseText);
+                    alert("Falla de red al guardar. Status: " + xhr.status); 
+                }
             });
         }
 
