@@ -1,0 +1,559 @@
+@model CloudStationWeb.Models.WatershedAdminViewModel
+@{
+    ViewData["Title"] = "Administración de Cuencas";
+}
+
+@section Styles {
+<style>
+    .watershed-container {
+        padding: 30px;
+        max-width: 1400px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+    }
+
+    .ws-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .ws-header h2 {
+        font-size: 22px;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+    }
+
+    .ws-header h2 i { color: #2196F3; }
+
+    .btn-new {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+    .btn-new:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(16,185,129,0.4); }
+
+    .cuenca-card {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: all 0.2s;
+    }
+    .cuenca-card:hover {
+        border-color: rgba(33, 150, 243, 0.3);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .cuenca-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .cuenca-name {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .cuenca-stats {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+    }
+
+    .stat-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .stat-badge.subcuencas { background: rgba(33, 150, 243, 0.15); color: #64b5f6; }
+    .stat-badge.estaciones { background: rgba(76, 175, 80, 0.15); color: #81c784; }
+    .stat-badge.inactive { background: rgba(244, 67, 54, 0.15); color: #ef5350; }
+
+    .unassigned-section {
+        margin-top: 30px;
+    }
+
+    .unassigned-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .unassigned-header h3 {
+        color: #ef5350;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .actions-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    /* Modal overrides for dark theme */
+    .ui.modal {
+        background: #1a1e2e !important;
+        color: #fff !important;
+        border-radius: 12px !important;
+    }
+    .ui.modal > .header {
+        background: #1a1e2e !important;
+        color: #fff !important;
+        border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+    }
+    .ui.modal > .content {
+        background: #1a1e2e !important;
+        color: #fff !important;
+    }
+    .ui.modal > .actions {
+        background: #1a1e2e !important;
+        border-top: 1px solid rgba(255,255,255,0.1) !important;
+    }
+</style>
+}
+
+<div class="watershed-container">
+    <div class="ws-header">
+        <h2>
+            <i class="tint icon"></i>
+            Administración de Cuencas y Subcuencas
+        </h2>
+        <button class="btn-new" onclick="openCuencaModal()">
+            <i class="plus icon"></i> Nueva Cuenca
+        </button>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="ui positive message" style="margin-bottom: 20px;">
+            <i class="close icon"></i>
+            <p>@TempData["SuccessMessage"]</p>
+        </div>
+    }
+
+    <!-- Search -->
+    <div style="margin-bottom: 20px;">
+        <div class="ui inverted transparent icon input" style="border: 1px solid rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 20px; width: 350px;">
+            <input type="text" id="searchCuencas" placeholder="Buscar cuencas..." style="color: white;">
+            <i class="search icon" style="color: #2196F3;"></i>
+        </div>
+    </div>
+
+    <!-- Cuencas List -->
+    <div id="cuencasList">
+        @foreach (var cuenca in Model.Cuencas)
+        {
+            <div class="cuenca-card" data-name="@cuenca.Nombre.ToLower()">
+                <div class="cuenca-card-header">
+                    <div>
+                        <span class="cuenca-name">
+                            <i class="tint icon" style="color: #2196F3;"></i>
+                            @cuenca.Nombre
+                        </span>
+                        @if (!cuenca.Activo)
+                        {
+                            <span class="stat-badge inactive" style="margin-left: 10px;">
+                                <i class="ban icon"></i> Inactiva
+                            </span>
+                        }
+                        @if (cuenca.VerEnMapa)
+                        {
+                            <span class="stat-badge" style="margin-left: 10px; background:rgba(76,175,80,0.15); color:#66bb6a;">
+                                <i class="map icon"></i> En Mapa
+                            </span>
+                        }
+                    </div>
+                    <div class="actions-group">
+                        <a href="@Url.Action("EditCuenca", "WatershedAdmin", new { id = cuenca.Id })"
+                           class="ui small primary button" style="background-color: #2196F3;">
+                            <i class="edit icon"></i> Gestionar
+                        </a>
+                        <button class="ui small button" style="background: rgba(255,255,255,0.1); color: #fff;"
+                                onclick="openCuencaModal('@cuenca.Id', '@cuenca.Nombre.Replace("'", "\\'")','@cuenca.Activo','@cuenca.VerEnMapa')">
+                            <i class="pencil icon"></i>
+                        </button>                        <button class="ui small red button" onclick="deleteCuenca('@cuenca.Id', '@cuenca.Nombre.Replace("'", "\\'")', @cuenca.SubcuencaCount, @cuenca.EstacionCount)">
+                            <i class="trash icon"></i>
+                        </button>                    </div>
+                </div>
+                <div class="cuenca-stats">
+                    <span class="stat-badge subcuencas">
+                        <i class="sitemap icon"></i> @cuenca.SubcuencaCount subcuencas
+                    </span>
+                    <span class="stat-badge estaciones">
+                        <i class="broadcast tower icon"></i> @cuenca.EstacionCount estaciones
+                    </span>
+                </div>
+            </div>
+        }
+
+        @if (!Model.Cuencas.Any())
+        {
+            <div class="glass-panel" style="padding: 40px; text-align: center; color: #888;">
+                <i class="tint slash icon" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+                <p style="font-size: 16px;">No hay cuencas registradas.</p>
+                <p>Haz clic en <strong>"Nueva Cuenca"</strong> para comenzar.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Unassigned Stations -->
+    @if (Model.EstacionesSinCuenca.Any())
+    {
+        <div class="unassigned-section">
+            <div class="unassigned-header">
+                <h3>
+                    <i class="exclamation triangle icon"></i>
+                    Estaciones sin Cuenca (@Model.EstacionesSinCuenca.Count)
+                </h3>
+                <button class="ui small yellow button" onclick="openBulkAssignModal()">
+                    <i class="exchange icon"></i> Asignación Masiva
+                </button>
+            </div>
+            <div class="glass-panel" style="padding: 15px;">
+                <table class="ui celled selectable inverted compact table" id="unassignedTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><div class="ui fitted checkbox"><input type="checkbox" id="selectAll"><label></label></div></th>
+                            <th>Nombre</th>
+                            <th>ID Asignado</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var est in Model.EstacionesSinCuenca)
+                        {
+                            <tr>
+                                <td><div class="ui fitted checkbox"><input type="checkbox" class="station-check" value="@est.Id"><label></label></div></td>
+                                <td style="font-weight:500;">@est.Nombre</td>
+                                <td style="color: #00ff88;">@(est.IdAsignado ?? "N/A")</td>
+                                <td>
+                                    @if (est.Activo)
+                                    {
+                                        <i class="check circle icon green"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="times circle icon red"></i>
+                                    }
+                                </td>
+                                <td>
+                                    <button class="ui mini blue button" onclick="openQuickAssignModal('@est.Id', '@est.Nombre?.Replace("'", "\\'")' )">
+                                        <i class="arrow right icon"></i> Asignar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal: New/Edit Cuenca -->
+<div class="ui small modal" id="cuencaModal">
+    <div class="header" id="cuencaModalTitle">Nueva Cuenca</div>
+    <div class="content">
+        <form class="ui inverted form" id="cuencaForm">
+            <input type="hidden" id="cuenca_id" />
+            <div class="field">
+                <label>Nombre de la Cuenca</label>
+                <input type="text" id="cuenca_nombre" placeholder="Ej: Río Grijalva-Concordia" maxlength="200" />
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox">
+                    <input type="checkbox" id="cuenca_activo" checked />
+                    <label>Activa</label>
+                </div>
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox">
+                    <input type="checkbox" id="cuenca_verenmapa" />
+                    <label>Visible en Mapa</label>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveCuenca()">
+            <i class="save icon"></i> Guardar
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Quick Assign Station -->
+<div class="ui small modal" id="quickAssignModal">
+    <div class="header">Asignar Estación a Cuenca</div>
+    <div class="content">
+        <form class="ui inverted form" id="quickAssignForm">
+            <input type="hidden" id="assign_estacion_id" />
+            <div class="field">
+                <label>Estación</label>
+                <input type="text" id="assign_estacion_nombre" readonly style="opacity: 0.7;" />
+            </div>
+            <div class="field">
+                <label>Cuenca</label>
+                <select id="assign_cuenca" class="ui search dropdown">
+                    <option value="">Seleccionar cuenca...</option>
+                    @foreach (var c in Model.Cuencas.Where(c => c.Activo))
+                    {
+                        <option value="@c.Id">@c.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Subcuenca</label>
+                <select id="assign_subcuenca" class="ui search dropdown">
+                    <option value="">Seleccionar subcuenca...</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveQuickAssign()">
+            <i class="check icon"></i> Asignar
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Bulk Assign -->
+<div class="ui small modal" id="bulkAssignModal">
+    <div class="header">Asignación Masiva de Estaciones</div>
+    <div class="content">
+        <form class="ui inverted form">
+            <div class="field">
+                <label>Estaciones seleccionadas: <strong id="bulkCount">0</strong></label>
+            </div>
+            <div class="field">
+                <label>Cuenca destino</label>
+                <select id="bulk_cuenca" class="ui search dropdown">
+                    <option value="">Seleccionar cuenca...</option>
+                    @foreach (var c in Model.Cuencas.Where(c => c.Activo))
+                    {
+                        <option value="@c.Id">@c.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Subcuenca destino</label>
+                <select id="bulk_subcuenca" class="ui search dropdown">
+                    <option value="">Seleccionar subcuenca...</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveBulkAssign()">
+            <i class="check icon"></i> Asignar Todas
+        </button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    $('.ui.checkbox').checkbox();
+    $('.ui.dropdown').dropdown();
+    $('.message .close').on('click', function() { $(this).closest('.message').transition('fade'); });
+
+    // Search cuencas
+    $('#searchCuencas').on('input', function() {
+        var q = $(this).val().toLowerCase();
+        $('#cuencasList .cuenca-card').each(function() {
+            $(this).toggle($(this).data('name').includes(q));
+        });
+    });
+
+    // Select all checkbox
+    $('#selectAll').on('change', function() {
+        $('.station-check').prop('checked', $(this).prop('checked'));
+    });
+
+    // Cascading subcuenca dropdown on quick assign
+    $('#assign_cuenca').on('change', function() {
+        loadSubcuencas($(this).val(), '#assign_subcuenca');
+    });
+    $('#bulk_cuenca').on('change', function() {
+        loadSubcuencas($(this).val(), '#bulk_subcuenca');
+    });
+});
+
+function loadSubcuencas(cuencaId, targetSelector) {
+    var $target = $(targetSelector);
+    $target.empty().append('<option value="">Seleccionar subcuenca...</option>');
+    if (!cuencaId) return;
+    $.get('/WatershedAdmin/GetSubcuencas/' + cuencaId, function(data) {
+        data.forEach(function(sc) {
+            $target.append('<option value="' + sc.id + '">' + sc.nombre + '</option>');
+        });
+        // Reinitialize dropdown
+        $target.parent('.ui.dropdown').dropdown('refresh');
+    });
+}
+
+function openCuencaModal(id, nombre, activo, verenmapa) {
+    if (id) {
+        $('#cuencaModalTitle').text('Editar Cuenca');
+        $('#cuenca_id').val(id);
+        $('#cuenca_nombre').val(nombre);
+        $('#cuenca_activo').prop('checked', activo === 'True');
+        $('#cuenca_verenmapa').prop('checked', verenmapa === 'True');
+    } else {
+        $('#cuencaModalTitle').text('Nueva Cuenca');
+        $('#cuenca_id').val('');
+        $('#cuenca_nombre').val('');
+        $('#cuenca_activo').prop('checked', true);
+        $('#cuenca_verenmapa').prop('checked', false);
+    }
+    $('#cuencaModal').modal('show');
+}
+
+function saveCuenca() {
+    var id = $('#cuenca_id').val();
+    var data = {
+        id: id || null,
+        nombre: $('#cuenca_nombre').val(),
+        activo: $('#cuenca_activo').prop('checked'),
+        verEnMapa: $('#cuenca_verenmapa').prop('checked')
+    };
+    if (!data.nombre.trim()) {
+        alert('El nombre es requerido.');
+        return;
+    }
+    $.ajax({
+        url: '/WatershedAdmin/SaveCuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) {
+                location.reload();
+            } else {
+                alert(res.message || 'Error al guardar.');
+            }
+        }
+    });
+}
+
+function openQuickAssignModal(estacionId, nombre) {
+    $('#assign_estacion_id').val(estacionId);
+    $('#assign_estacion_nombre').val(nombre);
+    $('#assign_cuenca').dropdown('clear');
+    $('#assign_subcuenca').empty().append('<option value="">Seleccionar subcuenca...</option>');
+    $('#quickAssignModal').modal('show');
+}
+
+function saveQuickAssign() {
+    var data = {
+        idEstacion: $('#assign_estacion_id').val(),
+        idCuenca: $('#assign_cuenca').val() || null,
+        idSubcuenca: $('#assign_subcuenca').val() || null
+    };
+    if (!data.idCuenca) {
+        alert('Seleccione una cuenca.');
+        return;
+    }
+    $.ajax({
+        url: '/WatershedAdmin/AssignStation',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al asignar.');
+        }
+    });
+}
+
+function openBulkAssignModal() {
+    var checked = $('.station-check:checked');
+    if (checked.length === 0) {
+        alert('Seleccione al menos una estación.');
+        return;
+    }
+    $('#bulkCount').text(checked.length);
+    $('#bulk_cuenca').dropdown('clear');
+    $('#bulk_subcuenca').empty().append('<option value="">Seleccionar subcuenca...</option>');
+    $('#bulkAssignModal').modal('show');
+}
+
+function deleteCuenca(id, nombre, scCount, estCount) {
+    var msg = '¿Eliminar la cuenca "' + nombre + '"?';
+    if (scCount > 0 || estCount > 0) {
+        msg += '\n\nEsto también eliminará ' + scCount + ' subcuenca(s) y desvinculará ' + estCount + ' estación(es).';
+    }
+    if (!confirm(msg)) return;
+    $.ajax({
+        url: '/WatershedAdmin/DeleteCuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(id),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al eliminar.');
+        }
+    });
+}
+
+function saveBulkAssign() {
+    var ids = [];
+    $('.station-check:checked').each(function() { ids.push($(this).val()); });
+    var data = {
+        estacionIds: ids,
+        idCuenca: $('#bulk_cuenca').val() || null,
+        idSubcuenca: $('#bulk_subcuenca').val() || null
+    };
+    if (!data.idCuenca) {
+        alert('Seleccione una cuenca destino.');
+        return;
+    }
+    $.ajax({
+        url: '/WatershedAdmin/BulkAssign',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al asignar.');
+        }
+    });
+}
+</script>
+@Html.AntiForgeryToken()
+}

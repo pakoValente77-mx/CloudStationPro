@@ -382,11 +382,12 @@ namespace CloudStationWeb.Controllers
 
             try
             {
-                // Obtenemos el usuario autenticado para la bitácora
                 var userName = User.Identity?.Name ?? "Admin";
 
                 using (var db = new SqlConnection(_sqlServerConn))
                 {
+                    await db.OpenAsync();
+
                     if (cota.Id > 0)
                     {
                         // Actualizar
@@ -397,22 +398,39 @@ namespace CloudStationWeb.Controllers
                                 FechaInicio = @FechaInicio,
                                 Fin = @Fin,
                                 FechaFinal = @FechaFinal
-                            WHERE Id = @Id", cota);
+                            WHERE Id = @Id",
+                            new {
+                                cota.ValorCota,
+                                cota.Operador,
+                                FechaInicio = cota.FechaInicio,
+                                Fin = cota.Fin == true ? 1 : 0,
+                                FechaFinal = cota.FechaFinal,
+                                cota.Id
+                            });
                     }
                     else
                     {
                         // Insertar nueva
-                        cota.FechaRegistro = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                        cota.IdUsuarioRegistra = userName;
-                        cota.NombreCompleto = userName;
-                        
                         await db.ExecuteAsync(@"
                             INSERT INTO CotaSensor 
                             (IdSensor, ValorCota, Operador, FechaInicio, Fin, FechaFinal, FechaRegistro, IdUsuarioRegistra, NombreCompleto)
                             VALUES 
-                            (@IdSensor, @ValorCota, @Operador, @FechaInicio, @Fin, @FechaFinal, @FechaRegistro, @IdUsuarioRegistra, @NombreCompleto)", 
-                            cota);
+                            (@IdSensor, @ValorCota, @Operador, @FechaInicio, @Fin, @FechaFinal, @FechaRegistro, @IdUsuarioRegistra, @NombreCompleto)",
+                            new {
+                                cota.IdSensor,
+                                cota.ValorCota,
+                                cota.Operador,
+                                FechaInicio = cota.FechaInicio,
+                                Fin = cota.Fin == true ? 1 : 0,
+                                FechaFinal = cota.FechaFinal,
+                                FechaRegistro = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                                IdUsuarioRegistra = userName,
+                                NombreCompleto = userName
+                            });
                     }
+
+                    // Actualizar Sensor.AplicaCota según cotas vigentes
+                    await UpdateAplicaCotaAsync(db, cota.IdSensor);
                 }
                 return Json(new { success = true });
             }
@@ -433,7 +451,17 @@ namespace CloudStationWeb.Controllers
             {
                 using (var db = new SqlConnection(_sqlServerConn))
                 {
+                    await db.OpenAsync();
+
+                    // Obtener el IdSensor antes de borrar para actualizar AplicaCota
+                    var sensorId = await db.QueryFirstOrDefaultAsync<Guid?>(
+                        "SELECT IdSensor FROM CotaSensor WHERE Id = @Id", new { Id = id });
+
                     await db.ExecuteAsync("DELETE FROM CotaSensor WHERE Id = @Id", new { Id = id });
+
+                    // Recalcular AplicaCota del sensor
+                    if (sensorId.HasValue && sensorId.Value != Guid.Empty)
+                        await UpdateAplicaCotaAsync(db, sensorId.Value);
                 }
                 return Json(new { success = true });
             }
@@ -441,6 +469,23 @@ namespace CloudStationWeb.Controllers
             {
                 return Json(new { success = false, message = "Error al eliminar: " + ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Recalcula Sensor.AplicaCota = 1 si hay cotas vigentes, 0 si no.
+        /// </summary>
+        private async Task UpdateAplicaCotaAsync(SqlConnection db, Guid sensorId)
+        {
+            await db.ExecuteAsync(@"
+                UPDATE Sensor 
+                SET AplicaCota = CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM CotaSensor 
+                        WHERE IdSensor = @SensorId 
+                          AND (Fin IS NULL OR Fin = 0)
+                    ) THEN 1 ELSE 0 END
+                WHERE Id = @SensorId",
+                new { SensorId = sensorId });
         }
     }
 }

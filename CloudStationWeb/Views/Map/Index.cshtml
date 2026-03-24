@@ -699,28 +699,61 @@
         }
         
         function loadCuencasKml() {
-            $.getJSON('/Map/GetCuencasKml', function(cuencas) {
+            $.getJSON('/Map/GetCuencasKml', function(data) {
                 const container = $('#cuenca-toggles-container');
-                cuencas.forEach(function(c) {
+                var items = data.cuencas || data;
+                if (!Array.isArray(items)) items = [];
+                items.forEach(function(c) {
+                    var code = c.code || c.Code;
+                    var label = c.label || c.Label;
+                    var kmlFile = c.kmlFile || c.KmlFile;
+                    var color = c.color || c.Color || '#2196F3';
                     // Create toggle checkbox
                     const field = $(`
                         <div class="field" style="margin-bottom: 5px;">
-                            <div id="cuenca-${c.code}-toggle" class="ui inverted checkbox">
+                            <div id="cuenca-${code}-toggle" class="ui inverted checkbox">
                                 <input type="checkbox">
-                                <label>${c.label} (${c.code.toUpperCase()})</label>
+                                <label>${label} (${code.toUpperCase()})</label>
                             </div>
                         </div>
                     `);
                     container.append(field);
                     
                     // Initialize Fomantic checkbox
-                    $(`#cuenca-${c.code}-toggle`).checkbox({
-                        onChecked: function() { toggleCuencaLayer(c.code, true); },
-                        onUnchecked: function() { toggleCuencaLayer(c.code, false); }
+                    $(`#cuenca-${code}-toggle`).checkbox({
+                        onChecked: function() { toggleCuencaLayer(code, true); },
+                        onUnchecked: function() { toggleCuencaLayer(code, false); }
                     });
                     
                     // Load KML polygon
-                    loadCuencaKml(c.kmlFile, c.code, c.color);
+                    loadCuencaKml(kmlFile, code, color);
+                });
+
+                // Also load subcuencas if present
+                var subs = data.subcuencas || [];
+                subs.forEach(function(sc) {
+                    var label = sc.label || sc.Label;
+                    var kmlFile = sc.kmlFile || sc.KmlFile;
+                    var color = sc.color || sc.Color || '#64b5f6';
+                    var parentCode = sc.parentCode || sc.ParentCode || '';
+                    var scKey = parentCode + '_sc_' + label.replace(/\s+/g, '_').toLowerCase();
+                    
+                    const field = $(`
+                        <div class="field" style="margin-bottom: 5px; padding-left: 16px;">
+                            <div id="cuenca-${scKey}-toggle" class="ui inverted checkbox">
+                                <input type="checkbox">
+                                <label style="font-size:12px;">${label}</label>
+                            </div>
+                        </div>
+                    `);
+                    container.append(field);
+                    
+                    $(`#cuenca-${scKey}-toggle`).checkbox({
+                        onChecked: function() { toggleCuencaLayer(scKey, true); },
+                        onUnchecked: function() { toggleCuencaLayer(scKey, false); }
+                    });
+                    
+                    loadCuencaKml(kmlFile, scKey, color);
                 });
             });
         }

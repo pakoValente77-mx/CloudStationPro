@@ -2,6 +2,9 @@ using OfficeOpenXml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using CloudStationWeb.Data;
 using CloudStationWeb.Models;
 
@@ -46,7 +49,36 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    // When an API call arrives without cookie, return 401 instead of redirect
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = 401;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
+
+// Configure JWT Bearer authentication for API consumers (mobile, desktop, etc.)
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection["Key"] ?? throw new InvalidOperationException("Jwt:Key is missing in configuration");
+builder.Services.AddAuthentication()
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        };
+    });
 
 // Configure external authentication (Google & Microsoft)
 var googleSection = builder.Configuration.GetSection("Authentication:Google");
@@ -75,6 +107,13 @@ if (!string.IsNullOrEmpty(msSection["ClientId"]))
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<CloudStationWeb.Services.DataService>();
 builder.Services.AddScoped<CloudStationWeb.Services.IEmailSender, CloudStationWeb.Services.SmtpEmailSender>();
+
+// CORS for API consumers (mobile, desktop apps)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ApiCors", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
 
 var app = builder.Build();
 
@@ -112,6 +151,7 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseRouting();
 
+app.UseCors("ApiCors");
 app.UseAuthentication();
 app.UseAuthorization();
 

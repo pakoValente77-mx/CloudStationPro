@@ -1,8 +1,10 @@
 using System.Threading.Tasks;
 using CloudStationWeb.Models;
 using CloudStationWeb.Services;
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
 namespace CloudStationWeb.Controllers
@@ -68,10 +70,39 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
-        public JsonResult GetCuencasKml()
+        public async Task<JsonResult> GetCuencasKml()
         {
+            // Try DB first, fallback to appsettings
+            var connStr = _configuration.GetConnectionString("SqlServer");
+            try
+            {
+                using var db = new SqlConnection(connStr);
+                var cuencas = (await db.QueryAsync(@"
+                    SELECT Codigo AS code, Nombre AS label, ArchivoKml AS kmlFile, Color AS color
+                    FROM Cuenca
+                    WHERE Activo = 1 AND VerEnMapa = 1 AND ArchivoKml IS NOT NULL AND ArchivoKml != ''
+                    ORDER BY Nombre")).ToList();
+
+                if (cuencas.Count > 0)
+                {
+                    var subcuencas = (await db.QueryAsync(@"
+                        SELECT sc.Nombre AS label, sc.ArchivoKml AS kmlFile, sc.Color AS color, c.Codigo AS parentCode
+                        FROM Subcuenca sc
+                        INNER JOIN Cuenca c ON sc.IdCuenca = c.Id
+                        WHERE sc.Activo = 1 AND sc.VerEnMapa = 1 AND sc.ArchivoKml IS NOT NULL AND sc.ArchivoKml != ''
+                        ORDER BY c.Nombre, sc.Nombre")).ToList();
+
+                    return Json(new { cuencas, subcuencas });
+                }
+            }
+            catch { /* fallback to config */ }
+
+            // Fallback: appsettings.json
             var config = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
-            return Json(config.Select(c => new { code = c.Code, label = c.Label, kmlFile = c.KmlFile, color = c.Color }));
+            return Json(new {
+                cuencas = config.Select(c => new { code = c.Code, label = c.Label, kmlFile = c.KmlFile, color = c.Color }),
+                subcuencas = new object[0]
+            });
         }
     }
 }

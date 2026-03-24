@@ -1,0 +1,731 @@
+@model CloudStationWeb.Models.EditCuencaViewModel
+@{
+    ViewData["Title"] = "Gestión de Cuenca: " + Model.Cuenca.Nombre;
+}
+
+@section Styles {
+<style>
+    .edit-container {
+        padding: 30px;
+        max-width: 1400px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+    }
+
+    .edit-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .edit-header h2 {
+        font-size: 22px;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+    }
+    .edit-header h2 i { color: #2196F3; }
+
+    .back-link {
+        color: #64b5f6;
+        font-size: 14px;
+        text-decoration: none;
+    }
+    .back-link:hover { color: #90caf9; text-decoration: underline; }
+
+    .section-panel {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #64b5f6;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .subcuenca-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        transition: background 0.15s;
+    }
+    .subcuenca-row:hover { background: rgba(255,255,255,0.03); }
+    .subcuenca-row:last-child { border-bottom: none; }
+
+    .subcuenca-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .subcuenca-name {
+        font-weight: 500;
+        color: #fff;
+        font-size: 15px;
+    }
+
+    .sc-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: rgba(76, 175, 80, 0.15);
+        color: #81c784;
+    }
+
+    .sc-inactive {
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: rgba(244, 67, 54, 0.15);
+        color: #ef5350;
+    }
+
+    .station-group-header {
+        background: rgba(33, 150, 243, 0.08);
+        border: 1px solid rgba(33, 150, 243, 0.15);
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-top: 8px;
+        margin-bottom: 4px;
+        font-weight: 600;
+        color: #64b5f6;
+        font-size: 14px;
+    }
+
+    .station-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 16px 8px 32px;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .station-item:hover { background: rgba(255,255,255,0.02); }
+
+    .station-name { color: #fff; font-weight: 500; }
+    .station-id { color: #00ff88; font-size: 13px; font-family: monospace; }
+
+    /* KML Section */
+    .kml-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+    .kml-status.has-file { background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.2); }
+    .kml-status.no-file { background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15); }
+
+    .kml-filename {
+        font-family: monospace;
+        color: #81c784;
+        font-size: 13px;
+    }
+
+    .color-swatch {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 2px solid rgba(255,255,255,0.2);
+        vertical-align: middle;
+        cursor: pointer;
+    }
+
+    .upload-area {
+        border: 2px dashed rgba(255,255,255,0.15);
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #888;
+    }
+    .upload-area:hover { border-color: rgba(33,150,243,0.4); color: #64b5f6; }
+
+    /* Modal overrides */
+    .ui.modal { background: #1a1e2e !important; color: #fff !important; border-radius: 12px !important; }
+    .ui.modal > .header { background: #1a1e2e !important; color: #fff !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }
+    .ui.modal > .content { background: #1a1e2e !important; color: #fff !important; }
+    .ui.modal > .actions { background: #1a1e2e !important; border-top: 1px solid rgba(255,255,255,0.1) !important; }
+</style>
+}
+
+<div class="edit-container">
+    <!-- Header -->
+    <div style="margin-bottom: 8px;">
+        <a href="@Url.Action("Index", "WatershedAdmin")" class="back-link">
+            <i class="arrow left icon"></i> Volver al listado de cuencas
+        </a>
+    </div>
+    <div class="edit-header">
+        <h2>
+            <i class="tint icon"></i>
+            @Model.Cuenca.Nombre
+            @if (!Model.Cuenca.Activo)
+            {
+                <span style="font-size:13px; padding:3px 10px; border-radius:12px; background:rgba(244,67,54,0.15); color:#ef5350; margin-left:10px;">Inactiva</span>
+            }
+        </h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <span style="color:#888; font-size:14px;">
+                <i class="broadcast tower icon"></i> @Model.Estaciones.Count estaciones
+            </span>
+        </div>
+    </div>
+
+    <!-- KML Configuration Section -->
+    <div class="section-panel">
+        <div class="section-title">
+            <i class="globe icon"></i> Archivo KML de la Cuenca
+        </div>
+
+        <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+            <!-- Current KML Status -->
+            <div style="flex:1; min-width:300px;">
+                @if (!string.IsNullOrEmpty(Model.Cuenca.ArchivoKml))
+                {
+                    <div class="kml-status has-file">
+                        <i class="file outline icon green" style="font-size:24px;"></i>
+                        <div style="flex:1;">
+                            <div style="font-weight:500; color:#fff; margin-bottom:2px;">Archivo asociado</div>
+                            <span class="kml-filename">@Model.Cuenca.ArchivoKml</span>
+                        </div>
+                        <a href="/kml/@Model.Cuenca.ArchivoKml" target="_blank" class="ui mini button" style="background:rgba(255,255,255,0.1); color:#64b5f6;">
+                            <i class="download icon"></i> Descargar
+                        </a>
+                        <button class="ui mini red button" onclick="removeKml('@Model.Cuenca.Id', 'cuenca')">
+                            <i class="trash icon"></i>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="kml-status no-file">
+                        <i class="file outline icon grey" style="font-size:24px;"></i>
+                        <span style="color:#888;">Sin archivo KML asociado</span>
+                    </div>
+                }
+
+                <!-- Upload -->
+                <form id="kmlUploadForm" enctype="multipart/form-data" style="margin-top:12px;">
+                    <input type="hidden" name="id" value="@Model.Cuenca.Id" />
+                    <input type="hidden" name="tipo" value="cuenca" />
+                    <div class="upload-area" onclick="document.getElementById('kmlFileInput').click();">
+                        <i class="cloud upload icon" style="font-size:28px; display:block; margin-bottom:8px;"></i>
+                        <span>Clic para seleccionar archivo .kml o .kmz</span>
+                        <div style="font-size:12px; margin-top:4px; color:#666;">Máximo 10 MB</div>
+                    </div>
+                    <input type="file" id="kmlFileInput" name="archivo" accept=".kml,.kmz" style="display:none;" onchange="uploadKml(this, '@Model.Cuenca.Id', 'cuenca')" />
+                </form>
+            </div>
+
+            <!-- Color & Code -->
+            <div style="width:250px;">
+                <div class="ui inverted form">
+                    <div class="field">
+                        <label>Código (para mapa)</label>
+                        <input type="text" id="cuenca_codigo" value="@(Model.Cuenca.Codigo ?? "")" placeholder="Ej: ang, mmt" maxlength="20"
+                               style="font-family:monospace;" />
+                    </div>
+                    <div class="field">
+                        <label>Color en mapa</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="color" id="cuenca_color" value="@(Model.Cuenca.Color ?? "#2196F3")" style="width:50px; height:36px; border:none; background:none; cursor:pointer;" />
+                            <input type="text" id="cuenca_color_hex" value="@(Model.Cuenca.Color ?? "#2196F3")" maxlength="7" style="width:100px; font-family:monospace;" />
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top:12px;">
+                        <div class="ui toggle checkbox">
+                            <input type="checkbox" id="cuenca_verenmapa" @(Model.Cuenca.VerEnMapa ? "checked" : "") />
+                            <label>Visible en Mapa</label>
+                        </div>
+                    </div>
+                    <button class="ui small blue button" onclick="saveCuencaKmlConfig()" style="margin-top:8px;">
+                        <i class="save icon"></i> Guardar Código y Color
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subcuencas Section -->
+    <div class="section-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="section-title">
+                <i class="sitemap icon"></i> Subcuencas (@Model.Subcuencas.Count)
+            </div>
+            <button class="ui small green button" onclick="openSubcuencaModal()">
+                <i class="plus icon"></i> Nueva Subcuenca
+            </button>
+        </div>
+
+        @if (Model.Subcuencas.Any())
+        {
+            @foreach (var sc in Model.Subcuencas)
+            {
+                <div class="subcuenca-row" style="flex-wrap:wrap;">
+                    <div class="subcuenca-info">
+                        <i class="angle right icon" style="color:#64b5f6;"></i>
+                        <span class="subcuenca-name">@sc.Nombre</span>
+                        <span class="sc-stat"><i class="broadcast tower icon"></i> @sc.EstacionCount</span>
+                        @if (!string.IsNullOrEmpty(sc.ArchivoKml))
+                        {
+                            <span class="sc-stat" style="background:rgba(33,150,243,0.15); color:#64b5f6;">
+                                <i class="globe icon"></i> KML
+                            </span>
+                        }
+                        @if (!string.IsNullOrEmpty(sc.Color))
+                        {
+                            <span class="color-swatch" style="background:@sc.Color;" title="@sc.Color"></span>
+                        }
+                        @if (!sc.Activo)
+                        {
+                            <span class="sc-inactive"><i class="ban icon"></i> Inactiva</span>
+                        }
+                        @if (sc.VerEnMapa)
+                        {
+                            <span class="sc-stat" style="background:rgba(76,175,80,0.15); color:#66bb6a;">
+                                <i class="map icon"></i> En Mapa
+                            </span>
+                        }
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <label class="ui mini button" style="background:rgba(33,150,243,0.15); color:#64b5f6; cursor:pointer;" title="Subir KML">
+                            <i class="globe icon"></i>
+                            <input type="file" accept=".kml,.kmz" style="display:none;" onchange="uploadKml(this, '@sc.Id', 'subcuenca')" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(sc.ArchivoKml))
+                        {
+                            <button class="ui mini button" style="background:rgba(244,67,54,0.15); color:#ef5350;" onclick="removeKml('@sc.Id', 'subcuenca')" title="Quitar KML">
+                                <i class="globe icon"></i><i class="times icon" style="margin:0;"></i>
+                            </button>
+                        }
+                        <button class="ui mini button" style="background:rgba(255,255,255,0.1); color:#fff;"
+                                onclick="openSubcuencaModal('@sc.Id','@sc.Nombre.Replace("'", "\\'")','@sc.Activo','@(sc.Color ?? "")','@sc.VerEnMapa')">
+                            <i class="pencil icon"></i>
+                        </button>
+                        <button class="ui mini red button" onclick="deleteSubcuenca('@sc.Id', '@sc.Nombre.Replace("'", "\\'")', @sc.EstacionCount)">
+                            <i class="trash icon"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div style="text-align:center; padding:20px; color:#666;">
+                <p>No hay subcuencas registradas. Crea una para organizar las estaciones.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Stations Section -->
+    <div class="section-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="section-title">
+                <i class="broadcast tower icon"></i> Estaciones en esta Cuenca (@Model.Estaciones.Count)
+            </div>
+            <button class="ui small blue button" onclick="openAddStationModal()">
+                <i class="plus icon"></i> Agregar Estación
+            </button>
+        </div>
+
+        @if (Model.Estaciones.Any())
+        {
+            // Group by subcuenca
+            var grouped = Model.Estaciones.GroupBy(e => e.SubcuencaNombre ?? "(Sin subcuenca)").OrderBy(g => g.Key);
+            @foreach (var group in grouped)
+            {
+                <div class="station-group-header">
+                    <i class="sitemap icon"></i> @group.Key (@group.Count())
+                </div>
+                @foreach (var est in group)
+                {
+                    <div class="station-item">
+                        <div>
+                            <span class="station-name">@est.Nombre</span>
+                            <span class="station-id" style="margin-left:10px;">@(est.IdAsignado ?? "N/A")</span>
+                            @if (!est.Activo)
+                            {
+                                <span style="margin-left:8px; font-size:12px; color:#ef5350;"><i class="times circle icon"></i></span>
+                            }
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="ui mini button" style="background:rgba(255,255,255,0.1); color:#fff;"
+                                    onclick="openChangeSubcuencaModal('@est.Id', '@est.Nombre?.Replace("'", "\\'")','@est.IdSubcuenca')">
+                                <i class="exchange icon"></i> Subcuenca
+                            </button>
+                            <button class="ui mini red button" onclick="removeFromCuenca('@est.Id', '@est.Nombre?.Replace("'", "\\'")' )">
+                                <i class="times icon"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        }
+        else
+        {
+            <div style="text-align:center; padding:20px; color:#666;">
+                <p>No hay estaciones asignadas a esta cuenca.</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: New/Edit Subcuenca -->
+<div class="ui small modal" id="subcuencaModal">
+    <div class="header" id="subcuencaModalTitle">Nueva Subcuenca</div>
+    <div class="content">
+        <form class="ui inverted form" id="subcuencaForm">
+            <input type="hidden" id="sc_id" />
+            <div class="field">
+                <label>Nombre de la Subcuenca</label>
+                <input type="text" id="sc_nombre" placeholder="Ej: Río Sabinal" maxlength="200" />
+            </div>
+            <div class="field">
+                <label>Color en mapa</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="color" id="sc_color" value="#64b5f6" style="width:50px; height:36px; border:none; background:none; cursor:pointer;" />
+                    <input type="text" id="sc_color_hex" value="#64b5f6" maxlength="7" style="width:100px; font-family:monospace;" />
+                </div>
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox">
+                    <input type="checkbox" id="sc_activo" checked />
+                    <label>Activa</label>
+                </div>
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox">
+                    <input type="checkbox" id="sc_verenmapa" />
+                    <label>Visible en Mapa</label>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveSubcuenca()"><i class="save icon"></i> Guardar</button>
+    </div>
+</div>
+
+<!-- Modal: Change Subcuenca for a Station -->
+<div class="ui small modal" id="changeSubcuencaModal">
+    <div class="header">Cambiar Subcuenca</div>
+    <div class="content">
+        <form class="ui inverted form">
+            <input type="hidden" id="chg_est_id" />
+            <div class="field">
+                <label>Estación</label>
+                <input type="text" id="chg_est_nombre" readonly style="opacity:0.7;" />
+            </div>
+            <div class="field">
+                <label>Subcuenca</label>
+                <select id="chg_subcuenca" class="ui search dropdown">
+                    <option value="">Sin subcuenca</option>
+                    @foreach (var sc in Model.Subcuencas.Where(s => s.Activo))
+                    {
+                        <option value="@sc.Id">@sc.Nombre</option>
+                    }
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveChangeSubcuenca()"><i class="check icon"></i> Guardar</button>
+    </div>
+</div>
+
+<!-- Modal: Add Station to this Cuenca -->
+<div class="ui small modal" id="addStationModal">
+    <div class="header">Agregar Estación a esta Cuenca</div>
+    <div class="content">
+        <div class="ui inverted form">
+            <div class="field">
+                <label>Estaciones sin cuenca asignada</label>
+                <div id="unassignedList" style="max-height:300px; overflow-y:auto;">
+                    <div class="ui active inverted loader" style="margin:20px;"></div>
+                </div>
+            </div>
+            <div class="field">
+                <label>Subcuenca (opcional)</label>
+                <select id="add_subcuenca" class="ui search dropdown">
+                    <option value="">Sin subcuenca</option>
+                    @foreach (var sc in Model.Subcuencas.Where(s => s.Activo))
+                    {
+                        <option value="@sc.Id">@sc.Nombre</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="actions">
+        <button class="ui cancel button" style="background: rgba(255,255,255,0.1); color: #fff;">Cancelar</button>
+        <button class="ui green button" onclick="saveAddStations()"><i class="plus icon"></i> Agregar Seleccionadas</button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+var cuencaId = '@Model.Cuenca.Id';
+
+$(document).ready(function() {
+    $('.ui.checkbox').checkbox();
+    $('.ui.dropdown').dropdown();
+
+    // Sync color pickers
+    $('#cuenca_color').on('input', function() { $('#cuenca_color_hex').val($(this).val()); });
+    $('#cuenca_color_hex').on('input', function() { var v = $(this).val(); if (/^#[0-9a-f]{6}$/i.test(v)) $('#cuenca_color').val(v); });
+    $('#sc_color').on('input', function() { $('#sc_color_hex').val($(this).val()); });
+    $('#sc_color_hex').on('input', function() { var v = $(this).val(); if (/^#[0-9a-f]{6}$/i.test(v)) $('#sc_color').val(v); });
+});
+
+// ===== SUBCUENCA =====
+function openSubcuencaModal(id, nombre, activo, color, verenmapa) {
+    if (id) {
+        $('#subcuencaModalTitle').text('Editar Subcuenca');
+        $('#sc_id').val(id);
+        $('#sc_nombre').val(nombre);
+        $('#sc_activo').prop('checked', activo === 'True');
+        var c = color || '#64b5f6';
+        $('#sc_color').val(c);
+        $('#sc_color_hex').val(c);
+        $('#sc_verenmapa').prop('checked', verenmapa === 'True');
+    } else {
+        $('#subcuencaModalTitle').text('Nueva Subcuenca');
+        $('#sc_id').val('');
+        $('#sc_nombre').val('');
+        $('#sc_activo').prop('checked', true);
+        $('#sc_color').val('#64b5f6');
+        $('#sc_color_hex').val('#64b5f6');
+        $('#sc_verenmapa').prop('checked', false);
+    }
+    $('#subcuencaModal').modal('show');
+}
+
+function saveSubcuenca() {
+    var id = $('#sc_id').val();
+    var data = {
+        id: id || null,
+        idCuenca: cuencaId,
+        nombre: $('#sc_nombre').val(),
+        color: $('#sc_color_hex').val(),
+        activo: $('#sc_activo').prop('checked'),
+        verEnMapa: $('#sc_verenmapa').prop('checked')
+    };
+    if (!data.nombre.trim()) { alert('El nombre es requerido.'); return; }
+    $.ajax({
+        url: '/WatershedAdmin/SaveSubcuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al guardar.');
+        }
+    });
+}
+
+function deleteSubcuenca(id, nombre, estCount) {
+    var msg = '¿Eliminar la subcuenca "' + nombre + '"?';
+    if (estCount > 0) msg += '\n\nLas ' + estCount + ' estación(es) asociadas quedarán sin subcuenca.';
+    if (!confirm(msg)) return;
+    $.ajax({
+        url: '/WatershedAdmin/DeleteSubcuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(id),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al eliminar.');
+        }
+    });
+}
+
+// ===== STATION SUBCUENCA CHANGE =====
+function openChangeSubcuencaModal(estId, nombre, currentScId) {
+    $('#chg_est_id').val(estId);
+    $('#chg_est_nombre').val(nombre);
+    if (currentScId && currentScId !== '') {
+        $('#chg_subcuenca').dropdown('set selected', currentScId);
+    } else {
+        $('#chg_subcuenca').dropdown('clear');
+    }
+    $('#changeSubcuencaModal').modal('show');
+}
+
+function saveChangeSubcuenca() {
+    var data = {
+        idEstacion: $('#chg_est_id').val(),
+        idCuenca: cuencaId,
+        idSubcuenca: $('#chg_subcuenca').val() || null
+    };
+    $.ajax({
+        url: '/WatershedAdmin/AssignStation',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error.');
+        }
+    });
+}
+
+function removeFromCuenca(estId, nombre) {
+    if (!confirm('¿Quitar "' + nombre + '" de esta cuenca? La estación quedará sin cuenca asignada.')) return;
+    $.ajax({
+        url: '/WatershedAdmin/RemoveStationFromCuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(estId),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error.');
+        }
+    });
+}
+
+// ===== ADD STATION =====
+function openAddStationModal() {
+    $('#unassignedList').html('<div class="ui active inverted loader" style="margin:20px;"></div>');
+    $('#addStationModal').modal('show');
+    $.get('/WatershedAdmin/GetUnassignedStations', function(data) {
+        if (data.length === 0) {
+            $('#unassignedList').html('<p style="color:#888; text-align:center;">Todas las estaciones ya tienen cuenca asignada.</p>');
+            return;
+        }
+        var html = '<div style="margin-bottom:8px;"><div class="ui fitted checkbox"><input type="checkbox" id="addSelectAll"><label style="color:#aaa;"> Seleccionar todas</label></div></div>';
+        data.forEach(function(e) {
+            html += '<div style="padding:4px 0;"><div class="ui fitted checkbox"><input type="checkbox" class="add-station-check" value="' + e.id + '"><label style="color:#fff;"> ' + (e.nombre || 'Sin nombre') + ' <span style="color:#00ff88; margin-left:6px; font-size:12px;">' + (e.idAsignado || '') + '</span></label></div></div>';
+        });
+        $('#unassignedList').html(html);
+        $('#addSelectAll').on('change', function() {
+            $('.add-station-check').prop('checked', $(this).prop('checked'));
+        });
+    });
+}
+
+function saveAddStations() {
+    var ids = [];
+    $('.add-station-check:checked').each(function() { ids.push($(this).val()); });
+    if (ids.length === 0) { alert('Seleccione al menos una estación.'); return; }
+    var data = {
+        estacionIds: ids,
+        idCuenca: cuencaId,
+        idSubcuenca: $('#add_subcuenca').val() || null
+    };
+    $.ajax({
+        url: '/WatershedAdmin/BulkAssign',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error.');
+        }
+    });
+}
+
+// ===== KML UPLOAD & CONFIG =====
+function uploadKml(input, entityId, tipo) {
+    var file = input.files[0];
+    if (!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'kml' && ext !== 'kmz') {
+        alert('Solo se permiten archivos .kml o .kmz');
+        input.value = '';
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        alert('El archivo no puede exceder 10 MB.');
+        input.value = '';
+        return;
+    }
+    var formData = new FormData();
+    formData.append('id', entityId);
+    formData.append('tipo', tipo);
+    formData.append('archivo', file);
+    formData.append('__RequestVerificationToken', $('input[name="__RequestVerificationToken"]').val());
+
+    $.ajax({
+        url: '/WatershedAdmin/UploadKml',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            if (res.success) {
+                location.reload();
+            } else {
+                alert(res.message || 'Error al subir archivo.');
+            }
+        },
+        error: function() { alert('Error de conexión.'); }
+    });
+}
+
+function removeKml(entityId, tipo) {
+    if (!confirm('¿Quitar el archivo KML asociado?')) return;
+    $.ajax({
+        url: '/WatershedAdmin/RemoveKml',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ id: entityId, tipo: tipo }),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error.');
+        }
+    });
+}
+
+function saveCuencaKmlConfig() {
+    var data = {
+        id: cuencaId,
+        nombre: '@Model.Cuenca.Nombre.Replace("'", "\\'")',
+        codigo: $('#cuenca_codigo').val(),
+        color: $('#cuenca_color_hex').val(),
+        activo: true,
+        verEnMapa: $('#cuenca_verenmapa').prop('checked')
+    };
+    $.ajax({
+        url: '/WatershedAdmin/SaveCuenca',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(res) {
+            if (res.success) location.reload();
+            else alert(res.message || 'Error al guardar.');
+        }
+    });
+}
+</script>
+@Html.AntiForgeryToken()
+}

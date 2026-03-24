@@ -160,9 +160,21 @@
             
             @if (User.IsInRole("Administrador"))
             {
-                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StationAdmin" ? "active" : "")" href="@Url.Action("Index", "StationAdmin")">
-                    <i class="server icon"></i> Estaciones
-                </a>
+                <div class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
+                    <i class="cogs icon"></i> Administración <i class="dropdown icon"></i>
+                    <div class="menu" style="background: rgba(14,18,26,0.97) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 8px !important; min-width: 220px;">
+                        <a class="item" href="@Url.Action("Index", "StationAdmin")" style="color: #fff !important;">
+                            <i class="server icon" style="color: #81c784;"></i> Estaciones
+                        </a>
+                        <a class="item" href="@Url.Action("Index", "WatershedAdmin")" style="color: #fff !important;">
+                            <i class="tint icon" style="color: #64b5f6;"></i> Cuencas y Subcuencas
+                        </a>
+                        <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                        <a class="item" href="@Url.Action("Index", "Admin")" style="color: #fff !important;">
+                            <i class="users cog icon" style="color: #ffb74d;"></i> Usuarios
+                        </a>
+                    </div>
+                </div>
             }
 
             <a href="/Documents" class="item" id="nav-documents">
@@ -221,6 +233,9 @@
             checkDocAlerts();
             setInterval(checkDocAlerts, 60000);
         })();
+
+        // Initialize Fomantic dropdowns (click-based, not hover)
+        $('.ui.dropdown').dropdown({ on: 'click' });
     </script>
 
 
