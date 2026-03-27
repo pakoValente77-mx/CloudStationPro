@@ -1,0 +1,90 @@
+@model CloudStationWeb.Models.FunVasosResumenPresa
+@{
+    var hasMultipleDates = Model.Datos.Select(d => d.Ts.Date).Distinct().Count() > 1;
+    var totalCols = Model.Presa == "Tapón Juan Grijalva" ? 13 : 15;
+    if (hasMultipleDates) totalCols++;
+}
+
+<div class="fv-table-wrapper">
+    <table class="fv-table">
+        <thead>
+            <tr>
+                @if (hasMultipleDates)
+                {
+                    <th rowspan="2">Fecha</th>
+                }
+                <th rowspan="2">Hora</th>
+                <th rowspan="2">Elevación<br/><span style="font-size:9px;font-weight:400;">m.s.n.m</span></th>
+                <th rowspan="2">Almac.<br/><span style="font-size:9px;font-weight:400;">Mill. m³</span></th>
+                <th rowspan="2">Dif.<br/><span style="font-size:9px;font-weight:400;">Mill. m³</span></th>
+                <th colspan="2">Aportaciones</th>
+                @if (Model.Presa == "Tapón Juan Grijalva")
+                {
+                    <th colspan="2">Canal</th>
+                    <th colspan="2">Túneles</th>
+                }
+                else
+                {
+                    <th colspan="2">Turbinas</th>
+                    <th colspan="2">Vertedor</th>
+                }
+                <th colspan="2">Total Extrac.</th>
+                @if (Model.Presa != "Tapón Juan Grijalva")
+                {
+                    <th rowspan="2">Gen.<br/><span style="font-size:9px;font-weight:400;">MWH</span></th>
+                    <th rowspan="2">Uds.</th>
+                }
+                <th rowspan="2">Cuenca<br/>Propia</th>
+                <th rowspan="2">Prom.</th>
+            </tr>
+            <tr class="subheader">
+                <th>m³/s</th><th>Mill.m³</th>
+                <th>m³/s</th><th>Mill.m³</th>
+                <th>m³/s</th><th>Mill.m³</th>
+                <th>m³/s</th><th>Mill.m³</th>
+            </tr>
+        </thead>
+        <tbody>
+            @{
+                DateTime? lastDate = null;
+            }
+            @foreach (var d in Model.Datos)
+            {
+                @if (hasMultipleDates && (lastDate == null || lastDate.Value.Date != d.Ts.Date))
+                {
+                    lastDate = d.Ts.Date;
+                    <tr style="background:rgba(0,230,118,0.08);">
+                        <td colspan="@totalCols" style="text-align:left; font-weight:600; color:#00e676; padding:6px 12px; font-size:12px;">
+                            <i class="calendar alternate outline icon"></i> @d.Ts.ToString("dd/MM/yyyy")
+                        </td>
+                    </tr>
+                }
+                <tr>
+                    @if (hasMultipleDates)
+                    {
+                        <td style="font-size:10px; color:#78909c;">@d.Ts.ToString("dd/MM")</td>
+                    }
+                    <td class="hora-col">@d.Hora</td>
+                    <td>@(d.Elevacion?.ToString("F2") ?? "")</td>
+                    <td>@(d.Almacenamiento?.ToString("F2") ?? "")</td>
+                    <td>@(d.Diferencia?.ToString("F2") ?? "")</td>
+                    <td>@(d.AportacionesQ?.ToString("F2") ?? "")</td>
+                    <td>@(d.AportacionesV?.ToString("F4") ?? "")</td>
+                    <td>@(d.ExtraccionesTurbQ?.ToString("F2") ?? "")</td>
+                    <td>@(d.ExtraccionesTurbV?.ToString("F4") ?? "")</td>
+                    <td>@(d.ExtraccionesVertQ?.ToString("F2") ?? "")</td>
+                    <td>@(d.ExtraccionesVertV?.ToString("F4") ?? "")</td>
+                    <td>@(d.ExtraccionesTotalQ?.ToString("F2") ?? "")</td>
+                    <td>@(d.ExtraccionesTotalV?.ToString("F4") ?? "")</td>
+                    @if (Model.Presa != "Tapón Juan Grijalva")
+                    {
+                        <td>@(d.Generacion?.ToString("F1") ?? "")</td>
+                        <td>@(d.NumUnidades?.ToString() ?? "")</td>
+                    }
+                    <td>@(d.AportacionCuencaPropia?.ToString("F2") ?? "")</td>
+                    <td>@(d.AportacionPromedio?.ToString("F2") ?? "")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

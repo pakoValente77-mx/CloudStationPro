@@ -22,6 +22,7 @@ namespace CloudStationWeb.Models
         public string? Cuenca { get; set; }
         public string? Subcuenca { get; set; }
         public bool HasCota { get; set; }
+        public bool EnMantenimiento { get; set; }
         public List<HourlyValue> HourlyValues { get; set; } = new();
     }
 

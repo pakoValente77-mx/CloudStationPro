@@ -160,11 +160,14 @@
             
             @if (User.IsInRole("Administrador"))
             {
-                <div class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
+                <div class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
                     <i class="cogs icon"></i> Administración <i class="dropdown icon"></i>
                     <div class="menu" style="background: rgba(14,18,26,0.97) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 8px !important; min-width: 220px;">
                         <a class="item" href="@Url.Action("Index", "StationAdmin")" style="color: #fff !important;">
                             <i class="server icon" style="color: #81c784;"></i> Estaciones
+                        </a>
+                        <a class="item" href="@Url.Action("Index", "Maintenance")" style="color: #fff !important;">
+                            <i class="wrench icon" style="color: #fbbf24;"></i> Mantenimiento
                         </a>
                         <a class="item" href="@Url.Action("Index", "WatershedAdmin")" style="color: #fff !important;">
                             <i class="tint icon" style="color: #64b5f6;"></i> Cuencas y Subcuencas
@@ -180,6 +183,12 @@
             <a href="/Documents" class="item" id="nav-documents">
                 <i class="folder open icon"></i> Repositorio
                 <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
+            </a>
+            <a href="/FunVasos" class="item">
+                <i class="water icon"></i> Fun. Vasos
+            </a>
+            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "RainForecast" ? "active" : "")" href="@Url.Action("Index", "RainForecast")">
+                <i class="cloud rain icon"></i> Pronóstico
             </a>
             <div class="right menu">
                 @await Html.PartialAsync("_LoginPartial")
@@ -214,6 +223,46 @@
     @await RenderSectionAsync("Scripts", required: false)
 
     <script>
+        // ── Session KeepAlive & 401 handler ──────────────────────────────
+        (function() {
+            var KEEPALIVE_MS = 4 * 60 * 1000; // 4 minutes
+            var keepAliveTimer = null;
+
+            function ping() {
+                fetch('/Home/KeepAlive', { credentials: 'same-origin' })
+                    .then(function(r) {
+                        // If redirected to login or 401 → session expired
+                        if (r.redirected || r.status === 401) {
+                            location.reload();
+                        }
+                    })
+                    .catch(function() {});
+            }
+
+            function startKeepAlive() {
+                if (keepAliveTimer) clearInterval(keepAliveTimer);
+                keepAliveTimer = setInterval(ping, KEEPALIVE_MS);
+            }
+
+            startKeepAlive();
+
+            // When tab comes back from background, ping immediately
+            // (browsers throttle setInterval in hidden tabs)
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    ping();
+                    startKeepAlive(); // reset interval
+                }
+            });
+
+            // Global AJAX 401 handler for jQuery $.ajax calls
+            $(document).ajaxError(function(event, jqXHR) {
+                if (jqXHR.status === 401) {
+                    location.reload();
+                }
+            });
+        })();
+
         // Document alert badge
         (function() {
             function checkDocAlerts() {

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CloudStationWeb.Data;
 using CloudStationWeb.Models;
+using CloudStationWeb.Services;
 
 namespace CloudStationWeb.Controllers
 {
@@ -12,13 +13,16 @@ namespace CloudStationWeb.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly FunVasosService _funVasosService;
 
         public DocumentsController(
             ApplicationDbContext context,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            FunVasosService funVasosService)
         {
             _context = context;
             _userManager = userManager;
+            _funVasosService = funVasosService;
         }
 
         // GET: /Documents
@@ -143,6 +147,42 @@ namespace CloudStationWeb.Controllers
             // Generate filename: {FilePrefix}{DDMMYY}.xlsx
             var prefix = string.IsNullOrEmpty(product.FilePrefix) ? product.Code.ToUpper() : product.FilePrefix;
             var datePart = now.ToString("ddMMyy");
+
+            // --- For "vasos" product: detect date from Excel content ---
+            DateTime? excelDate = null;
+            string? tempFilePath = null;
+            if (product.Code == "vasos")
+            {
+                // Save to temp file first to read the date
+                tempFilePath = Path.Combine(Path.GetTempPath(), $"fv_temp_{Guid.NewGuid()}{ext}");
+                using (var tempStream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(tempStream);
+                }
+
+                // Extract date from Excel content
+                excelDate = _funVasosService.ExtractDateFromFile(tempFilePath);
+
+                // Also try from filename
+                var filenameDate = FunVasosService.ExtractDateFromFilename(file.FileName);
+
+                if (excelDate.HasValue)
+                {
+                    // Validate: if filename has date, it should match Excel content
+                    if (filenameDate.HasValue && filenameDate.Value.Date != excelDate.Value.Date)
+                    {
+                        TempData["Warning"] = $"La fecha del nombre del archivo ({filenameDate.Value:dd/MM/yyyy}) no coincide con la fecha dentro del Excel ({excelDate.Value:dd/MM/yyyy}). Se usó la fecha del contenido: {excelDate.Value:dd/MM/yyyy}.";
+                    }
+
+                    datePart = excelDate.Value.ToString("ddMMyy");
+                }
+                else if (filenameDate.HasValue)
+                {
+                    excelDate = filenameDate;
+                    datePart = filenameDate.Value.ToString("ddMMyy");
+                }
+            }
+
             var storedFileName = $"{prefix}{datePart}{ext}";
 
             // Create directory (flat per product, organized by storage path)
@@ -151,13 +191,14 @@ namespace CloudStationWeb.Controllers
             var storedPath = storedFileName;
             var fullPath = Path.Combine(product.StoragePath, storedFileName);
 
-            // Check if there's already a file for today — replace it
-            var todayStart = now.Date;
-            var todayEnd = todayStart.AddDays(1);
+            // Check if there's already a file for this date — replace it
+            // For "vasos", use the Excel date; for others, use today
+            var targetDate = (product.Code == "vasos" && excelDate.HasValue) ? excelDate.Value.Date : now.Date;
+            var targetDateEnd = targetDate.AddDays(1);
             var existingToday = await _context.DocumentEntries
                 .Where(e => e.ProductId == productId
-                    && e.UploadedAt >= todayStart
-                    && e.UploadedAt < todayEnd)
+                    && e.UploadedAt >= targetDate
+                    && e.UploadedAt < targetDateEnd)
                 .ToListAsync();
 
             var isReplace = existingToday.Any();
@@ -181,9 +222,18 @@ namespace CloudStationWeb.Controllers
             }
 
             // Save file to disk
-            using (var stream = new FileStream(fullPath, FileMode.Create))
+            if (tempFilePath != null && System.IO.File.Exists(tempFilePath))
             {
-                await file.CopyToAsync(stream);
+                // For "vasos": move temp file to final destination
+                System.IO.File.Copy(tempFilePath, fullPath, overwrite: true);
+                System.IO.File.Delete(tempFilePath);
+            }
+            else
+            {
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
             }
 
             // Create new entry
@@ -196,9 +246,11 @@ namespace CloudStationWeb.Controllers
                 FileSize = file.Length,
                 ContentType = file.ContentType,
                 UploadedById = user.Id,
-                UploadedAt = now,
+                UploadedAt = (product.Code == "vasos" && excelDate.HasValue) ? excelDate.Value : now,
                 IsLatest = true,
-                Notes = notes
+                Notes = (product.Code == "vasos" && excelDate.HasValue)
+                    ? $"Fecha del reporte: {excelDate.Value:dd/MM/yyyy}" + (string.IsNullOrEmpty(notes) ? "" : $" | {notes}")
+                    : notes
             };
 
             _context.DocumentEntries.Add(entry);
@@ -216,6 +268,28 @@ namespace CloudStationWeb.Controllers
                 Details = $"{(isReplace ? "Reemplazó" : "Subió")} '{file.FileName}' → {storedFileName} ({FormatFileSize(file.Length)})"
             });
             await _context.SaveChangesAsync();
+
+            // --- Auto-parse Funcionamiento de Vasos ---
+            if (product.Code == "vasos")
+            {
+                try
+                {
+                    var (rowsInserted, reportDate, parseErrors) = await _funVasosService.ParseAndStoreAsync(fullPath);
+                    if (parseErrors.Any())
+                    {
+                        TempData["Warning"] = $"Archivo subido como {storedFileName}, pero con errores al procesar datos: {string.Join("; ", parseErrors)}";
+                    }
+                    else
+                    {
+                        TempData["Success"] = $"Archivo subido como {storedFileName}. Se vaciaron {rowsInserted} registros horarios ({reportDate:dd/MM/yyyy}) a la base de datos.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TempData["Warning"] = $"Archivo subido como {storedFileName}, pero falló el vaciado de datos: {ex.Message}";
+                }
+                return RedirectToAction("Index");
+            }
 
             TempData["Success"] = $"Archivo subido exitosamente como {storedFileName}.";
             return RedirectToAction("Index");
@@ -347,6 +421,28 @@ namespace CloudStationWeb.Controllers
                 Details = $"{(isReplace ? "Reemplazó" : "Subió")} '{entry.StoredFileName}' con fecha {reportDate:dd/MM/yyyy}"
             });
             await _context.SaveChangesAsync();
+
+            // --- Auto-parse Funcionamiento de Vasos (historical) ---
+            if (product.Code == "vasos")
+            {
+                try
+                {
+                    var (rowsInserted, parsedDate, parseErrors) = await _funVasosService.ParseAndStoreAsync(fullPath);
+                    if (parseErrors.Any())
+                    {
+                        TempData["Warning"] = $"Archivo histórico subido como {entry.StoredFileName}, pero con errores: {string.Join("; ", parseErrors)}";
+                    }
+                    else
+                    {
+                        TempData["Success"] = $"Reporte histórico '{entry.StoredFileName}' subido. Se vaciaron {rowsInserted} registros ({parsedDate:dd/MM/yyyy}) a la base de datos.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TempData["Warning"] = $"Archivo histórico subido, pero falló el vaciado: {ex.Message}";
+                }
+                return RedirectToAction("History", new { id = productId, year = reportDate.Year, month = reportDate.Month });
+            }
 
             TempData["Success"] = $"Reporte histórico '{entry.StoredFileName}' subido correctamente para {reportDate:dd/MM/yyyy}.";
             return RedirectToAction("History", new { id = productId, year = reportDate.Year, month = reportDate.Month });

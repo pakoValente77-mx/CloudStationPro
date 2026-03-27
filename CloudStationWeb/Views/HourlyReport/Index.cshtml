@@ -671,6 +671,14 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Hietograma debajo de la tabla (solo visible en precipitación) -->
+    <div id="hyetograph-container" style="display:none; margin-top: 20px; background: rgba(20,30,20,0.85); border-radius: 12px; border: 1px solid rgba(76,175,80,0.3); padding: 15px;">
+        <h4 style="color: #a5d6a7; margin-bottom: 10px; text-align: center;">
+            <i class="chart bar icon"></i> Hietograma — Precipitación Total por Hora (mm)
+        </h4>
+        <div id="hyetograph-chart" style="width: 100%; height: 320px;"></div>
+    </div>
 </div>
 
 <div id="loading-overlay" class="loading-overlay" style="display:none;">
@@ -678,6 +686,7 @@
 </div>
 
 @section Scripts {
+<script src="~/lib/highcharts/highcharts.js"></script>
 <script>
     let currentData = null;
     let autoRefreshInterval = null;
@@ -831,6 +840,7 @@
             success: function(data) {
                 currentData = data;
                 renderTable(data);
+                renderHyetograph(data);
                 updateInfo(data);
                 updateLastUpdateTime(); // Update timestamp
                 $('#loading-overlay').hide();
@@ -941,6 +951,85 @@
         }
     }
     
+    function renderHyetograph(data) {
+        const isPrecipitation = data.variable.toLowerCase().includes('precipitación');
+        if (!isPrecipitation || !data.stations || data.stations.length === 0) {
+            $('#hyetograph-container').hide();
+            return;
+        }
+        
+        const startTime = new Date(data.startTime);
+        const hourLabels = [];
+        const hourTotals = [];
+        
+        for (let i = 1; i <= 24; i++) {
+            const hourTime = new Date(startTime.getTime() + i * 60 * 60 * 1000);
+            const h = hourTime.getHours();
+            hourLabels.push(h.toString().padStart(2, '0') + ':00');
+            
+            let total = 0;
+            data.stations.forEach(station => {
+                function dtKey(d) { return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'-'+d.getHours(); }
+                const key = dtKey(hourTime);
+                const hv = station.hourlyValues.find(v => dtKey(new Date(v.hour)) === key);
+                if (hv && hv.value !== null && hv.value !== undefined && hv.isValid) {
+                    total += hv.value;
+                }
+            });
+            hourTotals.push(parseFloat(total.toFixed(1)));
+        }
+        
+        $('#hyetograph-container').show();
+        
+        Highcharts.chart('hyetograph-chart', {
+            chart: {
+                type: 'column',
+                backgroundColor: 'transparent',
+                style: { fontFamily: 'Arial, sans-serif' }
+            },
+            title: { text: null },
+            xAxis: {
+                categories: hourLabels,
+                title: { text: 'Hora', style: { color: '#a5d6a7' } },
+                labels: { style: { color: '#ccc' } },
+                lineColor: '#555',
+                tickColor: '#555'
+            },
+            yAxis: {
+                min: 0,
+                title: { text: 'Precipitación Total (mm)', style: { color: '#a5d6a7' } },
+                labels: { style: { color: '#ccc' } },
+                gridLineColor: 'rgba(255,255,255,0.08)'
+            },
+            legend: { enabled: false },
+            tooltip: {
+                headerFormat: '<b>Hora: {point.key}</b><br/>',
+                pointFormat: 'Total: <b>{point.y:.1f} mm</b>',
+                backgroundColor: 'rgba(30,40,30,0.95)',
+                borderColor: '#4caf50',
+                style: { color: '#e0e0e0' }
+            },
+            plotOptions: {
+                column: {
+                    borderRadius: 3,
+                    borderWidth: 0,
+                    color: {
+                        linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [
+                            [0, '#66bb6a'],
+                            [1, '#2e7d32']
+                        ]
+                    }
+                }
+            },
+            series: [{
+                name: 'Precipitación Total',
+                data: hourTotals
+            }],
+            credits: { enabled: false }
+        });
+    }
+
     function renderStationRow(station, startTime, isPrecipitation, body, indent) {
         const cotaIcon = station.hasCota ? ' <i class="bullseye icon" title="Valores calibrados con Cota" style="color:#ff9800;"></i>' : '';
         let row = `<tr><td class="station-col" title="${station.stationName}">${indent}${station.stationName}${cotaIcon}</td>`;

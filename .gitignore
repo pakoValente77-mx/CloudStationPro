@@ -489,3 +489,17 @@ $RECYCLE.BIN/
 Datos/
 _analyze_excel.py
 publicado_ok/
+
+# Archivos binarios generados
+*.docx
+
+# Datos locales
+DocumentRepository/
+Datos/
+dds_last/
+
+# Microservicio Java externo (referencia)
+grijalva-rain-forecast-service/
+
+# Static vendor files
+static/

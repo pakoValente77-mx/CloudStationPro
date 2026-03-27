@@ -31,7 +31,7 @@ call build_venv\Scripts\activate.bat
 
 REM 3. Instalar dependencias
 echo [2/4] Instalando dependencias...
-pip install --quiet psycopg2-binary==2.9.11 schedule==1.2.2 pyodbc==5.3.0 pyinstaller==6.13.0
+pip install --quiet psycopg2-binary==2.9.11 schedule==1.2.2 pyodbc==5.3.0 openpyxl>=3.1.0 pyinstaller==6.13.0
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo al instalar dependencias.
     pause

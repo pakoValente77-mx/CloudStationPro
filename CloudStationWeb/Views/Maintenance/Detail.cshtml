@@ -1,0 +1,712 @@
+@removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
+@model CloudStationWeb.Models.MaintenanceDetailViewModel
+@{
+    ViewData["Title"] = "Orden de Mantenimiento #" + Model.Orden.Id;
+    var estadoClass = Model.Orden.Estado.Replace(" ", "");
+    var tipoIcon = Model.Orden.TipoMantenimiento switch {
+        "Preventivo" => "shield alternate",
+        "Correctivo" => "tools",
+        "Instalación" => "download",
+        "Retiro" => "upload",
+        "Calibración" => "sliders horizontal",
+        "Emergencia" => "exclamation triangle",
+        _ => "wrench"
+    };
+    var isActive = Model.Orden.Estado == "En Proceso" || Model.Orden.Estado == "Programado";
+}
+
+@section Styles {
+<style>
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .estado-badge {
+        display: inline-block;
+        padding: 4px 16px;
+        border-radius: 14px;
+        font-size: 0.9em;
+        font-weight: 700;
+    }
+    .estado-EnProceso { background: #eab308; color: #000; }
+    .estado-Programado { background: #3b82f6; color: #fff; }
+    .estado-Completado { background: #22c55e; color: #fff; }
+    .estado-Cancelado { background: #6b7280; color: #fff; }
+    .priority-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+    .priority-Urgente { background: #ef4444; color: #fff; }
+    .priority-Alta { background: #f97316; color: #fff; }
+    .priority-Normal { background: #3b82f6; color: #fff; }
+    .priority-Baja { background: #6b7280; color: #fff; }
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .info-card {
+        background: rgba(30, 35, 50, 0.6);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 16px;
+    }
+    .info-card .label-text {
+        font-size: 0.78em;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+    .info-card .value-text {
+        font-size: 1.05em;
+        color: #fff;
+        font-weight: 600;
+    }
+    .isolation-banner {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 10px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .isolation-banner i { font-size: 1.5em; color: #ef4444; }
+    .isolation-banner .text { color: #fca5a5; }
+    .section-title {
+        color: var(--cfe-green);
+        font-size: 1.2em;
+        font-weight: 700;
+        margin: 24px 0 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .bitacora-entry {
+        background: rgba(20, 24, 33, 0.7);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        position: relative;
+    }
+    .bitacora-entry::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 24px;
+        width: 12px;
+        height: 12px;
+        background: var(--cfe-green);
+        border-radius: 50%;
+        border: 2px solid #0b0e14;
+    }
+    .bitacora-timeline {
+        margin-left: 20px;
+        padding-left: 20px;
+        border-left: 2px solid rgba(129, 199, 132, 0.3);
+    }
+    .bitacora-meta {
+        font-size: 0.82em;
+        color: #888;
+        margin-bottom: 8px;
+    }
+    .bitacora-desc {
+        color: #e0e0e0;
+        white-space: pre-wrap;
+    }
+    .adjunto-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 8px;
+        padding: 6px 14px;
+        margin: 4px 4px 4px 0;
+        font-size: 0.85em;
+        color: #93c5fd;
+        transition: background 0.2s;
+    }
+    .adjunto-item:hover {
+        background: rgba(59, 130, 246, 0.2);
+    }
+    .adjunto-item a {
+        color: #93c5fd;
+        text-decoration: none;
+    }
+    .adjunto-item .file-size {
+        color: #666;
+        font-size: 0.85em;
+    }
+    .adjunto-img-preview {
+        max-width: 120px;
+        max-height: 80px;
+        border-radius: 6px;
+        margin: 4px;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .adjunto-img-preview:hover { transform: scale(1.05); }
+    .drop-zone {
+        border: 2px dashed rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        color: #888;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-top: 12px;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: var(--cfe-green);
+        background: rgba(129, 199, 132, 0.05);
+        color: #81c784;
+    }
+</style>
+}
+
+<div class="ui container" style="margin-top: 30px; margin-bottom: 50px;">
+    <!-- Breadcrumb -->
+    <div style="margin-bottom: 16px;">
+        <a href="/Maintenance" style="color: #81c784; text-decoration: none;">
+            <i class="arrow left icon"></i> Volver a Órdenes
+        </a>
+    </div>
+
+    <div class="glass-panel" style="padding: 30px;">
+        <!-- Header -->
+        <div class="detail-header">
+            <div>
+                <h2 style="color: #fff; margin: 0 0 6px;">
+                    <i class="@tipoIcon icon" style="color: #64b5f6;"></i>
+                    Orden #@Model.Orden.Id — @Model.Orden.TipoMantenimiento
+                </h2>
+                <div style="font-size: 1.1em; color: #81c784; font-weight: 600;">
+                    <i class="server icon"></i> @Model.Orden.NombreEstacion
+                    <span style="color: #888; font-weight: normal; margin-left: 8px;">@Model.Orden.IdAsignado</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span class="estado-badge estado-@estadoClass">@Model.Orden.Estado</span>
+                <span class="priority-badge priority-@Model.Orden.Prioridad">@Model.Orden.Prioridad</span>
+                @if (isActive)
+                {
+                    <div class="ui tiny buttons" style="margin-left: 8px;">
+                        @if (Model.Orden.Estado == "Programado")
+                        {
+                            <button class="ui tiny yellow button" onclick="changeEstado(@Model.Orden.Id, 'En Proceso')">
+                                <i class="play icon"></i> Iniciar
+                            </button>
+                        }
+                        <button class="ui tiny green button" onclick="changeEstado(@Model.Orden.Id, 'Completado')">
+                            <i class="check icon"></i> Completar
+                        </button>
+                        <button class="ui tiny grey button" onclick="changeEstado(@Model.Orden.Id, 'Cancelado')">
+                            <i class="times icon"></i> Cancelar
+                        </button>
+                    </div>
+                    <button class="ui tiny inverted button" onclick="openEditModal()">
+                        <i class="edit icon"></i> Editar
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Isolation Warning -->
+        @if (Model.Orden.AislarDatos && isActive)
+        {
+            <div class="isolation-banner">
+                <i class="exclamation triangle icon"></i>
+                <div class="text">
+                    <strong>Datos Aislados:</strong> Los datos de esta estación están siendo excluidos de cálculos, reportes y alertas durante el periodo de mantenimiento.
+                </div>
+            </div>
+        }
+
+        <!-- Info Grid -->
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="label-text">Fecha Inicio</div>
+                <div class="value-text"><i class="calendar icon" style="color:#81c784;"></i> @Model.Orden.FechaInicio.ToString("dd/MMM/yyyy HH:mm")</div>
+            </div>
+            <div class="info-card">
+                <div class="label-text">Fecha Fin</div>
+                <div class="value-text">
+                    @if (Model.Orden.FechaFin.HasValue)
+                    {
+                        <i class="calendar check icon" style="color:#64b5f6;"></i> @Model.Orden.FechaFin.Value.ToString("dd/MMM/yyyy HH:mm")
+                    }
+                    else
+                    {
+                        <span style="color:#888;">Sin definir</span>
+                    }
+                </div>
+            </div>
+            <div class="info-card">
+                <div class="label-text">Responsable</div>
+                <div class="value-text">@(Model.Orden.ResponsableNombre ?? "No asignado")</div>
+            </div>
+            <div class="info-card">
+                <div class="label-text">Aislamiento de Datos</div>
+                <div class="value-text">
+                    @if (Model.Orden.AislarDatos)
+                    {
+                        <span style="color:#ef4444;"><i class="ban icon"></i> Activado</span>
+                    }
+                    else
+                    {
+                        <span style="color:#81c784;"><i class="check icon"></i> Desactivado</span>
+                    }
+                </div>
+            </div>
+            <div class="info-card" style="grid-column: span 2;">
+                <div class="label-text">Descripción</div>
+                <div class="value-text" style="font-weight:400; white-space:pre-wrap;">@(Model.Orden.Descripcion ?? "Sin descripción.")</div>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.Orden.Observaciones))
+            {
+                <div class="info-card" style="grid-column: span 2;">
+                    <div class="label-text">Observaciones</div>
+                    <div class="value-text" style="font-weight:400; white-space:pre-wrap;">@Model.Orden.Observaciones</div>
+                </div>
+            }
+        </div>
+
+        <div style="font-size: 0.8em; color: #555; margin-bottom: 24px;">
+            Creado por <strong style="color:#888;">@Model.Orden.CreadoPorNombre</strong> el @Model.Orden.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+            @if (Model.Orden.FechaModificacion.HasValue)
+            {
+                <span> | Modificado por <strong style="color:#888;">@Model.Orden.ModificadoPorNombre</strong> el @Model.Orden.FechaModificacion.Value.ToString("dd/MM/yyyy HH:mm")</span>
+            }
+        </div>
+
+        <!-- ═══════════════════════ ADJUNTOS GENERALES ═══════════════════════ -->
+        <div class="section-title">
+            <i class="paperclip icon"></i> Documentos y Archivos Adjuntos
+            <span style="font-size:0.7em; color:#888; font-weight:normal; margin-left:8px;">
+                (@Model.AdjuntosGenerales.Count + @Model.Bitacoras.Sum(b => b.Adjuntos.Count) archivos)
+            </span>
+        </div>
+
+        <div id="adjuntosGenerales">
+            @if (Model.AdjuntosGenerales.Any())
+            {
+                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;">
+                    @foreach (var adj in Model.AdjuntosGenerales)
+                    {
+                        var isImage = adj.TipoArchivo != null && adj.TipoArchivo.StartsWith("image/");
+                        if (isImage)
+                        {
+                            <div style="position:relative; display:inline-block;">
+                                <img src="@Url.Action("DownloadFile", "Maintenance", new { id = adj.Id })" 
+                                     alt="@adj.NombreOriginal" class="adjunto-img-preview"
+                                     onclick="window.open(this.src, '_blank')" />
+                                @if (isActive)
+                                {
+                                    <button class="ui tiny red icon button" style="position:absolute;top:2px;right:2px;padding:4px;opacity:0.8;"
+                                            onclick="deleteFile(@adj.Id)" title="Eliminar">
+                                        <i class="times icon" style="margin:0;"></i>
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="adjunto-item">
+                                <i class="@GetFileIcon(adj.TipoArchivo) icon"></i>
+                                <a href="@Url.Action("DownloadFile", "Maintenance", new { id = adj.Id })">@adj.NombreOriginal</a>
+                                <span class="file-size">(@FormatSize(adj.TamanoBytes))</span>
+                                @if (isActive)
+                                {
+                                    <i class="times circle icon" style="color:#ef4444; cursor:pointer;" onclick="deleteFile(@adj.Id)"></i>
+                                }
+                            </span>
+                        }
+                    }
+                </div>
+            }
+        </div>
+
+        @if (isActive)
+        {
+            <div class="drop-zone" id="dropZoneGeneral" onclick="$('#fileInputGeneral').click()">
+                <i class="cloud upload icon" style="font-size: 2em;"></i><br/>
+                <strong>Arrastre archivos aquí</strong> o haga clic para seleccionar<br/>
+                <span style="font-size:0.8em;">Fotos, videos, documentos, oficios (máx. 50 MB)</span>
+                <input type="file" id="fileInputGeneral" multiple style="display:none;" onchange="uploadFiles(this.files, @Model.Orden.Id, null)">
+            </div>
+        }
+
+        <!-- ═══════════════════════ BITÁCORA ═══════════════════════ -->
+        <div class="section-title">
+            <i class="clipboard list icon"></i> Bitácora de Actividades
+            <span style="font-size:0.7em; color:#888; font-weight:normal; margin-left:8px;">
+                (@Model.Bitacoras.Count entradas)
+            </span>
+        </div>
+
+        @if (isActive)
+        {
+            <div style="background: rgba(30, 35, 50, 0.5); border: 1px solid rgba(129,199,132,0.2); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                <form class="ui inverted form" id="bitacoraForm">
+                    <div class="two fields">
+                        <div class="twelve wide field">
+                            <label>Descripción de la actividad</label>
+                            <textarea id="bDescripcion" rows="2" placeholder="Describa lo realizado..." style="resize:vertical;"></textarea>
+                        </div>
+                        <div class="four wide field">
+                            <label>Fecha del evento</label>
+                            <input type="datetime-local" id="bFechaEvento">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <label class="ui small inverted basic button" for="fileInputBitacora" style="cursor:pointer;">
+                                <i class="paperclip icon"></i> Adjuntar archivos
+                            </label>
+                            <input type="file" id="fileInputBitacora" multiple style="display:none;">
+                            <span id="bitacoraFilesCount" style="color:#888; font-size:0.85em; margin-left:8px;"></span>
+                        </div>
+                        <button type="button" class="ui green button" onclick="submitBitacora()">
+                            <i class="plus icon"></i> Agregar Entrada
+                        </button>
+                    </div>
+                </form>
+            </div>
+        }
+
+        <div class="bitacora-timeline" id="bitacoraTimeline">
+            @if (!Model.Bitacoras.Any())
+            {
+                <div style="text-align:center; padding:30px; color:#666;">
+                    <i class="clipboard icon" style="font-size:2em;"></i><br/>
+                    No hay entradas en la bitácora aún.
+                </div>
+            }
+            @foreach (var bit in Model.Bitacoras)
+            {
+                <div class="bitacora-entry">
+                    <div class="bitacora-meta">
+                        <i class="user icon"></i> <strong style="color:#b0b0b0;">@bit.UsuarioNombre</strong>
+                        &nbsp;|&nbsp;
+                        <i class="calendar icon"></i> @bit.FechaEvento.ToString("dd/MMM/yyyy HH:mm")
+                        <span style="margin-left:8px; color:#555;">Registrado: @bit.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+                    <div class="bitacora-desc">@bit.Descripcion</div>
+
+                    @if (bit.Adjuntos.Any())
+                    {
+                        <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var adj in bit.Adjuntos)
+                            {
+                                var isImage = adj.TipoArchivo != null && adj.TipoArchivo.StartsWith("image/");
+                                if (isImage)
+                                {
+                                    <img src="@Url.Action("DownloadFile", "Maintenance", new { id = adj.Id })" 
+                                         alt="@adj.NombreOriginal" class="adjunto-img-preview"
+                                         onclick="window.open(this.src, '_blank')" />
+                                }
+                                else
+                                {
+                                    <span class="adjunto-item">
+                                        <i class="@GetFileIcon(adj.TipoArchivo) icon"></i>
+                                        <a href="@Url.Action("DownloadFile", "Maintenance", new { id = adj.Id })">@adj.NombreOriginal</a>
+                                        <span class="file-size">(@FormatSize(adj.TamanoBytes))</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+
+                    @if (isActive)
+                    {
+                        <div style="margin-top: 8px;">
+                            <label class="ui mini inverted basic button" style="cursor:pointer;" onclick="$('#fileInputBit_@bit.Id').click()">
+                                <i class="paperclip icon"></i> Adjuntar
+                            </label>
+                            <input type="file" id="fileInputBit_@bit.Id" multiple style="display:none;" 
+                                   onchange="uploadFiles(this.files, @Model.Orden.Id, @bit.Id)">
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Editar Orden -->
+<div class="ui small inverted modal" id="editModal">
+    <div class="header"><i class="edit icon"></i> Editar Orden de Mantenimiento</div>
+    <div class="scrolling content">
+        <form class="ui inverted form" id="editForm">
+            <input type="hidden" id="eId" value="@Model.Orden.Id">
+            <div class="two fields">
+                <div class="field">
+                    <label>Tipo de Mantenimiento</label>
+                    <select id="eTipo" class="ui inverted dropdown">
+                        @foreach (var t in new[] { "Preventivo", "Correctivo", "Instalación", "Retiro", "Calibración", "Emergencia" })
+                        {
+                            <option value="@t" @(Model.Orden.TipoMantenimiento == t ? "selected" : "")>@t</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Prioridad</label>
+                    <select id="ePrioridad" class="ui inverted dropdown">
+                        @foreach (var p in new[] { "Baja", "Normal", "Alta", "Urgente" })
+                        {
+                            <option value="@p" @(Model.Orden.Prioridad == p ? "selected" : "")>@p</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Estado</label>
+                    <select id="eEstado" class="ui inverted dropdown">
+                        @foreach (var e in new[] { "Programado", "En Proceso", "Completado", "Cancelado" })
+                        {
+                            <option value="@e" @(Model.Orden.Estado == e ? "selected" : "")>@e</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Responsable</label>
+                    <input type="text" id="eResponsable" value="@Model.Orden.ResponsableNombre">
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Fecha Inicio</label>
+                    <input type="datetime-local" id="eFechaInicio" value="@Model.Orden.FechaInicio.ToString("yyyy-MM-ddTHH:mm")">
+                </div>
+                <div class="field">
+                    <label>Fecha Fin</label>
+                    <input type="datetime-local" id="eFechaFin" value="@(Model.Orden.FechaFin?.ToString("yyyy-MM-ddTHH:mm"))">
+                </div>
+            </div>
+            <div class="field">
+                <label>Descripción</label>
+                <textarea id="eDescripcion" rows="3">@Model.Orden.Descripcion</textarea>
+            </div>
+            <div class="field">
+                <label>Observaciones</label>
+                <textarea id="eObservaciones" rows="2">@Model.Orden.Observaciones</textarea>
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox">
+                    <input type="checkbox" id="eAislarDatos" @(Model.Orden.AislarDatos ? "checked" : "")>
+                    <label style="color:#fca5a5 !important;">Aislar datos durante el mantenimiento</label>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel inverted button">Cancelar</button>
+        <button class="ui green button" onclick="submitEdit()"><i class="save icon"></i> Guardar Cambios</button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    $('.ui.dropdown').dropdown();
+    $('.ui.checkbox').checkbox();
+
+    // Set default bitacora date to now
+    (function() {
+        var now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        $('#bFechaEvento').val(now.toISOString().slice(0, 16));
+    })();
+
+    // Track files selected for bitacora entry
+    var pendingBitacoraFiles = [];
+    $('#fileInputBitacora').on('change', function() {
+        pendingBitacoraFiles = Array.from(this.files);
+        $('#bitacoraFilesCount').text(pendingBitacoraFiles.length + ' archivo(s) seleccionado(s)');
+    });
+
+    function getToken() {
+        return $('input[name="__RequestVerificationToken"]').val();
+    }
+
+    function changeEstado(id, estado) {
+        if (!confirm('¿Cambiar estado a "' + estado + '"?')) return;
+        $.ajax({
+            url: '@Url.Action("UpdateEstado", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: id, estado: estado }),
+            headers: { 'RequestVerificationToken': getToken() },
+            success: function(r) { if (r.success) location.reload(); else alert('Error: ' + r.message); }
+        });
+    }
+
+    function openEditModal() {
+        $('#editModal').modal('show');
+    }
+
+    function submitEdit() {
+        var data = {
+            id: parseInt($('#eId').val()),
+            tipoMantenimiento: $('#eTipo').val(),
+            prioridad: $('#ePrioridad').val(),
+            estado: $('#eEstado').val(),
+            responsableNombre: $('#eResponsable').val(),
+            fechaInicio: $('#eFechaInicio').val(),
+            fechaFin: $('#eFechaFin').val() || null,
+            descripcion: $('#eDescripcion').val(),
+            observaciones: $('#eObservaciones').val(),
+            aislarDatos: $('#eAislarDatos').is(':checked')
+        };
+
+        $.ajax({
+            url: '@Url.Action("Update", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: { 'RequestVerificationToken': getToken() },
+            success: function(r) { if (r.success) location.reload(); else alert('Error: ' + r.message); }
+        });
+    }
+
+    function submitBitacora() {
+        var desc = $('#bDescripcion').val();
+        if (!desc || !desc.trim()) { alert('Escriba una descripción.'); return; }
+
+        var data = {
+            idOrden: @Model.Orden.Id,
+            descripcion: desc,
+            fechaEvento: $('#bFechaEvento').val()
+        };
+
+        $.ajax({
+            url: '@Url.Action("AddBitacora", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: { 'RequestVerificationToken': getToken() },
+            success: function(r) {
+                if (r.success) {
+                    // Upload any pending files for this bitacora
+                    if (pendingBitacoraFiles.length > 0) {
+                        uploadFiles(pendingBitacoraFiles, @Model.Orden.Id, r.id, function() {
+                            location.reload();
+                        });
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert('Error: ' + r.message);
+                }
+            }
+        });
+    }
+
+    function uploadFiles(files, ordenId, bitacoraId, callback) {
+        var total = files.length;
+        var uploaded = 0;
+
+        for (var i = 0; i < files.length; i++) {
+            var formData = new FormData();
+            formData.append('file', files[i]);
+            formData.append('ordenId', ordenId);
+            if (bitacoraId) formData.append('bitacoraId', bitacoraId);
+
+            $.ajax({
+                url: '@Url.Action("UploadFile", "Maintenance")',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: { 'RequestVerificationToken': getToken() },
+                success: function(r) {
+                    uploaded++;
+                    if (!r.success) alert('Error subiendo archivo: ' + r.message);
+                    if (uploaded >= total) {
+                        if (callback) callback();
+                        else location.reload();
+                    }
+                },
+                error: function() {
+                    uploaded++;
+                    alert('Error de conexión al subir archivo.');
+                    if (uploaded >= total) {
+                        if (callback) callback();
+                        else location.reload();
+                    }
+                }
+            });
+        }
+    }
+
+    function deleteFile(id) {
+        if (!confirm('¿Eliminar este archivo?')) return;
+        $.ajax({
+            url: '@Url.Action("DeleteFile", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: id }),
+            headers: { 'RequestVerificationToken': getToken() },
+            success: function(r) { if (r.success) location.reload(); else alert('Error: ' + r.message); }
+        });
+    }
+
+    // Drag and drop support for general drop zone
+    var dropZone = document.getElementById('dropZoneGeneral');
+    if (dropZone) {
+        ['dragenter', 'dragover'].forEach(function(evt) {
+            dropZone.addEventListener(evt, function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach(function(evt) {
+            dropZone.addEventListener(evt, function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('dragover');
+            });
+        });
+        dropZone.addEventListener('drop', function(e) {
+            var files = e.dataTransfer.files;
+            if (files.length) uploadFiles(files, @Model.Orden.Id, null);
+        });
+    }
+</script>
+}
+
+@Html.AntiForgeryToken()
+
+@functions {
+    static string GetFileIcon(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return "file";
+        if (mimeType.StartsWith("image/")) return "file image";
+        if (mimeType.StartsWith("video/")) return "file video";
+        if (mimeType.Contains("pdf")) return "file pdf";
+        if (mimeType.Contains("word") || mimeType.Contains("document")) return "file word";
+        if (mimeType.Contains("excel") || mimeType.Contains("spreadsheet")) return "file excel";
+        if (mimeType.Contains("powerpoint") || mimeType.Contains("presentation")) return "file powerpoint";
+        if (mimeType.Contains("zip") || mimeType.Contains("rar") || mimeType.Contains("7z")) return "file archive";
+        return "file";
+    }
+
+    static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1048576) return (bytes / 1024.0).ToString("F1") + " KB";
+        return (bytes / 1048576.0).ToString("F1") + " MB";
+    }
+}

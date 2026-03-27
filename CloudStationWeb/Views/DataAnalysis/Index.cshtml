@@ -1262,6 +1262,11 @@
                     newSeries.variableDisplayName = variableName;
                     newSeries.newAxis = newAxis; // Store axis preference
 
+                    if (newSeries.enMantenimiento) {
+                        newSeries.stationName = stationName + ' [MTTO]';
+                        alert('⚠️ La estación "' + stationName + '" está en mantenimiento. Sus datos se muestran como referencia pero están marcados como no válidos.');
+                    }
+
                     activeSeries.push(newSeries);
                     currentAggregationLevel = response.aggregationLevel; // Store for removal logic
                     updateChart(activeSeries, response.aggregationLevel);
