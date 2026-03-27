@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudStation GOES Monitor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css">
+    <style>
+        body { background: #1b1c1d; color: #e0e0e0; min-height: 100vh; }
+        .top-bar { background: #2d2d2d; padding: 12px 20px; border-bottom: 1px solid #444; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+        .top-bar h2 { margin: 0; color: #21ba45; font-size: 1.3em; }
+        .top-bar .meta { color: #888; font-size: 0.85em; }
+        .main-grid { padding: 16px; }
+        .dark-card { background: #2d2d2d !important; border: 1px solid #444 !important; color: #e0e0e0 !important; }
+        .dark-card .header { color: #fff !important; }
+        .dark-card .meta, .dark-card .description { color: #aaa !important; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #21ba45; }
+        .stat-label { color: #888; font-size: 0.85em; text-transform: uppercase; }
+        .log-container { background: #1a1a2e; border-radius: 4px; padding: 10px; max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.8em; line-height: 1.5; }
+        .log-line { border-bottom: 1px solid #222; padding: 2px 0; }
+        .log-ts { color: #666; margin-right: 8px; }
+        .log-ok { color: #21ba45; }
+        .log-fail { color: #db2828; }
+        .log-warn { color: #fbbd08; }
+        .log-info { color: #2185d0; }
+        .log-retry { color: #a333c8; }
+        table.dark-table { background: #2d2d2d !important; color: #e0e0e0 !important; }
+        table.dark-table thead th { background: #363636 !important; color: #ccc !important; border-bottom: 1px solid #555 !important; }
+        table.dark-table td { border-top: 1px solid #3a3a3a !important; }
+        table.dark-table tr:hover td { background: #363636 !important; }
+        .retry-badge { background: #a333c8 !important; }
+        .online-badge { background: #21ba45 !important; }
+        .offline-badge { background: #db2828 !important; }
+        .section-title { color: #888; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; margin-bottom: 8px; }
+        .action-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+        #stationFilter { background: #1a1a2e; border: 1px solid #555; color: #e0e0e0; padding: 8px 12px; border-radius: 4px; width: 300px; }
+        .tab-menu { margin-bottom: 0 !important; }
+        .ui.inverted.menu .item { color: #aaa !important; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <h2>⚡ CloudStation GOES Monitor</h2>
+            <span id="statusBadge" class="ui tiny green label">ACTIVO</span>
+            <span class="meta" id="uptimeLabel">Uptime: --</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span class="meta" id="clockLabel">--:--:--</span>
+            <button class="ui tiny yellow button" id="btnPause" onclick="toggleScheduler()">⏸ Pausar</button>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="main-grid">
+        <div class="ui four column stackable grid" style="margin-bottom:16px;">
+            <div class="column">
+                <div class="ui card dark-card fluid">
+                    <div class="content" style="text-align:center;">
+                        <div class="stat-value" id="statEstaciones">--</div>
+                        <div class="stat-label">Estaciones</div>
+                    </div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="ui card dark-card fluid">
+                    <div class="content" style="text-align:center;">
+                        <div class="stat-value" style="color:#2185d0;" id="statScheduled">--</div>
+                        <div class="stat-label">Programadas</div>
+                    </div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="ui card dark-card fluid">
+                    <div class="content" style="text-align:center;">
+                        <div class="stat-value" style="color:#a333c8;" id="statRetries">--</div>
+                        <div class="stat-label">Reintentos Activos</div>
+                    </div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="ui card dark-card fluid">
+                    <div class="content" style="text-align:center;">
+                        <div class="stat-value" style="color:#fbbd08;" id="statJobs">--</div>
+                        <div class="stat-label">Jobs Pendientes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="ui top attached inverted tabular menu tab-menu">
+            <a class="item active" data-tab="stations">📡 Estaciones</a>
+            <a class="item" data-tab="retries">🔄 Reintentos</a>
+            <a class="item" data-tab="bitacora">📋 Bitácora</a>
+            <a class="item" data-tab="log">🖥 Consola</a>
+            <a class="item" data-tab="config">⚙️ Configuración</a>
+            <a class="item" data-tab="actions">🚀 Acciones</a>
+        </div>
+
+        <!-- TAB: Estaciones -->
+        <div class="ui bottom attached inverted tab segment active" data-tab="stations" style="background:#2d2d2d;border-color:#444;">
+            <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                <input type="text" id="stationFilter" placeholder="Buscar por DCP ID, nombre, cuenca..." oninput="filterStations()">
+                <span class="meta" id="stationCount">--</span>
+            </div>
+            <div style="max-height:500px;overflow-y:auto;">
+                <table class="ui compact small unstackable table dark-table" id="stationsTable">
+                    <thead>
+                        <tr>
+                            <th>DCP ID</th>
+                            <th>Nombre</th>
+                            <th>ID Asignado</th>
+                            <th>Min TX</th>
+                            <th>Rango</th>
+                            <th>Cuenca</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stationsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Reintentos -->
+        <div class="ui bottom attached inverted tab segment" data-tab="retries" style="background:#2d2d2d;border-color:#444;">
+            <div id="retriesContent">
+                <p style="color:#888;">Cargando...</p>
+            </div>
+        </div>
+
+        <!-- TAB: Bitácora -->
+        <div class="ui bottom attached inverted tab segment" data-tab="bitacora" style="background:#2d2d2d;border-color:#444;">
+            <div style="margin-bottom:10px;">
+                <select id="bitacoraHoras" class="ui compact mini inverted dropdown" style="background:#1a1a2e;color:#e0e0e0;border:1px solid #555;padding:4px 8px;">
+                    <option value="1">Última hora</option>
+                    <option value="3">3 horas</option>
+                    <option value="6" selected>6 horas</option>
+                    <option value="12">12 horas</option>
+                    <option value="24">24 horas</option>
+                </select>
+                <button class="ui tiny blue button" onclick="loadBitacora()">Actualizar</button>
+                <span class="meta" id="bitacoraCount" style="margin-left:12px;">--</span>
+            </div>
+            <div style="max-height:500px;overflow-y:auto;">
+                <table class="ui compact small unstackable table dark-table" id="bitacoraTable">
+                    <thead>
+                        <tr>
+                            <th>Hora UTC</th>
+                            <th>DCP ID</th>
+                            <th>Msg Timestamp</th>
+                            <th>Servidor</th>
+                            <th>Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bitacoraBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Consola -->
+        <div class="ui bottom attached inverted tab segment" data-tab="log" style="background:#2d2d2d;border-color:#444;">
+            <div style="margin-bottom:8px;">
+                <button class="ui tiny blue button" onclick="loadLog()">Actualizar</button>
+                <label style="color:#888;margin-left:12px;">
+                    <input type="checkbox" id="autoScroll" checked> Auto-scroll
+                </label>
+                <label style="color:#888;margin-left:12px;">
+                    <input type="checkbox" id="autoRefreshLog" checked> Auto-refresh (5s)
+                </label>
+            </div>
+            <div class="log-container" id="logContainer"></div>
+        </div>
+
+        <!-- TAB: Configuración -->
+        <div class="ui bottom attached inverted tab segment" data-tab="config" style="background:#2d2d2d;border-color:#444;">
+            <div id="configContent">
+                <p style="color:#888;">Cargando...</p>
+            </div>
+        </div>
+
+        <!-- TAB: Acciones -->
+        <div class="ui bottom attached inverted tab segment" data-tab="actions" style="background:#2d2d2d;border-color:#444;">
+            <div class="ui two column stackable grid">
+                <div class="column">
+                    <h4 style="color:#fff;">Recuperación Manual</h4>
+                    <div class="ui inverted form">
+                        <div class="field">
+                            <label>DCP ID (vacío = todas)</label>
+                            <input type="text" id="recoverDcpId" placeholder="Ej: E8906DD6">
+                        </div>
+                        <div class="field">
+                            <label>Horas hacia atrás</label>
+                            <input type="number" id="recoverHoras" value="12" min="1" max="168">
+                        </div>
+                        <button class="ui green button" onclick="doRecover()">🔄 Iniciar Recuperación</button>
+                    </div>
+                    <div id="recoverResult" style="margin-top:12px;"></div>
+                </div>
+                <div class="column">
+                    <h4 style="color:#fff;">Fetch Manual (Estación)</h4>
+                    <div class="ui inverted form">
+                        <div class="field">
+                            <label>DCP ID</label>
+                            <input type="text" id="fetchDcpId" placeholder="Ej: E8906DD6" required>
+                        </div>
+                        <div class="field">
+                            <label>Horas</label>
+                            <input type="number" id="fetchHoras" value="2" min="1" max="48">
+                        </div>
+                        <button class="ui blue button" onclick="doFetch()">📡 Fetch</button>
+                    </div>
+                    <div id="fetchResult" style="margin-top:12px;"></div>
+
+                    <h4 style="color:#fff;margin-top:24px;">Control del Scheduler</h4>
+                    <button class="ui yellow button" id="btnPauseMain" onclick="toggleScheduler()">⏸ Pausar Scheduler</button>
+                    <p style="color:#888;margin-top:8px;font-size:0.85em;">
+                        Pausar detiene la ejecución de tareas programadas.<br>
+                        Las acciones manuales siguen funcionando.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"></script>
+    <script>
+        // Init tabs
+        $('.tabular.menu .item').tab();
+
+        let _stations = [];
+        let _isRunning = true;
+
+        // === Clock ===
+        setInterval(() => {
+            document.getElementById('clockLabel').textContent = new Date().toLocaleTimeString('es-MX');
+        }, 1000);
+
+        // === Status ===
+        function loadStatus() {
+            fetch('/api/status').then(r => r.json()).then(d => {
+                _isRunning = d.running;
+                document.getElementById('uptimeLabel').textContent = 'Uptime: ' + d.uptime;
+                document.getElementById('statEstaciones').textContent = d.total_estaciones;
+                document.getElementById('statScheduled').textContent = d.total_scheduled;
+                document.getElementById('statRetries').textContent = d.retries_activos;
+                document.getElementById('statJobs').textContent = d.pending_jobs;
+
+                const badge = document.getElementById('statusBadge');
+                const btn = document.getElementById('btnPause');
+                const btnMain = document.getElementById('btnPauseMain');
+                if (d.running) {
+                    badge.className = 'ui tiny green label';
+                    badge.textContent = 'ACTIVO';
+                    btn.innerHTML = '⏸ Pausar';
+                    btn.className = 'ui tiny yellow button';
+                    btnMain.innerHTML = '⏸ Pausar Scheduler';
+                    btnMain.className = 'ui yellow button';
+                } else {
+                    badge.className = 'ui tiny red label pulse';
+                    badge.textContent = 'PAUSADO';
+                    btn.innerHTML = '▶ Reanudar';
+                    btn.className = 'ui tiny green button';
+                    btnMain.innerHTML = '▶ Reanudar Scheduler';
+                    btnMain.className = 'ui green button';
+                }
+            }).catch(() => {});
+        }
+
+        // === Stations ===
+        function loadStations() {
+            fetch('/api/stations').then(r => r.json()).then(data => {
+                _stations = data;
+                renderStations(data);
+                document.getElementById('stationCount').textContent = data.length + ' estaciones';
+            });
+        }
+
+        function renderStations(data) {
+            const filter = document.getElementById('stationFilter').value.toLowerCase();
+            const filtered = filter ? data.filter(s =>
+                s.dcp_id.toLowerCase().includes(filter) ||
+                s.nombre.toLowerCase().includes(filter) ||
+                (s.cuenca || '').toLowerCase().includes(filter) ||
+                (s.id_asignado || '').toLowerCase().includes(filter)
+            ) : data;
+
+            let html = '';
+            for (const s of filtered) {
+                const estado = s.retry
+                    ? `<span class="ui tiny label retry-badge">${s.retry.intentos}/${3} ↻ ${s.retry.hora_fallida}</span>`
+                    : (s.scheduled ? '<span class="ui tiny label online-badge">OK</span>' : '<span class="ui tiny label offline-badge">OFF</span>');
+                html += `<tr>
+                    <td><b>${s.dcp_id}</b></td>
+                    <td>${s.nombre}</td>
+                    <td>${s.id_asignado}</td>
+                    <td>:${String(s.minuto_tx).padStart(2,'0')}</td>
+                    <td>${s.rango_tx}m</td>
+                    <td>${s.cuenca || '-'}</td>
+                    <td>${estado}</td>
+                    <td><button class="ui tiny compact blue button" onclick="quickFetch('${s.dcp_id}')">Fetch</button></td>
+                </tr>`;
+            }
+            document.getElementById('stationsBody').innerHTML = html;
+            document.getElementById('stationCount').textContent = filtered.length + '/' + data.length + ' estaciones';
+        }
+
+        function filterStations() { renderStations(_stations); }
+
+        function quickFetch(dcpId) {
+            fetch('/api/fetch/' + dcpId, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => { if (d.success) alert('Fetch iniciado: ' + dcpId); });
+        }
+
+        // === Retries ===
+        function loadRetries() {
+            fetch('/api/retries').then(r => r.json()).then(data => {
+                if (data.length === 0) {
+                    document.getElementById('retriesContent').innerHTML =
+                        '<div style="text-align:center;padding:40px;color:#888;"><h3>✅ Sin reintentos activos</h3><p>Todas las estaciones respondieron correctamente.</p></div>';
+                    return;
+                }
+                let html = '<table class="ui compact small table dark-table"><thead><tr><th>DCP ID</th><th>Nombre</th><th>Intento</th><th>Hora Falla</th><th>Acción</th></tr></thead><tbody>';
+                for (const r of data) {
+                    html += `<tr>
+                        <td><b>${r.dcp_id}</b></td>
+                        <td>${r.nombre}</td>
+                        <td><span class="ui tiny purple label">${r.intentos}/${r.max_intentos}</span></td>
+                        <td>${r.hora_fallida}</td>
+                        <td><button class="ui tiny compact green button" onclick="quickFetch('${r.dcp_id}')">Forzar</button></td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+                document.getElementById('retriesContent').innerHTML = html;
+            });
+        }
+
+        // === Bitacora ===
+        function loadBitacora() {
+            const horas = document.getElementById('bitacoraHoras').value;
+            fetch('/api/bitacora?horas=' + horas + '&limit=200').then(r => r.json()).then(data => {
+                if (data.error) { document.getElementById('bitacoraBody').innerHTML = '<tr><td colspan="5" style="color:red;">' + data.error + '</td></tr>'; return; }
+                let html = '';
+                for (const r of data) {
+                    const icon = r.exito ? '✅' : '❌';
+                    const cls = r.exito ? '' : 'style="background:#3a1c1c !important;"';
+                    html += `<tr ${cls}>
+                        <td>${r.timestamp_utc || '-'}</td>
+                        <td><b>${r.dcp_id}</b></td>
+                        <td>${r.timestamp_msg || '-'}</td>
+                        <td>${r.servidor || '-'}</td>
+                        <td>${icon}</td>
+                    </tr>`;
+                }
+                document.getElementById('bitacoraBody').innerHTML = html;
+                document.getElementById('bitacoraCount').textContent = data.length + ' registros';
+            });
+        }
+
+        // === Log ===
+        function loadLog() {
+            fetch('/api/log?limit=300').then(r => r.json()).then(data => {
+                let html = '';
+                for (const entry of data) {
+                    let cls = '';
+                    const m = entry.msg;
+                    if (m.includes('[OK]') || m.includes('✅') || m.includes('RETRY OK')) cls = 'log-ok';
+                    else if (m.includes('[FAIL]') || m.includes('❌') || m.includes('[ERROR]')) cls = 'log-fail';
+                    else if (m.includes('[WARN]') || m.includes('AGOTADO')) cls = 'log-warn';
+                    else if (m.includes('[RETRY')) cls = 'log-retry';
+                    else if (m.includes('[INFO]') || m.includes('[START]') || m.includes('[SCHED')) cls = 'log-info';
+                    html += `<div class="log-line"><span class="log-ts">${entry.ts}</span><span class="${cls}">${escapeHtml(m)}</span></div>`;
+                }
+                const container = document.getElementById('logContainer');
+                container.innerHTML = html;
+                if (document.getElementById('autoScroll').checked) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        // === Config ===
+        function loadConfig() {
+            fetch('/api/config').then(r => r.json()).then(data => {
+                let html = '';
+                for (const [section, values] of Object.entries(data)) {
+                    html += `<h4 style="color:#2185d0;margin-top:16px;">[${section}]</h4>`;
+                    html += '<div class="ui inverted form">';
+                    for (const [key, val] of Object.entries(values)) {
+                        const isPass = key.toLowerCase().includes('password');
+                        html += `<div class="inline field" style="margin-bottom:4px;">
+                            <label style="width:250px;color:#aaa;">${key}</label>
+                            <input type="${isPass ? 'password' : 'text'}" value="${escapeHtml(val)}" 
+                                   style="background:#1a1a2e;border:1px solid #555;color:#e0e0e0;padding:4px 8px;width:300px;"
+                                   ${isPass ? 'disabled' : ''}
+                                   onchange="updateConfig('${section}','${key}',this.value)">
+                        </div>`;
+                    }
+                    html += '</div>';
+                }
+                document.getElementById('configContent').innerHTML = html;
+            });
+        }
+
+        function updateConfig(section, key, value) {
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ section, key, value })
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    // Flash green briefly
+                    alert('Configuración actualizada: [' + section + '] ' + key);
+                } else {
+                    alert('Error: ' + (d.error || 'desconocido'));
+                }
+            });
+        }
+
+        // === Actions ===
+        function doRecover() {
+            const dcp_id = document.getElementById('recoverDcpId').value.trim();
+            const horas = parseInt(document.getElementById('recoverHoras').value);
+            const body = { horas };
+            if (dcp_id) body.dcp_id = dcp_id;
+            fetch('/api/recover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }).then(r => r.json()).then(d => {
+                document.getElementById('recoverResult').innerHTML =
+                    d.success ? `<div class="ui green message">${d.message}</div>` : `<div class="ui red message">${d.error}</div>`;
+            });
+        }
+
+        function doFetch() {
+            const dcp_id = document.getElementById('fetchDcpId').value.trim();
+            const horas = parseInt(document.getElementById('fetchHoras').value);
+            if (!dcp_id) { alert('Ingresa un DCP ID'); return; }
+            fetch('/api/fetch/' + dcp_id + '?horas=' + horas, { method: 'POST' })
+                .then(r => r.json()).then(d => {
+                    document.getElementById('fetchResult').innerHTML =
+                        d.success ? `<div class="ui blue message">${d.message}</div>` : `<div class="ui red message">${d.error}</div>`;
+                });
+        }
+
+        function toggleScheduler() {
+            const action = _isRunning ? 'pause' : 'resume';
+            fetch('/api/scheduler', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            }).then(r => r.json()).then(() => loadStatus());
+        }
+
+        // === Auto-refresh ===
+        function refreshAll() {
+            loadStatus();
+            // Refresh active tab data
+            const activeTab = document.querySelector('.tabular.menu .item.active');
+            if (activeTab) {
+                const tab = activeTab.getAttribute('data-tab');
+                if (tab === 'stations') loadStations();
+                else if (tab === 'retries') loadRetries();
+            }
+        }
+
+        // Initial load
+        loadStatus();
+        loadStations();
+        loadRetries();
+        loadBitacora();
+        loadLog();
+        loadConfig();
+
+        // Periodic refresh
+        setInterval(refreshAll, 10000);  // Status + active tab every 10s
+        setInterval(() => {
+            if (document.getElementById('autoRefreshLog') && document.getElementById('autoRefreshLog').checked) {
+                const activeTab = document.querySelector('.tabular.menu .item.active');
+                if (activeTab && activeTab.getAttribute('data-tab') === 'log') {
+                    loadLog();
+                }
+            }
+        }, 5000);  // Log every 5s if on log tab
+        setInterval(loadBitacora, 30000);  // Bitacora every 30s
+    </script>
+</body>
+</html>

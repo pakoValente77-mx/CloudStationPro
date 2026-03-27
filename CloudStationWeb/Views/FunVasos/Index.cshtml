@@ -1,0 +1,2031 @@
+@model CloudStationWeb.Models.FunVasosViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Funcionamiento de Vasos";
+}
+@functions {
+    string SafeId(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        var normalized = name.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in normalized)
+        {
+            var uc = CharUnicodeCategory(c);
+            if (uc != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC).Replace(" ", "_");
+    }
+    static UnicodeCategory CharUnicodeCategory(char c) => char.GetUnicodeCategory(c);
+}
+
+@section Styles {
+<style>
+    .fv-container {
+        padding: 15px;
+        max-width: 100%;
+    }
+
+    .compact-header {
+        background: rgba(15, 25, 30, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(0, 230, 118, 0.2);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 230, 118, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 1000 !important;
+    }
+
+    .header-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #e8f5e9;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 15px;
+        text-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+    }
+
+    .header-title i { color: #00e676; }
+
+    /* Tabs for presas */
+    .presa-tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .presa-tab {
+        padding: 8px 18px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        background: rgba(15, 25, 30, 0.7);
+        color: #b0bec5;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.3s ease;
+    }
+
+    .presa-tab:hover { background: rgba(0, 230, 118, 0.15); color: #e8f5e9; }
+    .presa-tab.active {
+        background: linear-gradient(135deg, rgba(0, 230, 118, 0.3), rgba(0, 176, 255, 0.3));
+        color: #fff;
+        border-color: #00e676;
+        box-shadow: 0 0 12px rgba(0, 230, 118, 0.3);
+    }
+
+    /* Summary cards */
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .summary-card {
+        background: rgba(15, 25, 30, 0.8);
+        backdrop-filter: blur(8px);
+        border-radius: 10px;
+        padding: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        text-align: center;
+    }
+
+    .summary-card .label { color: #78909c; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .summary-card .value { color: #e8f5e9; font-size: 22px; font-weight: 700; }
+    .summary-card .unit { color: #546e7a; font-size: 11px; margin-top: 2px; }
+
+    .summary-card.elev .value { color: #00e676; }
+    .summary-card.almac .value { color: #00b0ff; }
+    .summary-card.aport .value { color: #ffab40; }
+    .summary-card.extrac .value { color: #ff5252; }
+    .summary-card.gen .value { color: #e040fb; }
+
+    /* Table section */
+    .fv-table-wrapper {
+        background: rgba(15, 25, 30, 0.8);
+        backdrop-filter: blur(8px);
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        overflow-x: auto;
+        overflow-y: auto;
+        max-height: 600px;
+        margin-bottom: 15px;
+    }
+
+    .fv-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+
+    .fv-table thead th {
+        background: #0d1f1a;
+        color: #b0bec5;
+        padding: 8px 10px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(0, 230, 118, 0.2);
+        white-space: nowrap;
+    }
+
+    .fv-table thead tr.subheader th {
+        background: #0b1916;
+        font-size: 10px;
+        color: #78909c;
+        padding: 4px 10px;
+        position: sticky;
+        top: 36px;
+        z-index: 2;
+    }
+
+    .fv-table tbody td {
+        padding: 6px 10px;
+        text-align: center;
+        color: #cfd8dc;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        white-space: nowrap;
+    }
+
+    .fv-table tbody tr:hover { background: rgba(0, 230, 118, 0.06); }
+
+    .fv-table .hora-col { color: #00e676; font-weight: 700; }
+
+    /* Charts */
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .chart-card {
+        background: rgba(15, 25, 30, 0.8);
+        backdrop-filter: blur(8px);
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 14px;
+    }
+
+    .chart-card .chart-title {
+        color: #e8f5e9;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-ref-config {
+        margin-left: auto;
+        background: rgba(0, 230, 118, 0.1);
+        border: 1px solid rgba(0, 230, 118, 0.25);
+        color: #00e676;
+        border-radius: 5px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: 0;
+        transition: all 0.2s;
+    }
+    .btn-ref-config:hover { background: rgba(0, 230, 118, 0.25); color: #fff; }
+
+    .nivel-toggle-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid;
+        user-select: none;
+    }
+    .nivel-toggle-chip.active { opacity: 1; }
+    .nivel-toggle-chip:not(.active) { opacity: 0.35; }
+    .nivel-toggle-chip .nivel-val { font-weight: 400; font-size: 11px; opacity: 0.8; }
+
+    /* Combined chart (Comportamiento del Embalse) */
+    .combo-chart-card {
+        background: rgba(15, 25, 30, 0.85);
+        backdrop-filter: blur(12px);
+        border-radius: 12px;
+        border: 1px solid rgba(0, 230, 118, 0.15);
+        padding: 16px;
+        margin-bottom: 15px;
+        position: relative;
+    }
+
+    .combo-chart-card .combo-title {
+        color: #e8f5e9;
+        font-size: 14px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .combo-chart-card .btn-maximize,
+    .chart-card .btn-maximize {
+        background: rgba(0, 230, 118, 0.12);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        color: #00e676;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+        z-index: 2;
+    }
+    .combo-chart-card .btn-maximize {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+    }
+    .combo-chart-card .btn-maximize:hover,
+    .chart-card .btn-maximize:hover {
+        background: rgba(0, 230, 118, 0.25);
+        color: #fff;
+    }
+
+    .btn-action-sm {
+        background: rgba(0, 230, 118, 0.12);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        color: #00e676;
+        border-radius: 6px;
+        padding: 4px 9px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .btn-action-sm:hover {
+        background: rgba(0, 230, 118, 0.25);
+        color: #fff;
+    }
+    .btn-action-sm.btn-export {
+        background: rgba(33, 150, 243, 0.12);
+        border-color: rgba(33, 150, 243, 0.3);
+        color: #2196F3;
+    }
+    .btn-action-sm.btn-export:hover {
+        background: rgba(33, 150, 243, 0.25);
+        color: #fff;
+    }
+
+    /* Fullscreen modal overlay */
+    .chart-fullscreen-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(5, 10, 15, 0.96);
+        z-index: 10000;
+        padding: 20px;
+        overflow: auto;
+    }
+    .chart-fullscreen-overlay.active { display: flex; flex-direction: column; }
+    .chart-fullscreen-overlay .fs-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .chart-fullscreen-overlay .fs-title {
+        color: #00e676;
+        font-size: 16px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .chart-fullscreen-overlay .btn-close-fs {
+        background: rgba(239, 83, 80, 0.15);
+        border: 1px solid rgba(239, 83, 80, 0.4);
+        color: #ef5350;
+        border-radius: 6px;
+        padding: 6px 14px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .chart-fullscreen-overlay .btn-close-fs:hover { background: rgba(239, 83, 80, 0.35); color: #fff; }
+    .chart-fullscreen-overlay .fs-chart-container {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .no-data-msg {
+        text-align: center;
+        color: #78909c;
+        padding: 60px 20px;
+        font-size: 16px;
+    }
+
+    .no-data-msg i { font-size: 48px; display: block; margin-bottom: 15px; color: #455a64; }
+
+    /* Tab "Todas" view */
+    .all-presas-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .presa-section-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #00e676;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 10px 14px;
+        background: rgba(0, 230, 118, 0.08);
+        border-radius: 8px 8px 0 0;
+        border-bottom: 2px solid rgba(0, 230, 118, 0.3);
+    }
+
+    /* Cascade 3D */
+    #cascade3d-wrapper {
+        width: 100%;
+        height: calc(100vh - 200px);
+        min-height: 550px;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+        background: #040c14;
+        border: 1px solid rgba(0,230,118,0.15);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 0 20px rgba(0,230,118,0.03);
+    }
+    #cascade3d-wrapper:fullscreen,
+    #cascade3d-wrapper:-webkit-full-screen {
+        border-radius: 0;
+        border: none;
+        height: 100vh;
+    }
+    #cascade3d-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .c3d-overlay-info {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        z-index: 10;
+        background: rgba(4,12,20,0.75);
+        padding: 8px 16px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,230,118,0.25);
+        backdrop-filter: blur(8px);
+    }
+    .c3d-overlay-info span {
+        color: #00e676;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .c3d-controls {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        z-index: 10;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .c3d-controls .button { transition: all 0.2s ease; min-width: auto; }
+    .c3d-controls .button.disabled { pointer-events: none; }
+    .c3d-hint {
+        position: absolute;
+        bottom: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        color: rgba(255,255,255,0.3);
+        font-size: 11px;
+        pointer-events: none;
+        transition: opacity 3s;
+    }
+
+    /* Bottom Data Banner */
+    .c3d-bottom-banner {
+        position: absolute;
+        bottom: 28px;
+        left: 0;
+        right: 0;
+        z-index: 12;
+        display: flex;
+        gap: 0;
+        background: rgba(4, 12, 20, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-top: 1px solid rgba(0, 230, 118, 0.25);
+        padding: 1px 8px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,230,118,0.3) transparent;
+    }
+    .c3d-bottom-banner::-webkit-scrollbar { height: 3px; }
+    .c3d-bottom-banner::-webkit-scrollbar-thumb { background: rgba(0,230,118,0.3); border-radius: 2px; }
+    .c3d-banner-item {
+        flex: 1;
+        min-width: 130px;
+        padding: 4px 10px;
+        border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .c3d-banner-item:last-child { border-right: none; }
+    .c3d-banner-name {
+        font-size: 11px;
+        font-weight: 800;
+        color: #00e676;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+        white-space: nowrap;
+    }
+    .c3d-banner-row {
+        display: flex;
+        gap: 4px;
+        align-items: baseline;
+        line-height: 1.3;
+    }
+    .c3d-banner-label {
+        font-size: 10px;
+        color: rgba(255,255,255,0.4);
+        white-space: nowrap;
+    }
+    .c3d-banner-val {
+        font-size: 11px;
+        color: #e8f5e9;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .c3d-banner-val small { font-size: 9px; color: rgba(255,255,255,0.35); }
+    .c3d-banner-val.c3d-gen { color: #ffd54f; }
+    .c3d-banner-label.c3d-no-gen { color: rgba(255,255,255,0.2); font-style: italic; }
+    .c3d-banner-gulf { border-left: 1px solid rgba(79,195,247,0.3); }
+</style>
+}
+
+<div class="fv-container">
+    <!-- Header -->
+    <div class="compact-header">
+        <div class="header-title">
+            <i class="water icon"></i> Funcionamiento de Vasos
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px;">
+            <label style="color:#b0bec5; font-size:12px; font-weight:600;">Desde:</label>
+            <input type="date" id="fechaInicio" value="@Model.FechaInicio.ToString("yyyy-MM-dd")"
+                   style="background:rgba(0,0,0,0.3); border:1px solid rgba(0,230,118,0.3); color:#e8f5e9; padding:6px 12px; border-radius:6px; font-size:13px;" />
+            <label style="color:#b0bec5; font-size:12px; font-weight:600;">Hasta:</label>
+            <input type="date" id="fechaFin" value="@Model.FechaFin.ToString("yyyy-MM-dd")"
+                   style="background:rgba(0,0,0,0.3); border:1px solid rgba(0,230,118,0.3); color:#e8f5e9; padding:6px 12px; border-radius:6px; font-size:13px;" />
+            <button class="ui tiny inverted teal button" id="btnConsultar" style="margin-left:4px;">
+                <i class="search icon"></i> Consultar
+            </button>
+        </div>
+
+        <div style="margin-left:auto; display:flex; gap:8px;">
+            <button class="ui tiny inverted green button" onclick="exportTable()">
+                <i class="file excel icon"></i> Exportar
+            </button>
+        </div>
+    </div>
+
+    @if (Model.Presas.Count == 0)
+    {
+        <div class="no-data-msg">
+            <i class="database icon"></i>
+            No hay datos disponibles para esta fecha.<br/>
+            <span style="font-size:13px;">Suba un archivo de Funcionamiento de Vasos en el módulo <a href="/Documents" style="color:#00e676;">Repositorio</a>.</span>
+        </div>
+    }
+    else
+    {
+        <!-- Presa Tabs -->
+        <div class="presa-tabs">
+            <div class="presa-tab active" data-presa="todas">Todas</div>
+            <div class="presa-tab" data-presa="cascada3d" style="background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(33,150,243,0.15)); border:1px solid rgba(0,230,118,0.3);"><i class="water icon"></i> Cascada 3D</div>
+            <div class="presa-tab" data-presa="promapor" style="background:linear-gradient(135deg,rgba(255,171,64,0.15),rgba(233,30,99,0.15)); border:1px solid rgba(255,171,64,0.3);"><i class="chart line icon"></i> PromApor SHG</div>
+            <div class="presa-tab" data-presa="niveleshorarios" style="background:linear-gradient(135deg,rgba(76,175,80,0.15),rgba(255,235,59,0.15)); border:1px solid rgba(76,175,80,0.3);"><i class="table icon"></i> Niveles Horarios</div>
+            @foreach (var p in Model.Presas)
+            {
+                <div class="presa-tab" data-presa="@SafeId(p.Presa)">@p.Presa</div>
+            }
+        </div>
+
+        <!-- Tab: TODAS -->
+        <div id="tab-todas" class="tab-content">
+            @foreach (var p in Model.Presas)
+            {
+                <div style="margin-bottom:20px;">
+                    <div class="presa-section-title">
+                        <i class="tint icon"></i> @p.Presa
+                        @if (p.UltimaHora > 0)
+                        {
+                            <span style="font-size:11px; color:#78909c; font-weight:400; margin-left:10px;">
+                                Última hora: @p.UltimaHora:00
+                            </span>
+                        }
+                    </div>
+
+                    <!-- Summary for this presa -->
+                    <div class="summary-cards" style="margin-top:8px;">
+                        <div class="summary-card elev">
+                            <div class="label">Elevación</div>
+                            <div class="value">@(p.UltimaElevacion?.ToString("F2") ?? "—")</div>
+                            <div class="unit">m.s.n.m</div>
+                        </div>
+                        <div class="summary-card almac">
+                            <div class="label">Almacenamiento</div>
+                            <div class="value">@(p.UltimoAlmacenamiento?.ToString("F2") ?? "—")</div>
+                            <div class="unit">Mill. m³</div>
+                        </div>
+                        <div class="summary-card aport">
+                            <div class="label">Aportaciones</div>
+                            <div class="value">@(p.TotalAportacionesV?.ToString("F2") ?? "—")</div>
+                            <div class="unit">Mill. m³</div>
+                        </div>
+                        <div class="summary-card extrac">
+                            <div class="label">Extracciones</div>
+                            <div class="value">@(p.TotalExtraccionesV?.ToString("F2") ?? "—")</div>
+                            <div class="unit">Mill. m³</div>
+                        </div>
+                        @if (p.Presa != "Tapón Juan Grijalva")
+                        {
+                            <div class="summary-card gen">
+                                <div class="label">Generación</div>
+                                <div class="value">@(p.TotalGeneracion?.ToString("F1") ?? "—")</div>
+                                <div class="unit">MWH total</div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Table -->
+                    @await Html.PartialAsync("_PresaTable", p)
+                </div>
+            }
+        </div>
+
+        <!-- Tab: CASCADA 3D -->
+        <div id="tab-cascada3d" class="tab-content" style="display:none;">
+            <div id="cascade3d-wrapper">
+                <div class="c3d-overlay-info">
+                    <span><i class="water icon"></i> Sistema Hidroeléctrico Grijalva — Cascada en Tiempo Real</span>
+                    <span id="c3dTimestamp" style="margin-left:16px; color:#4fc3f7; font-size:12px; letter-spacing:0.5px;"></span>
+                </div>
+                <div class="c3d-controls">
+                    <button class="ui tiny inverted green button" id="c3d-btn-play" onclick="playCascade3D()" style="opacity:0.5;">
+                        <i class="play icon"></i> Iniciar
+                    </button>
+                    <button class="ui tiny inverted yellow button" id="c3d-btn-pause" onclick="pauseCascade3D()">
+                        <i class="pause icon"></i> Pausar
+                    </button>
+                    <button class="ui tiny inverted red button" id="c3d-btn-stop" onclick="stopCascade3D()">
+                        <i class="stop icon"></i> Detener
+                    </button>
+                    <button class="ui tiny inverted teal button" onclick="toggle3DFullscreen()">
+                        <i class="expand icon"></i> Pantalla Completa
+                    </button>
+                </div>
+                <canvas id="cascade3d-canvas"></canvas>
+                <div class="c3d-hint" id="c3dHint">
+                    <i class="mouse pointer icon"></i> Arrastra para rotar &bull; Scroll para zoom
+                </div>
+                <!-- Bottom Data Banner -->
+                <div class="c3d-bottom-banner" id="c3dBanner">
+                    @foreach (var p in Model.Presas)
+                    {
+                        var pKey = SafeId(p.Presa);
+                        var isTapon = p.Presa == "Tapón Juan Grijalva";
+                        var lastRow = p.Datos.LastOrDefault();
+                        <div class="c3d-banner-item" data-presa-key="@pKey">
+                            <div class="c3d-banner-name">@p.Presa</div>
+                            <div class="c3d-banner-row">
+                                <span class="c3d-banner-label">Elev:</span>
+                                <span class="c3d-banner-val c3d-val-elev">@(p.UltimaElevacion?.ToString("F2") ?? "—") <small>msnm</small></span>
+                            </div>
+                            <div class="c3d-banner-row">
+                                <span class="c3d-banner-label">Almac:</span>
+                                <span class="c3d-banner-val c3d-val-almac">@(p.UltimoAlmacenamiento?.ToString("F2") ?? "—") <small>Mm³</small></span>
+                            </div>
+                            @if (!isTapon)
+                            {
+                                <div class="c3d-banner-row">
+                                    <span class="c3d-banner-label">Gen:</span>
+                                    <span class="c3d-banner-val c3d-gen c3d-val-gen">@(p.TotalGeneracion?.ToString("F1") ?? "—") <small>MWh</small></span>
+                                </div>
+                                <div class="c3d-banner-row">
+                                    <span class="c3d-banner-label">Uds:</span>
+                                    <span class="c3d-banner-val c3d-val-uds">@(lastRow?.NumUnidades?.ToString() ?? "0") generando</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="c3d-banner-row"><span class="c3d-banner-label c3d-no-gen">Sin generación</span></div>
+                            }
+                        </div>
+                    }
+                    <div class="c3d-banner-item c3d-banner-gulf">
+                        <div class="c3d-banner-name" style="color:#4fc3f7;">Golfo de México</div>
+                        <div class="c3d-banner-row"><span class="c3d-banner-label">Desembocadura</span></div>
+                        <div class="c3d-banner-row"><span class="c3d-banner-label">Río Grijalva</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: PromApor SHG (Aportado original vs promedios centrales) -->
+        <div id="tab-promapor" class="tab-content" style="display:none;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; padding:10px 0;">
+                @foreach (var p in Model.Presas)
+                {
+                    <div class="chart-card" style="position:relative;">
+                        <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:6px;">
+                            <button class="btn-maximize" type="button" onclick="maximizePromApor('@SafeId(p.Presa)', '@(p.Presa == "Tapón Juan Grijalva" ? "Tapón Juan del Grijalva" : "C.H. " + p.Presa)')" title="Maximizar">
+                                <i class="expand arrows alternate icon"></i>
+                            </button>
+                            <button class="btn-maximize" type="button" onclick="exportPromApor('@SafeId(p.Presa)')" title="Exportar imagen" style="border-color:rgba(33,150,243,0.3); background:rgba(33,150,243,0.12); color:#2196F3;">
+                                <i class="download icon"></i>
+                            </button>
+                        </div>
+                        <div id="chart-promapor-@SafeId(p.Presa)" style="height:340px;"></div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Tab: Niveles Horarios -->
+        <div id="tab-niveleshorarios" class="tab-content" style="display:none;">
+            <div style="padding:10px 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="color:#e8f5e9; margin:0; font-size:18px; font-weight:600; letter-spacing:0.5px;">
+                        <i class="table icon" style="color:#4caf50;"></i> REPORTE DE NIVELES HORARIOS
+                    </h3>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="color:#78909c; font-size:13px;">
+                            FECHA: @Model.FechaFin.ToString("dd 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es-MX"))
+                        </span>
+                        <button class="btn-action-sm" type="button" onclick="exportNivelesHorarios()" title="Exportar a Excel">
+                            <i class="file excel icon"></i> Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:3fr 2fr; gap:20px;">
+                    <!-- Tabla de niveles -->
+                    <div class="chart-card" style="overflow-x:auto; overflow-y:auto; max-height:600px; padding:12px;">
+                        <table class="ui very basic inverted compact table" id="nivelesHorariosTable" style="font-size:12px; width:100%;">
+                            <thead>
+                                <tr style="background:rgba(0,230,118,0.08); position:sticky; top:0; z-index:2;">
+                                    <th rowspan="2" style="color:#4caf50; text-align:center; border-bottom:2px solid rgba(76,175,80,0.3); vertical-align:middle; background:rgba(15,25,30,0.95);">Hora</th>
+                                    <th colspan="1" style="color:#00e676; text-align:center; border-bottom:1px solid rgba(0,230,118,0.2); background:rgba(15,25,30,0.95);">Angostura</th>
+                                    <th colspan="2" style="color:#42a5f5; text-align:center; border-bottom:1px solid rgba(66,165,245,0.2); background:rgba(15,25,30,0.95);">Chicoasén</th>
+                                    <th colspan="1" style="color:#e040fb; text-align:center; border-bottom:1px solid rgba(224,64,251,0.2); background:rgba(15,25,30,0.95);">Malpaso</th>
+                                    <th colspan="2" style="color:#ffab40; text-align:center; border-bottom:1px solid rgba(255,171,64,0.2); background:rgba(15,25,30,0.95);">Peñitas</th>
+                                </tr>
+                                <tr style="background:rgba(0,230,118,0.05); position:sticky; top:30px; z-index:2;">
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Nivel (msnm)</th>
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Nivel (msnm)</th>
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Dif. Al NAMO</th>
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Nivel (msnm)</th>
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Nivel (msnm)</th>
+                                    <th style="color:#78909c; font-size:10px; text-align:center; background:rgba(15,25,30,0.95);">Dif. Al NAMO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nivelesHorariosBody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Gráficas Chicoasén y Peñitas -->
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        <div class="chart-card" style="position:relative;">
+                            <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                                <button class="btn-action-sm" type="button" onclick="maximizeNivelChart('chicoasen')" title="Maximizar">
+                                    <i class="expand arrows alternate icon"></i>
+                                </button>
+                                <button class="btn-action-sm btn-export" type="button" onclick="exportNivelChart('chicoasen')" title="Exportar PNG">
+                                    <i class="download icon"></i>
+                                </button>
+                            </div>
+                            <div id="chart-nivel-chicoasen" style="height:250px;"></div>
+                        </div>
+                        <div class="chart-card" style="position:relative;">
+                            <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                                <button class="btn-action-sm" type="button" onclick="maximizeNivelChart('penitas')" title="Maximizar">
+                                    <i class="expand arrows alternate icon"></i>
+                                </button>
+                                <button class="btn-action-sm btn-export" type="button" onclick="exportNivelChart('penitas')" title="Exportar PNG">
+                                    <i class="download icon"></i>
+                                </button>
+                            </div>
+                            <div id="chart-nivel-penitas" style="height:250px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Individual presa tabs -->
+        @foreach (var p in Model.Presas)
+        {
+            <div id="tab-@SafeId(p.Presa)" class="tab-content" style="display:none;">
+                <!-- Summary cards -->
+                <div class="summary-cards">
+                    <div class="summary-card elev">
+                        <div class="label">Elevación</div>
+                        <div class="value">@(p.UltimaElevacion?.ToString("F2") ?? "—")</div>
+                        <div class="unit">m.s.n.m</div>
+                    </div>
+                    <div class="summary-card almac">
+                        <div class="label">Almacenamiento</div>
+                        <div class="value">@(p.UltimoAlmacenamiento?.ToString("F2") ?? "—")</div>
+                        <div class="unit">Mill. m³</div>
+                    </div>
+                    <div class="summary-card aport">
+                        <div class="label">Aportaciones</div>
+                        <div class="value">@(p.TotalAportacionesV?.ToString("F2") ?? "—")</div>
+                        <div class="unit">Mill. m³</div>
+                    </div>
+                    <div class="summary-card extrac">
+                        <div class="label">Extracciones</div>
+                        <div class="value">@(p.TotalExtraccionesV?.ToString("F2") ?? "—")</div>
+                        <div class="unit">Mill. m³</div>
+                    </div>
+                    @if (p.Presa != "Tapón Juan Grijalva")
+                    {
+                        <div class="summary-card gen">
+                            <div class="label">Generación</div>
+                            <div class="value">@(p.TotalGeneracion?.ToString("F1") ?? "—")</div>
+                            <div class="unit">MWH total</div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Table -->
+                @await Html.PartialAsync("_PresaTable", p)
+
+                <!-- Combined Chart: Comportamiento del Embalse -->
+                <div class="combo-chart-card">
+                    <div class="combo-title">
+                        <i class="chart area icon"></i> Comportamiento del Embalse de @(p.Presa == "Tapón Juan Grijalva" ? "Juan de Grijalva" : "la C.H. " + p.Presa)
+                    </div>
+                    <div style="position:absolute; top:10px; right:12px; z-index:2; display:flex; gap:6px;">
+                        <button class="btn-action-sm" type="button" onclick="openRefModal('@SafeId(p.Presa)', '@p.Presa')" title="Configurar líneas de referencia">
+                            <i class="sliders horizontal icon"></i> Ref.
+                        </button>
+                        <button class="btn-action-sm" type="button" onclick="maximizeChart('@SafeId(p.Presa)', '@(p.Presa == "Tapón Juan Grijalva" ? "Juan de Grijalva" : "C.H. " + p.Presa)')" title="Maximizar">
+                            <i class="expand arrows alternate icon"></i>
+                        </button>
+                        <button class="btn-action-sm btn-export" type="button" onclick="exportIndivChart('@SafeId(p.Presa)', 'combo')" title="Exportar PNG">
+                            <i class="download icon"></i>
+                        </button>
+                    </div>
+                    <div id="chart-combo-@SafeId(p.Presa)" style="height:380px;"></div>
+                </div>
+
+                <!-- Charts -->
+                <div class="charts-grid">
+                    <div class="chart-card" style="position:relative;">
+                        <div class="chart-title">
+                            <i class="chart line icon" style="color:#00e676;"></i> Elevación del Vaso
+                        </div>
+                        <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                            <button class="btn-action-sm" type="button" onclick="openRefModal('@SafeId(p.Presa)', '@p.Presa')" title="Configurar líneas de referencia">
+                                <i class="sliders horizontal icon"></i>
+                            </button>
+                            <button class="btn-action-sm" type="button" onclick="maximizeIndivChart('@SafeId(p.Presa)', 'elev', 'Elevación del Vaso')" title="Maximizar">
+                                <i class="expand arrows alternate icon"></i>
+                            </button>
+                            <button class="btn-action-sm btn-export" type="button" onclick="exportIndivChart('@SafeId(p.Presa)', 'elev')" title="Exportar PNG">
+                                <i class="download icon"></i>
+                            </button>
+                        </div>
+                        <div id="chart-elev-@SafeId(p.Presa)" style="height:280px;"></div>
+                    </div>
+                    <div class="chart-card" style="position:relative;">
+                        <div class="chart-title"><i class="chart bar icon" style="color:#00b0ff;"></i> Aportaciones vs Extracciones (m³/s)</div>
+                        <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                            <button class="btn-action-sm" type="button" onclick="maximizeIndivChart('@SafeId(p.Presa)', 'qflow', 'Aportaciones vs Extracciones')" title="Maximizar">
+                                <i class="expand arrows alternate icon"></i>
+                            </button>
+                            <button class="btn-action-sm btn-export" type="button" onclick="exportIndivChart('@SafeId(p.Presa)', 'qflow')" title="Exportar PNG">
+                                <i class="download icon"></i>
+                            </button>
+                        </div>
+                        <div id="chart-qflow-@SafeId(p.Presa)" style="height:280px;"></div>
+                    </div>
+                    @if (p.Presa != "Tapón Juan Grijalva")
+                    {
+                        <div class="chart-card" style="position:relative;">
+                            <div class="chart-title"><i class="bolt icon" style="color:#e040fb;"></i> Generación (MWH)</div>
+                            <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                                <button class="btn-action-sm" type="button" onclick="maximizeIndivChart('@SafeId(p.Presa)', 'gen', 'Generación (MWH)')" title="Maximizar">
+                                    <i class="expand arrows alternate icon"></i>
+                                </button>
+                                <button class="btn-action-sm btn-export" type="button" onclick="exportIndivChart('@SafeId(p.Presa)', 'gen')" title="Exportar PNG">
+                                    <i class="download icon"></i>
+                                </button>
+                            </div>
+                            <div id="chart-gen-@SafeId(p.Presa)" style="height:280px;"></div>
+                        </div>
+                    }
+                    <div class="chart-card" style="position:relative;">
+                        <div class="chart-title"><i class="tint icon" style="color:#ffab40;"></i> Almacenamiento (Mill. m³)</div>
+                        <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">
+                            <button class="btn-action-sm" type="button" onclick="maximizeIndivChart('@SafeId(p.Presa)', 'almac', 'Almacenamiento (Mill. m³)')" title="Maximizar">
+                                <i class="expand arrows alternate icon"></i>
+                            </button>
+                            <button class="btn-action-sm btn-export" type="button" onclick="exportIndivChart('@SafeId(p.Presa)', 'almac')" title="Exportar PNG">
+                                <i class="download icon"></i>
+                            </button>
+                        </div>
+                        <div id="chart-almac-@SafeId(p.Presa)" style="height:280px;"></div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Fullscreen chart modal -->
+<div class="chart-fullscreen-overlay" id="chartFullscreen">
+    <div class="fs-header">
+        <span class="fs-title" id="fsTitleText"></span>
+        <button class="btn-close-fs" onclick="closeFullscreen()"><i class="compress icon"></i> Cerrar</button>
+    </div>
+    <div class="fs-chart-container" id="fsChartContainer"></div>
+</div>
+
+<!-- Modal: Configurar Referencias del Embalse -->
+<div class="ui small inverted modal" id="refModal">
+    <div class="header" style="background:rgba(0,230,118,0.12); border-bottom:1px solid rgba(0,230,118,0.3);">
+        <i class="sliders horizontal icon" style="color:#00e676;"></i> Líneas de Referencia — <span id="refPresaTitle"></span>
+    </div>
+    <div class="content" style="background:#0a1520;">
+        <div style="margin-bottom:16px;">
+            <h5 style="color:#78909c; margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:1px;">Niveles Fijos (NAMO / NAME / NAMINO)</h5>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;" id="refNivelesToggle"></div>
+        </div>
+        <hr style="border-color:rgba(255,255,255,0.08); margin:14px 0;">
+        <h5 style="color:#78909c; margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:1px;">Asíntotas de Referencia Personalizadas</h5>
+        <div id="refTableContainer">
+            <table class="ui very basic inverted compact table" id="refTable" style="font-size:12px;">
+                <thead>
+                    <tr>
+                        <th style="color:#b0bec5;">Nombre</th>
+                        <th style="color:#b0bec5;">Valor (msnm)</th>
+                        <th style="color:#b0bec5;">Color</th>
+                        <th style="color:#b0bec5;">Visible</th>
+                        <th style="color:#b0bec5;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="refTableBody"></tbody>
+            </table>
+        </div>
+        <div style="margin-top:12px; padding:12px; background:rgba(0,230,118,0.06); border-radius:8px; border:1px solid rgba(0,230,118,0.15);">
+            <h5 style="color:#00e676; margin:0 0 8px; font-size:12px;"><i class="plus icon"></i> Agregar / Editar Referencia</h5>
+            <input type="hidden" id="refEditId" value="0">
+            <div style="display:grid; grid-template-columns:1fr 120px 80px; gap:8px; align-items:end;">
+                <div>
+                    <label style="color:#78909c; font-size:11px; display:block; margin-bottom:3px;">Nombre</label>
+                    <input type="text" id="refNombre" placeholder="Ej: Nivel Crítico" maxlength="200"
+                           style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); color:#e8f5e9; padding:7px 10px; border-radius:5px; font-size:12px;">
+                </div>
+                <div>
+                    <label style="color:#78909c; font-size:11px; display:block; margin-bottom:3px;">Valor (msnm)</label>
+                    <input type="number" step="0.01" id="refValor" placeholder="0.00"
+                           style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); color:#e8f5e9; padding:7px 10px; border-radius:5px; font-size:12px;">
+                </div>
+                <div>
+                    <label style="color:#78909c; font-size:11px; display:block; margin-bottom:3px;">Color</label>
+                    <input type="color" id="refColor" value="#ffff00"
+                           style="width:100%; height:33px; border:1px solid rgba(255,255,255,0.15); border-radius:5px; cursor:pointer; background:transparent;">
+                </div>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:8px;">
+                <button type="button" class="ui tiny green button" id="btnSaveRef"><i class="save icon"></i> Guardar</button>
+                <button type="button" class="ui tiny basic inverted button" id="btnResetRef"><i class="eraser icon"></i> Limpiar</button>
+            </div>
+        </div>
+    </div>
+    <div class="actions" style="background:rgba(0,230,118,0.06); border-top:1px solid rgba(0,230,118,0.15);">
+        <button type="button" class="ui inverted green button" id="btnApplyCloseRef">
+            <i class="check icon"></i> Aplicar y Cerrar
+        </button>
+    </div>
+</div>
+@Html.AntiForgeryToken()
+
+@section Scripts {
+<script src="~/lib/highcharts/highcharts.js"></script>
+<script src="~/lib/highcharts/modules/exporting.js"></script>
+<script src="~/lib/threejs/three.min.js"></script>
+<script src="~/js/cascade3d.js"></script>
+<script>
+$(function() {
+    console.log('[FunVasos] Script v3 loaded at', new Date().toISOString());
+
+    // Sanitize string for DOM IDs (remove diacritics, replace spaces)
+    function sanitizeId(str) {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ /g, '_');
+    }
+
+    // Tab switching
+    $('.presa-tab').on('click', function() {
+        $('.presa-tab').removeClass('active');
+        $(this).addClass('active');
+        var presa = $(this).data('presa');
+        $('.tab-content').hide();
+        stopCascadeAutoRefresh(); // stop auto-refresh when leaving cascade tab
+        if (presa === 'todas') {
+            $('#tab-todas').show();
+        } else if (presa === 'cascada3d') {
+            $('#tab-cascada3d').show();
+            if (!window._c3dReady) {
+                setTimeout(function() {
+                    initCascade3D('cascade3d-wrapper', window._c3dData);
+                    window._c3dReady = true;
+                    setTimeout(function() { $('#c3dHint').css('opacity', 0); }, 5000);
+                }, 150);
+            } else {
+                resizeCascade3D();
+            }
+            startCascadeAutoRefresh();
+        } else if (presa === 'promapor') {
+            $('#tab-promapor').show();
+            renderPromAporCharts();
+        } else if (presa === 'niveleshorarios') {
+            $('#tab-niveleshorarios').show();
+            renderNivelesHorarios();
+        } else {
+            $('#tab-' + sanitizeId(presa)).show();
+            renderCharts(presa);
+        }
+    });
+
+    // Date range query
+    $('#btnConsultar').on('click', function() {
+        var fi = $('#fechaInicio').val();
+        var ff = $('#fechaFin').val();
+        window.location.href = '@Url.Action("Index", "FunVasos")' + '?fechaInicio=' + fi + '&fechaFin=' + ff;
+    });
+
+    // Also query on Enter key in date fields
+    $('#fechaInicio, #fechaFin').on('keydown', function(e) {
+        if (e.key === 'Enter') { $('#btnConsultar').click(); }
+    });
+
+    @{
+        var isRange = Model.FechaInicio != Model.FechaFin;
+    }
+
+    // Chart data from model
+    var presasData = {};
+    @foreach (var p in Model.Presas)
+    {
+        <text>
+        presasData['@SafeId(p.Presa)'] = {
+            labels: [@Html.Raw(string.Join(",", p.Datos.Select(d => isRange
+                ? $"'{d.Ts:dd/MM} {d.Hora}:00'"
+                : $"'{d.Hora}:00'")))],
+            elevacion: [@string.Join(",", p.Datos.Select(d => d.Elevacion?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            almacenamiento: [@string.Join(",", p.Datos.Select(d => d.Almacenamiento?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            aportQ: [@string.Join(",", p.Datos.Select(d => d.AportacionesQ?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            turbQ: [@string.Join(",", p.Datos.Select(d => d.ExtraccionesTurbQ?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            vertQ: [@string.Join(",", p.Datos.Select(d => d.ExtraccionesVertQ?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            totalQ: [@string.Join(",", p.Datos.Select(d => d.ExtraccionesTotalQ?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            gen: [@string.Join(",", p.Datos.Select(d => d.Generacion?.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) ?? "null"))],
+            isTapon: @(p.Presa == "Tapón Juan Grijalva" ? "true" : "false")
+        };
+        </text>
+    }
+
+    // 3D Cascade data
+    window._c3dData = [
+        @foreach (var p in Model.Presas)
+        {
+            var lastRow = p.Datos.LastOrDefault();
+            <text>{ key: '@SafeId(p.Presa)', name: '@Html.Raw(p.Presa)', currentElev: @(p.UltimaElevacion?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "null"), generation: @(p.TotalGeneracion?.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) ?? "0"), activeUnits: @(lastRow?.NumUnidades ?? 0) },
+            </text>
+        }
+    ];
+    window._c3dReady = false;
+    window._c3dRefreshInterval = null;
+
+    // Set initial timestamp from model data
+    (function setInitialTimestamp() {
+        var presas = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Presas.Select(p => new { p.Presa, p.UltimaHora }).ToList()));
+        var maxHora = 0;
+        presas.forEach(function(p) { if (p.UltimaHora > maxHora) maxHora = p.UltimaHora; });
+        var fechaStr = '@Model.FechaFin.ToString("dd/MM/yyyy")';
+        var horaStr = maxHora > 0 ? (maxHora + ':00') : '--';
+        $('#c3dTimestamp').html('<i class="clock outline icon"></i> Datos al: ' + fechaStr + ' ' + horaStr + ' hrs');
+    })();
+
+    // Auto-refresh cascade every 5 minutes
+    function refreshCascadeData() {
+        $.ajax({
+            url: '@Url.Action("GetCascadeData", "FunVasos")',
+            type: 'GET',
+            dataType: 'json',
+            success: function(resp) {
+                if (!resp || !resp.presas) return;
+                var maxHora = 0;
+                var fecha = resp.fecha || '';
+
+                // Update _c3dData and banner
+                resp.presas.forEach(function(p) {
+                    if (p.ultimaHora > maxHora) maxHora = p.ultimaHora;
+
+                    // Update 3D data array
+                    for (var i = 0; i < window._c3dData.length; i++) {
+                        if (window._c3dData[i].key === p.key) {
+                            window._c3dData[i].currentElev = p.currentElev;
+                            window._c3dData[i].generation = p.generation;
+                            window._c3dData[i].activeUnits = p.activeUnits;
+                            break;
+                        }
+                    }
+
+                    // Update bottom banner values
+                    var $item = $('#c3dBanner .c3d-banner-item[data-presa-key="' + p.key + '"]');
+                    if ($item.length) {
+                        $item.find('.c3d-val-elev').html((p.currentElev != null ? p.currentElev.toFixed(2) : '—') + ' <small>msnm</small>');
+                        $item.find('.c3d-val-almac').html((p.almacenamiento != null ? p.almacenamiento.toFixed(2) : '—') + ' <small>Mm³</small>');
+                        if ($item.find('.c3d-val-gen').length) {
+                            $item.find('.c3d-val-gen').html((p.generation != null ? p.generation.toFixed(1) : '—') + ' <small>MWh</small>');
+                        }
+                        if ($item.find('.c3d-val-uds').length) {
+                            $item.find('.c3d-val-uds').text((p.activeUnits || 0) + ' generando');
+                        }
+                    }
+                });
+
+                // Update timestamp
+                var d = new Date();
+                var fechaDisplay = fecha ? fecha.split('-').reverse().join('/') : d.toLocaleDateString('es-MX');
+                var horaStr = maxHora > 0 ? (maxHora + ':00') : '--';
+                $('#c3dTimestamp').html('<i class="clock outline icon"></i> Datos al: ' + fechaDisplay + ' ' + horaStr + ' hrs &nbsp;|&nbsp; Actualizado: ' + d.toLocaleTimeString('es-MX'));
+
+                // Reinitialize 3D scene with new data
+                if (window._c3dReady) {
+                    destroyCascade3D();
+                    window._c3dReady = false;
+                    setTimeout(function() {
+                        initCascade3D('cascade3d-wrapper', window._c3dData);
+                        window._c3dReady = true;
+                    }, 200);
+                }
+
+                console.log('[Cascade] Auto-refresh OK — ' + d.toLocaleTimeString());
+            },
+            error: function(xhr, status, err) {
+                console.warn('[Cascade] Auto-refresh error:', err);
+            }
+        });
+    }
+
+    function startCascadeAutoRefresh() {
+        if (window._c3dRefreshInterval) return;
+        window._c3dRefreshInterval = setInterval(refreshCascadeData, 5 * 60 * 1000); // 5 min
+        console.log('[Cascade] Auto-refresh started (cada 5 min)');
+    }
+
+    function stopCascadeAutoRefresh() {
+        if (window._c3dRefreshInterval) {
+            clearInterval(window._c3dRefreshInterval);
+            window._c3dRefreshInterval = null;
+            console.log('[Cascade] Auto-refresh stopped');
+        }
+    }
+
+    var chartTheme = {
+        chart: { backgroundColor: 'transparent', style: { fontFamily: "'Segoe UI', sans-serif" } },
+        title: { text: null },
+        credits: { enabled: false },
+        legend: { itemStyle: { color: '#b0bec5', fontWeight: '400' }, itemHoverStyle: { color: '#fff' } },
+        xAxis: { labels: { style: { color: '#78909c' } }, gridLineColor: 'rgba(255,255,255,0.05)', lineColor: 'rgba(255,255,255,0.1)' },
+        yAxis: { labels: { style: { color: '#78909c' } }, gridLineColor: 'rgba(255,255,255,0.05)', title: { style: { color: '#78909c' } } },
+        tooltip: { backgroundColor: 'rgba(15,25,30,0.95)', borderColor: '#00e676', style: { color: '#e8f5e9' } }
+    };
+
+    Highcharts.setOptions(chartTheme);
+
+    // ========== NIVELES DE REFERENCIA FIJOS POR PRESA ==========
+    var NIVELES_REF = {
+        'Angostura':           { namo: 539.00, name_e: 542.10, namino: 510.40 },
+        'Chicoasen':           { namo: 395.00, name_e: 400.00, namino: 378.50 },
+        'Malpaso':             { namo: 189.70, name_e: 192.00, namino: 163.00 },
+        'Tapon_Juan_Grijalva': { namo: 100.00, name_e: 105.50, namino:  87.00 },
+        'Penitas':             { namo:  95.10, name_e:  99.20, namino:  84.50 }
+    };
+
+    // Estado de visibilidad de niveles fijos (persistente solo en sesión de página)
+    var nivelesVisibles = {};
+    Object.keys(NIVELES_REF).forEach(function(k) {
+        nivelesVisibles[k] = { namo: true, name_e: true, namino: true };
+    });
+
+    // ========== REFERENCIAS PERSONALIZADAS (desde BD) ==========
+    var customRefs = {};  // { presaKey: [ {Id, PresaKey, Nombre, Valor, Color, Visible}, ... ] }
+    var currentRefPresa = '';
+
+    // Cargar todas las referencias al inicio
+    function loadAllReferencias() {
+        $.get('@Url.Action("GetReferencias", "FunVasos")', function(r) {
+            if (r.success) {
+                customRefs = {};
+                (r.data || []).forEach(function(ref) {
+                    if (!customRefs[ref.presaKey]) customRefs[ref.presaKey] = [];
+                    customRefs[ref.presaKey].push(ref);
+                });
+                console.log('[FunVasos] Referencias cargadas:', customRefs);
+            } else {
+                console.warn('[FunVasos] No se pudieron cargar referencias:', r.message);
+            }
+        }).fail(function(xhr) {
+            console.warn('[FunVasos] Error cargando referencias:', xhr.status, xhr.responseText && xhr.responseText.substring(0, 200));
+        });
+    }
+    loadAllReferencias();
+
+    // ========== CONSTRUIR plotLines PARA GRÁFICAS DE ELEVACIÓN ==========
+    function buildElevPlotLines(presaKey) {
+        var lines = [];
+        var nivRef = NIVELES_REF[presaKey];
+        var vis = nivelesVisibles[presaKey];
+        if (nivRef && vis) {
+            if (vis.namo) {
+                lines.push({ value: nivRef.namo, color: '#ff5252', dashStyle: 'Dash', width: 2, zIndex: 4,
+                    label: { text: 'NAMO ' + nivRef.namo.toFixed(2), style: { color: '#ff5252', fontSize: '10px', fontWeight: '700' }, align: 'right', x: -4 } });
+            }
+            if (vis.name_e) {
+                lines.push({ value: nivRef.name_e, color: '#ff9800', dashStyle: 'ShortDash', width: 2, zIndex: 4,
+                    label: { text: 'NAME ' + nivRef.name_e.toFixed(2), style: { color: '#ff9800', fontSize: '10px', fontWeight: '700' }, align: 'right', x: -4 } });
+            }
+            if (vis.namino) {
+                lines.push({ value: nivRef.namino, color: '#42a5f5', dashStyle: 'LongDash', width: 2, zIndex: 4,
+                    label: { text: 'NAMINO ' + nivRef.namino.toFixed(2), style: { color: '#42a5f5', fontSize: '10px', fontWeight: '700' }, align: 'right', x: -4 } });
+            }
+        }
+        // Custom user references
+        var refs = customRefs[presaKey] || [];
+        refs.forEach(function(ref) {
+            if (ref.visible) {
+                lines.push({ value: ref.valor, color: ref.color || '#ffff00', dashStyle: 'DashDot', width: 2, zIndex: 4,
+                    label: { text: ref.nombre + ' ' + parseFloat(ref.valor).toFixed(2), style: { color: ref.color || '#ffff00', fontSize: '10px', fontWeight: '600' }, align: 'left', x: 4 } });
+            }
+        });
+        return lines;
+    }
+
+    // Build invisible reference series for tooltip display
+    function buildRefSeries(plotLines, numPoints) {
+        var series = [];
+        plotLines.forEach(function(pl) {
+            var labelText = pl.label && pl.label.text ? pl.label.text : ('Ref ' + pl.value);
+            series.push({
+                name: labelText,
+                type: 'line',
+                yAxis: 0,
+                data: Array(numPoints).fill(pl.value),
+                color: pl.color || '#ffff00',
+                dashStyle: pl.dashStyle || 'Dash',
+                lineWidth: 0,
+                enableMouseTracking: true,
+                showInLegend: false,
+                marker: { enabled: false },
+                states: { hover: { lineWidth: 0 } }
+            });
+        });
+        return series;
+    }
+
+    function renderCharts(presa) {
+        var d = presasData[presa];
+        if (!d) return;
+        var cats = d.labels;
+        var key = sanitizeId(presa);
+        var elevPlotLines = buildElevPlotLines(key);
+
+        // Combined Chart: Comportamiento del Embalse
+        indivCharts[key + '_combo'] = renderComboChart('chart-combo-' + key, d, cats, null, elevPlotLines);
+
+        // Elevation
+        var elevRefSeries = buildRefSeries(elevPlotLines, cats.length);
+        indivCharts[key + '_elev'] = Highcharts.chart('chart-elev-' + key, {
+            chart: { type: 'areaspline' },
+            xAxis: { categories: cats },
+            yAxis: { title: { text: 'm.s.n.m' }, plotLines: elevPlotLines },
+            tooltip: {
+                shared: true,
+                backgroundColor: 'rgba(15,25,30,0.95)',
+                borderColor: '#00e676',
+                style: { color: '#e8f5e9' }
+            },
+            series: [{
+                name: 'Elevación',
+                data: d.elevacion,
+                color: '#00e676',
+                fillColor: { linearGradient: {x1:0,y1:0,x2:0,y2:1}, stops: [[0,'rgba(0,230,118,0.3)'],[1,'rgba(0,230,118,0.02)']] },
+                marker: { radius: 3 }
+            }].concat(elevRefSeries)
+        });
+
+        // Q Flows
+        indivCharts[key + '_qflow'] = Highcharts.chart('chart-qflow-' + key, {
+            chart: { type: 'column' },
+            xAxis: { categories: cats },
+            yAxis: { title: { text: 'm³/s' } },
+            plotOptions: { column: { borderRadius: 2, borderWidth: 0 } },
+            series: [
+                { name: 'Aportaciones', data: d.aportQ, color: '#ffab40' },
+                { name: d.isTapon ? 'Canal' : 'Turbinas', data: d.turbQ, color: '#42a5f5' },
+                { name: d.isTapon ? 'Túneles' : 'Vertedor', data: d.vertQ, color: '#ef5350' }
+            ]
+        });
+
+        // Generation (not for Tapón)
+        if (!d.isTapon) {
+            indivCharts[key + '_gen'] = Highcharts.chart('chart-gen-' + key, {
+                chart: { type: 'column' },
+                xAxis: { categories: cats },
+                yAxis: { title: { text: 'MWH' } },
+                plotOptions: { column: { borderRadius: 2, borderWidth: 0 } },
+                series: [{
+                    name: 'Generación',
+                    data: d.gen,
+                    color: '#e040fb'
+                }]
+            });
+        }
+
+        // Almacenamiento
+        indivCharts[key + '_almac'] = Highcharts.chart('chart-almac-' + key, {
+            chart: { type: 'areaspline' },
+            xAxis: { categories: cats },
+            yAxis: { title: { text: 'Mill. m³' } },
+            series: [{
+                name: 'Almacenamiento',
+                data: d.almacenamiento,
+                color: '#00b0ff',
+                fillColor: { linearGradient: {x1:0,y1:0,x2:0,y2:1}, stops: [[0,'rgba(0,176,255,0.3)'],[1,'rgba(0,176,255,0.02)']] },
+                marker: { radius: 3 }
+            }]
+        });
+    }
+
+    function renderComboChart(containerId, d, cats, height, elevPlotLines) {
+        var pLines = elevPlotLines || [];
+        // Calculate Y-axis range to include plotLines
+        var elevMin = null, elevMax = null;
+        if (d.elevacion && d.elevacion.length) {
+            d.elevacion.forEach(function(v) { if (v != null) { if (elevMin === null || v < elevMin) elevMin = v; if (elevMax === null || v > elevMax) elevMax = v; } });
+        }
+        pLines.forEach(function(pl) { if (pl.value != null) { if (elevMin === null || pl.value < elevMin) elevMin = pl.value; if (elevMax === null || pl.value > elevMax) elevMax = pl.value; } });
+        var yMinElev = elevMin !== null ? elevMin - (elevMax - elevMin) * 0.05 - 0.5 : undefined;
+        var yMaxElev = elevMax !== null ? elevMax + (elevMax - elevMin) * 0.05 + 0.5 : undefined;
+        var seriesBars = [
+            { name: 'Gasto Aportado (m³/s)', data: d.aportQ, color: '#2196F3', type: 'column', yAxis: 1 },
+            { name: d.isTapon ? 'Gasto Canal (m³/s)' : 'Gasto Extracción Turbinas (m³/s)', data: d.turbQ, color: '#FFC107', type: 'column', yAxis: 1 },
+            { name: d.isTapon ? 'Gasto Túneles (m³/s)' : 'Gasto Extracción Vertedor (m³/s)', data: d.vertQ, color: '#FF5722', type: 'column', yAxis: 1 }
+        ];
+        var seriesLine = {
+            name: 'Elev. (msnm)',
+            data: d.elevacion,
+            type: 'spline',
+            yAxis: 0,
+            color: '#00e676',
+            lineWidth: 2.5,
+            marker: { radius: 4, fillColor: '#00e676', lineWidth: 1, lineColor: '#00e676' },
+            zIndex: 5
+        };
+
+        return Highcharts.chart(containerId, {
+            chart: { height: height || null, backgroundColor: 'transparent' },
+            title: { text: null },
+            credits: { enabled: false },
+            xAxis: {
+                categories: cats,
+                labels: { style: { color: '#78909c', fontSize: '10px' }, rotation: cats.length > 30 ? -45 : 0 },
+                gridLineColor: 'rgba(255,255,255,0.05)',
+                lineColor: 'rgba(255,255,255,0.1)',
+                title: { text: 'Tiempo, horas', style: { color: '#78909c' } }
+            },
+            yAxis: [{
+                title: { text: 'Elevación, msnm', style: { color: '#00e676' } },
+                labels: { style: { color: '#78909c' }, format: '{value:.2f}' },
+                gridLineColor: 'rgba(255,255,255,0.05)',
+                opposite: false,
+                plotLines: pLines,
+                min: yMinElev,
+                max: yMaxElev
+            }, {
+                title: { text: 'Gasto, m³/s', style: { color: '#2196F3' } },
+                labels: { style: { color: '#78909c' } },
+                gridLineColor: 'rgba(255,255,255,0.03)',
+                opposite: true,
+                min: 0
+            }],
+            tooltip: {
+                shared: true,
+                backgroundColor: 'rgba(15,25,30,0.95)',
+                borderColor: '#00e676',
+                style: { color: '#e8f5e9' }
+            },
+            legend: {
+                itemStyle: { color: '#b0bec5', fontWeight: '400', fontSize: '11px' },
+                itemHoverStyle: { color: '#fff' }
+            },
+            plotOptions: {
+                column: { borderRadius: 1, borderWidth: 0, groupPadding: 0.15, pointPadding: 0.05 }
+            },
+            series: [seriesLine].concat(seriesBars).concat(buildRefSeries(pLines, cats.length))
+        });
+    }
+
+    // Maximize chart to fullscreen
+    var currentFsPresa = null;
+    window.maximizeChart = function(presaKey, presaTitle) {
+        currentFsPresa = presaKey;
+        var d = presasData[presaKey];
+        if (!d) return;
+        var cats = d.labels;
+        var elevPlotLines = buildElevPlotLines(sanitizeId(presaKey));
+        $('#fsTitleText').text('Comportamiento del Embalse de ' + presaTitle);
+        $('#chartFullscreen').addClass('active');
+        $('body').css('overflow', 'hidden');
+        setTimeout(function() {
+            var h = $('#fsChartContainer').height();
+            renderComboChart('fsChartContainer', d, cats, h, elevPlotLines);
+        }, 100);
+    };
+
+    window.closeFullscreen = function() {
+        $('#chartFullscreen').removeClass('active');
+        $('body').css('overflow', '');
+        currentFsPresa = null;
+    };
+
+    // Close fullscreen on Escape key
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && currentFsPresa) closeFullscreen();
+    });
+
+    // ========== INDIVIDUAL CHARTS: Maximize & Export ==========
+    var indivCharts = {};  // { presaKey_chartType: Highcharts.Chart instance }
+
+    window.maximizeIndivChart = function(presaKey, chartType, chartTitle) {
+        var d = presasData[presaKey];
+        if (!d) return;
+        var cats = d.labels;
+        var key = sanitizeId(presaKey);
+        var displayName = PRESA_DISPLAY[presaKey] || presaKey;
+        $('#fsTitleText').text(chartTitle + ' — ' + displayName);
+        $('#chartFullscreen').addClass('active');
+        $('body').css('overflow', 'hidden');
+        currentFsPresa = '__indiv__' + presaKey + '_' + chartType;
+        setTimeout(function() {
+            var h = $('#fsChartContainer').height();
+            renderIndivChartTo('fsChartContainer', presaKey, chartType, h);
+        }, 100);
+    };
+
+    window.exportIndivChart = function(presaKey, chartType) {
+        var chart = indivCharts[presaKey + '_' + chartType];
+        if (chart) {
+            chart.exportChart({ type: 'image/png', filename: chartType + '_' + presaKey }, {
+                chart: { backgroundColor: '#0f1923' }
+            });
+        }
+    };
+
+    function renderIndivChartTo(containerId, presaKey, chartType, chartHeight) {
+        var d = presasData[presaKey];
+        if (!d) return;
+        var cats = d.labels;
+        var key = sanitizeId(presaKey);
+        var elevPlotLines = buildElevPlotLines(key);
+        var opts = { chart: { backgroundColor: 'transparent', height: chartHeight || null }, credits: { enabled: false }, exporting: { enabled: false } };
+
+        if (chartType === 'elev') {
+            var elevRefSeries = buildRefSeries(elevPlotLines, cats.length);
+            Highcharts.chart(containerId, $.extend(true, opts, {
+                chart: { type: 'areaspline' },
+                title: { text: 'Elevación del Vaso', style: { color: '#e8f5e9', fontSize: '14px' } },
+                xAxis: { categories: cats },
+                yAxis: { title: { text: 'm.s.n.m' }, plotLines: elevPlotLines },
+                tooltip: { shared: true, backgroundColor: 'rgba(15,25,30,0.95)', borderColor: '#00e676', style: { color: '#e8f5e9' } },
+                series: [{ name: 'Elevación', data: d.elevacion, color: '#00e676',
+                    fillColor: { linearGradient: {x1:0,y1:0,x2:0,y2:1}, stops: [[0,'rgba(0,230,118,0.3)'],[1,'rgba(0,230,118,0.02)']] },
+                    marker: { radius: 3 } }].concat(elevRefSeries)
+            }));
+        } else if (chartType === 'qflow') {
+            Highcharts.chart(containerId, $.extend(true, opts, {
+                chart: { type: 'column' },
+                title: { text: 'Aportaciones vs Extracciones', style: { color: '#e8f5e9', fontSize: '14px' } },
+                xAxis: { categories: cats },
+                yAxis: { title: { text: 'm³/s' } },
+                plotOptions: { column: { borderRadius: 2, borderWidth: 0 } },
+                series: [
+                    { name: 'Aportaciones', data: d.aportQ, color: '#ffab40' },
+                    { name: d.isTapon ? 'Canal' : 'Turbinas', data: d.turbQ, color: '#42a5f5' },
+                    { name: d.isTapon ? 'Túneles' : 'Vertedor', data: d.vertQ, color: '#ef5350' }
+                ]
+            }));
+        } else if (chartType === 'gen') {
+            Highcharts.chart(containerId, $.extend(true, opts, {
+                chart: { type: 'column' },
+                title: { text: 'Generación (MWH)', style: { color: '#e8f5e9', fontSize: '14px' } },
+                xAxis: { categories: cats },
+                yAxis: { title: { text: 'MWH' } },
+                plotOptions: { column: { borderRadius: 2, borderWidth: 0 } },
+                series: [{ name: 'Generación', data: d.gen, color: '#e040fb' }]
+            }));
+        } else if (chartType === 'almac') {
+            Highcharts.chart(containerId, $.extend(true, opts, {
+                chart: { type: 'areaspline' },
+                title: { text: 'Almacenamiento (Mill. m³)', style: { color: '#e8f5e9', fontSize: '14px' } },
+                xAxis: { categories: cats },
+                yAxis: { title: { text: 'Mill. m³' } },
+                series: [{ name: 'Almacenamiento', data: d.almacenamiento, color: '#00b0ff',
+                    fillColor: { linearGradient: {x1:0,y1:0,x2:0,y2:1}, stops: [[0,'rgba(0,176,255,0.3)'],[1,'rgba(0,176,255,0.02)']] },
+                    marker: { radius: 3 } }]
+            }));
+        }
+    }
+
+    // Export functionality
+    window.exportTable = function() {
+        window.location.href = '@Url.Action("Index", "FunVasos")' + '?fechaInicio=' + $('#fechaInicio').val() + '&fechaFin=' + $('#fechaFin').val() + '&export=true';
+    };
+
+    // ========== MODAL: REFERENCIAS PERSONALIZADAS ==========
+    var _antiForgeryToken = $('input[name="__RequestVerificationToken"]').val();
+
+    window.openRefModal = function(presaKey, presaTitle) {
+        currentRefPresa = presaKey;
+        $('#refPresaTitle').text(presaTitle);
+        resetRefForm();
+        renderNivelesToggle(presaKey);
+        loadRefTable(presaKey);
+        $('#refModal').modal({ closable: false }).modal('show');
+    };
+
+    function renderNivelesToggle(presaKey) {
+        var nivRef = NIVELES_REF[presaKey];
+        var vis = nivelesVisibles[presaKey];
+        if (!nivRef || !vis) { $('#refNivelesToggle').html('<span style="color:#546e7a; font-size:12px;">Sin niveles de referencia para esta presa.</span>'); return; }
+        var html = '';
+        var items = [
+            { key: 'namo', label: 'NAMO', val: nivRef.namo, color: '#ff5252', bg: 'rgba(255,82,82,0.15)', border: 'rgba(255,82,82,0.5)' },
+            { key: 'name_e', label: 'NAME', val: nivRef.name_e, color: '#ff9800', bg: 'rgba(255,152,0,0.15)', border: 'rgba(255,152,0,0.5)' },
+            { key: 'namino', label: 'NAMINO', val: nivRef.namino, color: '#42a5f5', bg: 'rgba(66,165,245,0.15)', border: 'rgba(66,165,245,0.5)' }
+        ];
+        items.forEach(function(item) {
+            var active = vis[item.key] ? 'active' : '';
+            html += '<div class="nivel-toggle-chip ' + active + '" data-nivel="' + item.key + '" '
+                + 'style="background:' + item.bg + '; border-color:' + item.border + '; color:' + item.color + ';" '
+                + 'onclick="toggleNivel(\'' + presaKey + '\', \'' + item.key + '\', this)">'
+                + '<i class="' + (vis[item.key] ? 'eye' : 'eye slash') + ' icon" style="margin:0;"></i> '
+                + item.label + ' <span class="nivel-val">' + item.val.toFixed(2) + '</span>'
+                + '</div>';
+        });
+        $('#refNivelesToggle').html(html);
+    }
+
+    window.toggleNivel = function(presaKey, nivelKey, el) {
+        nivelesVisibles[presaKey][nivelKey] = !nivelesVisibles[presaKey][nivelKey];
+        var isVis = nivelesVisibles[presaKey][nivelKey];
+        $(el).toggleClass('active', isVis);
+        $(el).find('i').attr('class', isVis ? 'eye icon' : 'eye slash icon');
+    };
+
+    function loadRefTable(presaKey) {
+        var refs = customRefs[presaKey] || [];
+        var html = '';
+        if (refs.length === 0) {
+            html = '<tr><td colspan="5" style="color:#546e7a; text-align:center; padding:12px;">No hay asíntotas personalizadas configuradas.</td></tr>';
+        } else {
+            refs.forEach(function(ref) {
+                html += '<tr>'
+                    + '<td style="color:#e8f5e9;">' + escHtml(ref.nombre) + '</td>'
+                    + '<td style="color:#e8f5e9; text-align:center;">' + parseFloat(ref.valor).toFixed(2) + '</td>'
+                    + '<td style="text-align:center;"><span style="display:inline-block; width:20px; height:14px; border-radius:3px; background:' + escHtml(ref.color) + ';"></span></td>'
+                    + '<td style="text-align:center;">'
+                    + '  <div class="ui fitted toggle checkbox" style="transform:scale(0.8);">'
+                    + '    <input type="checkbox" ' + (ref.visible ? 'checked' : '') + ' onchange="toggleRefVisible(' + ref.id + ', this.checked)">'
+                    + '    <label></label>'
+                    + '  </div>'
+                    + '</td>'
+                    + '<td style="text-align:center;">'
+                    + '  <button class="ui tiny inverted yellow icon button" onclick="editRef(' + ref.id + ')" title="Editar"><i class="edit icon"></i></button>'
+                    + '  <button class="ui tiny inverted red icon button" onclick="deleteRef(' + ref.id + ')" title="Eliminar"><i class="trash icon"></i></button>'
+                    + '</td>'
+                    + '</tr>';
+            });
+        }
+        $('#refTableBody').html(html);
+        $('#refTableBody .ui.checkbox').checkbox();
+    }
+
+    function escHtml(s) { return $('<span>').text(s).html(); }
+
+    window.resetRefForm = function() {
+        $('#refEditId').val('0');
+        $('#refNombre').val('');
+        $('#refValor').val('');
+        $('#refColor').val('#ffff00');
+    };
+
+    window.saveReferencia = function() {
+        var nombre = $('#refNombre').val().trim();
+        var valor = $('#refValor').val();
+        if (!nombre || !valor) { alert('Ingresa nombre y valor.'); return; }
+        if (!currentRefPresa) { alert('No hay presa seleccionada.'); return; }
+        var payload = {
+            id: 0,
+            presaKey: currentRefPresa,
+            nombre: nombre,
+            valor: parseFloat(valor),
+            color: $('#refColor').val(),
+            visible: true
+        };
+        var editId = parseInt($('#refEditId').val());
+        if (editId > 0) payload.id = editId;
+        console.log('[FunVasos] Guardando referencia:', payload);
+        $.ajax({
+            type: 'POST',
+            url: '@Url.Action("SaveReferencia", "FunVasos")',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            headers: { 'RequestVerificationToken': _antiForgeryToken },
+            success: function(r) {
+                console.log('[FunVasos] Respuesta save:', r);
+                if (r.success) {
+                    if (!customRefs[currentRefPresa]) customRefs[currentRefPresa] = [];
+                    var ref = r.referencia;
+                    var idx = customRefs[currentRefPresa].findIndex(function(x) { return x.id === ref.id; });
+                    if (idx >= 0) customRefs[currentRefPresa][idx] = ref;
+                    else customRefs[currentRefPresa].push(ref);
+                    resetRefForm();
+                    loadRefTable(currentRefPresa);
+                    // Re-render charts immediately so user sees the line
+                    reRenderPresa(currentRefPresa);
+                } else { alert('Error al guardar: ' + (r.message || 'Error desconocido')); }
+            },
+            error: function(xhr, status, err) {
+                console.error('[FunVasos] Error AJAX save:', xhr.status, xhr.responseText);
+                alert('Error al guardar referencia (HTTP ' + xhr.status + '). Revisa la consola del navegador.');
+            }
+        });
+    };
+
+    window.editRef = function(id) {
+        var refs = customRefs[currentRefPresa] || [];
+        var ref = refs.find(function(x) { return x.id === id; });
+        if (!ref) return;
+        $('#refEditId').val(ref.id);
+        $('#refNombre').val(ref.nombre);
+        $('#refValor').val(ref.valor);
+        $('#refColor').val(ref.color || '#ffff00');
+    };
+
+    window.deleteRef = function(id) {
+        if (!confirm('¿Eliminar esta referencia permanentemente?')) return;
+        $.ajax({
+            type: 'POST',
+            url: '@Url.Action("DeleteReferencia", "FunVasos")' + '?id=' + id,
+            headers: { 'RequestVerificationToken': _antiForgeryToken },
+            success: function(r) {
+                if (r.success) {
+                    customRefs[currentRefPresa] = (customRefs[currentRefPresa] || []).filter(function(x) { return x.id !== id; });
+                    loadRefTable(currentRefPresa);
+                    reRenderPresa(currentRefPresa);
+                } else { alert('Error al eliminar: ' + (r.message || '')); }
+            },
+            error: function(xhr) { alert('Error HTTP ' + xhr.status + ' al eliminar.'); }
+        });
+    };
+
+    window.toggleRefVisible = function(id, visible) {
+        $.ajax({
+            type: 'POST',
+            url: '@Url.Action("ToggleReferencia", "FunVasos")',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: id, visible: visible }),
+            headers: { 'RequestVerificationToken': _antiForgeryToken },
+            success: function(r) {
+                if (r.success) {
+                    var refs = customRefs[currentRefPresa] || [];
+                    var ref = refs.find(function(x) { return x.id === id; });
+                    if (ref) ref.visible = visible;
+                    reRenderPresa(currentRefPresa);
+                }
+            },
+            error: function(xhr) { console.error('[FunVasos] Toggle error:', xhr.status); }
+        });
+    };
+
+    // Re-render charts for a specific presa key
+    function reRenderPresa(presaKey) {
+        if (presaKey && presaKey !== 'todas' && presaKey !== 'cascada3d' && presasData[presaKey]) {
+            renderCharts(presaKey);
+        }
+    }
+
+    window.reRenderCurrentPresa = function() {
+        var active = $('.presa-tab.active').data('presa');
+        if (active && active !== 'todas' && active !== 'cascada3d') {
+            renderCharts(active);
+        } else if (currentRefPresa) {
+            reRenderPresa(currentRefPresa);
+        }
+    };
+
+    // ========== PROMAPOR SHG: Maximizar & Exportar ==========
+    var promAporCharts = {};  // { presaKey: Highcharts.Chart instance }
+
+    window.maximizePromApor = function(presaKey, presaTitle) {
+        $('#fsTitleText').text('Aportado original vs promedios centrales — ' + presaTitle);
+        $('#chartFullscreen').addClass('active');
+        $('body').css('overflow', 'hidden');
+        currentFsPresa = '__promapor__' + presaKey;
+        setTimeout(function() {
+            var h = $('#fsChartContainer').height();
+            renderSinglePromApor('fsChartContainer', presaKey, h);
+        }, 100);
+    };
+
+    window.exportPromApor = function(presaKey) {
+        var chart = promAporCharts[presaKey];
+        if (chart) {
+            chart.exportChart({ type: 'image/png', filename: 'PromApor_' + presaKey }, {
+                chart: { backgroundColor: '#0f1923' }
+            });
+        }
+    };
+
+    // ========== PROMAPOR SHG: Promedio Central Móvil ==========
+    var PRESA_DISPLAY = {};
+    @foreach (var p in Model.Presas)
+    {
+        <text>PRESA_DISPLAY['@SafeId(p.Presa)'] = '@Html.Raw(p.Presa == "Tapón Juan Grijalva" ? "Tapón Juan del Grijalva" : "C.H. " + p.Presa)';
+        </text>
+    }
+
+    // Calcular promedio móvil central de 3 puntos (una pasada)
+    function centralMovingAverage(data) {
+        if (!data || data.length < 3) return [];
+        var result = [];
+        for (var i = 1; i < data.length - 1; i++) {
+            if (data[i - 1] != null && data[i] != null && data[i + 1] != null) {
+                result.push(Math.round(((data[i - 1] + data[i] + data[i + 1]) / 3) * 100) / 100);
+            } else {
+                result.push(null);
+            }
+        }
+        return result;
+    }
+
+    // Renderizar todas las gráficas de PromApor SHG
+    function buildPromAporSeries(presaKey) {
+        var seriesConfig = [
+            { name: 'Aportado original', color: '#0000CC', marker: 'diamond' },
+            { name: '1er. Promedio',     color: '#E91E63', marker: 'square' },
+            { name: '2° Promedio',       color: '#00CC00', marker: 'triangle' },
+            { name: '3er. Promedio',     color: '#CC0000', marker: 'square' },
+            { name: '4° Promedio',       color: '#9C27B0', marker: 'diamond' }
+        ];
+
+        var d = presasData[presaKey];
+        if (!d || !d.aportQ) return null;
+
+        var TOTAL_HOURS = 25;
+        var categories = [];
+        for (var h = 0; h < TOTAL_HOURS; h++) categories.push(h.toString());
+
+        var original = [];
+        for (var h = 0; h < TOTAL_HOURS; h++) {
+            var v = (h < d.aportQ.length && d.aportQ[h] != null) ? d.aportQ[h] : 0;
+            original.push(v);
+        }
+
+        var series = [];
+        series.push({
+            type: 'spline',
+            name: seriesConfig[0].name,
+            data: original.slice(),
+            color: seriesConfig[0].color,
+            marker: { symbol: seriesConfig[0].marker, radius: 4, enabled: true },
+            lineWidth: 2
+        });
+
+        var current = original;
+        for (var pass = 1; pass <= 4; pass++) {
+            var avg = centralMovingAverage(current);
+            if (avg.length < 2) break;
+            var offsetData = [];
+            for (var i = 0; i < TOTAL_HOURS; i++) {
+                var idx = i - pass;
+                if (idx >= 0 && idx < avg.length) {
+                    offsetData.push(avg[idx]);
+                } else {
+                    offsetData.push(null);
+                }
+            }
+            series.push({
+                type: 'spline',
+                name: seriesConfig[pass].name,
+                data: offsetData,
+                color: seriesConfig[pass].color,
+                marker: { symbol: seriesConfig[pass].marker, radius: 4, enabled: true },
+                lineWidth: 2
+            });
+            current = avg;
+        }
+        return { categories: categories, series: series };
+    }
+
+    function renderPromAporToContainer(containerId, presaKey, chartHeight) {
+        var built = buildPromAporSeries(presaKey);
+        if (!built) return null;
+        var displayName = PRESA_DISPLAY[presaKey] || presaKey;
+        return Highcharts.chart(containerId, {
+            chart: { backgroundColor: 'transparent', height: chartHeight || null },
+            title: {
+                text: 'Aportado original vs promedios centrales<br/>' + displayName,
+                style: { color: '#e8f5e9', fontSize: '14px', fontWeight: '600' }
+            },
+            credits: { enabled: false },
+            xAxis: {
+                categories: built.categories,
+                min: 0,
+                max: 24,
+                tickInterval: 1,
+                title: { text: 'Tiempo, horas', style: { color: '#78909c' } },
+                labels: { style: { color: '#78909c' } },
+                gridLineColor: 'rgba(255,255,255,0.05)',
+                lineColor: 'rgba(255,255,255,0.1)'
+            },
+            yAxis: {
+                title: { text: 'Aportado, m3/s', style: { color: '#78909c' } },
+                labels: { style: { color: '#78909c' }, format: '{value:.2f}' },
+                gridLineColor: 'rgba(255,255,255,0.05)'
+            },
+            legend: {
+                enabled: true,
+                itemStyle: { color: '#b0bec5', fontWeight: '400', fontSize: '11px' },
+                itemHoverStyle: { color: '#fff' }
+            },
+            tooltip: {
+                shared: true,
+                backgroundColor: 'rgba(15,25,30,0.95)',
+                borderColor: '#00e676',
+                style: { color: '#e8f5e9' },
+                valueDecimals: 2,
+                valueSuffix: ' m³/s'
+            },
+            exporting: { enabled: false },
+            series: built.series
+        });
+    }
+
+    // Renderizar una sola para fullscreen
+    function renderSinglePromApor(containerId, presaKey, h) {
+        renderPromAporToContainer(containerId, presaKey, h);
+    }
+
+    function renderPromAporCharts() {
+        Object.keys(presasData).forEach(function(presaKey) {
+            var chart = renderPromAporToContainer('chart-promapor-' + sanitizeId(presaKey), presaKey, null);
+            if (chart) promAporCharts[presaKey] = chart;
+        });
+    }
+
+    // Delegated event handlers for modal buttons (robust even after Fomantic moves DOM)
+    $(document).on('click', '#btnSaveRef', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FunVasos] btnSaveRef clicked');
+        saveReferencia();
+    });
+    $(document).on('click', '#btnResetRef', function(e) {
+        e.preventDefault();
+        resetRefForm();
+    });
+    $(document).on('click', '#btnApplyCloseRef', function(e) {
+        e.preventDefault();
+        $('#refModal').modal('hide');
+        reRenderCurrentPresa();
+    });
+
+    // ========== NIVELES HORARIOS ==========
+    var NAMO_NIVELES = { Chicoasen: 392.50, Penitas: 87.40 };
+    var nivelCharts = {};
+
+    window.renderNivelesHorarios = function() {
+        var tbody = $('#nivelesHorariosBody');
+        tbody.empty();
+
+        var ang = presasData['Angostura'];
+        var chi = presasData['Chicoasen'];
+        var mal = presasData['Malpaso'];
+        var pen = presasData['Penitas'];
+
+        // Build hour⇒value maps (works for both single-day and range)
+        function buildHourMap(pd) {
+            if (!pd) return {};
+            var map = {};
+            for (var i = 0; i < pd.labels.length; i++) {
+                // label could be "HH:00" or "dd/MM HH:00"
+                var lbl = pd.labels[i];
+                var parts = lbl.split(' ');
+                var hourStr = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+                var h = parseInt(hourStr);
+                if (!isNaN(h)) map[h] = pd.elevacion[i];
+            }
+            return map;
+        }
+
+        var angMap = buildHourMap(ang);
+        var chiMap = buildHourMap(chi);
+        var malMap = buildHourMap(mal);
+        var penMap = buildHourMap(pen);
+
+        for (var h = 1; h <= 24; h++) {
+            var aVal = angMap[h];
+            var cVal = chiMap[h];
+            var mVal = malMap[h];
+            var pVal = penMap[h];
+
+            var cDif = (cVal != null) ? (NAMO_NIVELES.Chicoasen - cVal) : null;
+            var pDif = (pVal != null) ? (NAMO_NIVELES.Penitas - pVal) : null;
+
+            var fmt = function(v) { return v != null ? v.toFixed(2) : ''; };
+
+            var row = '<tr>' +
+                '<td style="text-align:center; color:#4caf50; font-weight:600;">' + h + '</td>' +
+                '<td style="text-align:center;">' + fmt(aVal) + '</td>' +
+                '<td style="text-align:center;">' + fmt(cVal) + '</td>' +
+                '<td style="text-align:center; color:' + (cDif != null && cDif > 0 ? '#ffab40' : '#00e676') + ';">' + fmt(cDif) + '</td>' +
+                '<td style="text-align:center;">' + fmt(mVal) + '</td>' +
+                '<td style="text-align:center;">' + fmt(pVal) + '</td>' +
+                '<td style="text-align:center; color:' + (pDif != null && pDif > 0 ? '#ffab40' : '#00e676') + ';">' + fmt(pDif) + '</td>' +
+                '</tr>';
+            tbody.append(row);
+        }
+
+        renderNivelCharts();
+    };
+
+    function renderNivelCharts() {
+        renderNivelChartFor('chicoasen', 'Chicoasen', 'Chicoasén', '#42a5f5', NAMO_NIVELES.Chicoasen);
+        renderNivelChartFor('penitas', 'Penitas', 'Peñitas', '#ffab40', NAMO_NIVELES.Penitas);
+    }
+
+    function renderNivelChartFor(chartKey, dataKey, displayName, color, namoVal) {
+        var pd = presasData[dataKey];
+        if (!pd) return;
+
+        // Build arrays for 24 hours
+        var categories = [];
+        var data = [];
+        var hourMap = {};
+        for (var i = 0; i < pd.labels.length; i++) {
+            var lbl = pd.labels[i];
+            var parts = lbl.split(' ');
+            var hourStr = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+            var h = parseInt(hourStr);
+            if (!isNaN(h)) hourMap[h] = pd.elevacion[i];
+        }
+        for (var h = 1; h <= 24; h++) {
+            categories.push(h + ':00');
+            data.push(hourMap[h] != null ? hourMap[h] : null);
+        }
+
+        var chart = Highcharts.chart('chart-nivel-' + chartKey, {
+            chart: { backgroundColor: 'transparent', height: 250, spacingTop: 30 },
+            title: { text: displayName, style: { color: color, fontSize: '14px', fontWeight: '600' } },
+            exporting: { enabled: false },
+            xAxis: { categories: categories, labels: { style: { color: '#78909c', fontSize: '9px' }, step: 2 } },
+            yAxis: {
+                title: { text: 'Nivel (msnm)', style: { color: '#78909c', fontSize: '10px' } },
+                softMax: namoVal + 0.5,
+                plotLines: [{
+                    value: namoVal,
+                    color: '#ff5252',
+                    width: 2,
+                    dashStyle: 'Dash',
+                    zIndex: 5,
+                    label: { text: 'NAMO: ' + namoVal.toFixed(2) + ' msnm', align: 'right', style: { color: '#ff5252', fontSize: '10px', fontWeight: '600' } }
+                }]
+            },
+            series: [{
+                name: 'Nivel',
+                type: 'spline',
+                data: data,
+                color: color,
+                lineWidth: 2,
+                marker: { radius: 3 }
+            }],
+            legend: { enabled: false },
+            credits: { enabled: false },
+            tooltip: { valueSuffix: ' msnm', valueDecimals: 2 }
+        });
+        nivelCharts[chartKey] = chart;
+    }
+
+    window.maximizeNivelChart = function(which) {
+        var chart = nivelCharts[which];
+        if (!chart) return;
+        var displayName = which === 'chicoasen' ? 'Chicoasén' : 'Peñitas';
+        var color = which === 'chicoasen' ? '#42a5f5' : '#ffab40';
+        var namoVal = which === 'chicoasen' ? NAMO_NIVELES.Chicoasen : NAMO_NIVELES.Penitas;
+        var dataKey = which === 'chicoasen' ? 'Chicoasen' : 'Penitas';
+
+        $('#fsTitleText').text('Nivel - ' + displayName);
+        $('#chartFullscreen').addClass('active');
+        $('body').css('overflow', 'hidden');
+        currentFsPresa = '__nivel__' + which;
+        setTimeout(function() {
+            var h = $('#fsChartContainer').height();
+            renderNivelChartTo('fsChartContainer', dataKey, displayName, color, namoVal, h);
+        }, 100);
+    };
+
+    function renderNivelChartTo(containerId, dataKey, displayName, color, namoVal, height) {
+        var pd = presasData[dataKey];
+        if (!pd) return;
+        var categories = [];
+        var data = [];
+        var hourMap = {};
+        for (var i = 0; i < pd.labels.length; i++) {
+            var lbl = pd.labels[i];
+            var parts = lbl.split(' ');
+            var hourStr = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+            var hh = parseInt(hourStr);
+            if (!isNaN(hh)) hourMap[hh] = pd.elevacion[i];
+        }
+        for (var hh = 1; hh <= 24; hh++) {
+            categories.push(hh + ':00');
+            data.push(hourMap[hh] != null ? hourMap[hh] : null);
+        }
+        Highcharts.chart(containerId, {
+            chart: { backgroundColor: '#0f1923', height: height },
+            title: { text: displayName + ' – Nivel Horario', style: { color: color, fontSize: '18px' } },
+            exporting: { enabled: false },
+            xAxis: { categories: categories, labels: { style: { color: '#78909c' } } },
+            yAxis: {
+                title: { text: 'Nivel (msnm)', style: { color: '#78909c' } },
+                softMax: namoVal + 0.5,
+                plotLines: [{ value: namoVal, color: '#ff5252', width: 2, dashStyle: 'Dash', zIndex: 5,
+                    label: { text: 'NAMO: ' + namoVal.toFixed(2) + ' msnm', align: 'right', style: { color: '#ff5252', fontSize: '12px', fontWeight: '600' } } }]
+            },
+            series: [{ name: 'Nivel', type: 'spline', data: data, color: color, lineWidth: 3, marker: { radius: 4 } }],
+            legend: { enabled: false },
+            credits: { enabled: false },
+            tooltip: { valueSuffix: ' msnm', valueDecimals: 2 }
+        });
+    }
+
+    window.exportNivelChart = function(which) {
+        var chart = nivelCharts[which];
+        if (chart) {
+            chart.exportChart({ type: 'image/png', filename: 'Nivel_' + which }, { chart: { backgroundColor: '#0f1923' } });
+        }
+    };
+
+    window.exportNivelesHorarios = function() {
+        var fecha = '@Model.FechaFin.ToString("yyyy-MM-dd")';
+        window.location.href = '@Url.Action("ExportNivelesHorarios", "FunVasos")?fecha=' + fecha;
+    };
+});
+</script>
+}
+

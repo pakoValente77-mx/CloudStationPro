@@ -1,0 +1,410 @@
+@removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
+@model CloudStationWeb.Models.MaintenanceIndexViewModel
+@{
+    ViewData["Title"] = "Mantenimiento de Estaciones";
+}
+
+@section Styles {
+<style>
+    .maint-stat-card {
+        background: rgba(30, 35, 50, 0.8);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 18px 22px;
+        text-align: center;
+    }
+    .maint-stat-card .stat-value {
+        font-size: 2.2em;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .maint-stat-card .stat-label {
+        font-size: 0.85em;
+        color: #b0b0b0;
+        margin-top: 4px;
+    }
+    .maint-filters {
+        background: rgba(20, 24, 33, 0.6);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+    .priority-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+    .priority-Urgente { background: #ef4444; color: #fff; }
+    .priority-Alta { background: #f97316; color: #fff; }
+    .priority-Normal { background: #3b82f6; color: #fff; }
+    .priority-Baja { background: #6b7280; color: #fff; }
+    .estado-badge {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+    .estado-EnProceso { background: #eab308; color: #000; }
+    .estado-Programado { background: #3b82f6; color: #fff; }
+    .estado-Completado { background: #22c55e; color: #fff; }
+    .estado-Cancelado { background: #6b7280; color: #fff; }
+    .tipo-icon {
+        margin-right: 4px;
+    }
+    .isolation-warning {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.78em;
+        font-weight: 600;
+    }
+</style>
+}
+
+<div class="ui container" style="margin-top: 30px; margin-bottom: 50px;">
+
+    <div class="glass-panel" style="padding: 30px;">
+        <!-- Header -->
+        <div class="ui grid" style="margin-bottom: 20px;">
+            <div class="ten wide column middle aligned">
+                <h2 class="ui header" style="color: var(--cfe-green); margin:0;">
+                    <i class="wrench icon"></i>
+                    <div class="content">
+                        Mantenimiento de Estaciones
+                        <div class="sub header" style="color: #b0b0b0;">Gestión de órdenes de mantenimiento, bitácora y aislamiento de datos.</div>
+                    </div>
+                </h2>
+            </div>
+            <div class="six wide column right aligned middle aligned">
+                <button class="ui green button" onclick="openCreateModal()">
+                    <i class="plus icon"></i> Nueva Orden
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="ui four column grid" style="margin-bottom: 20px;">
+            <div class="column">
+                <div class="maint-stat-card">
+                    <div class="stat-value" style="color: #3b82f6;">@Model.Ordenes.Count</div>
+                    <div class="stat-label">Total Órdenes</div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="maint-stat-card">
+                    <div class="stat-value" style="color: #eab308;">@Model.Ordenes.Count(o => o.Estado == "En Proceso")</div>
+                    <div class="stat-label">En Proceso</div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="maint-stat-card">
+                    <div class="stat-value" style="color: #22c55e;">@Model.Ordenes.Count(o => o.Estado == "Programado")</div>
+                    <div class="stat-label">Programadas</div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="maint-stat-card">
+                    <div class="stat-value" style="color: #ef4444;">@Model.TotalEstacionesAisladas</div>
+                    <div class="stat-label">Estaciones Aisladas</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="maint-filters">
+            <form method="get" class="ui inverted form">
+                <div class="four fields">
+                    <div class="field">
+                        <label>Estado</label>
+                        <select name="estado" class="ui inverted dropdown">
+                            <option value="">Todos</option>
+                            <option value="Programado" @(Model.FiltroEstado == "Programado" ? "selected" : "")>Programado</option>
+                            <option value="En Proceso" @(Model.FiltroEstado == "En Proceso" ? "selected" : "")>En Proceso</option>
+                            <option value="Completado" @(Model.FiltroEstado == "Completado" ? "selected" : "")>Completado</option>
+                            <option value="Cancelado" @(Model.FiltroEstado == "Cancelado" ? "selected" : "")>Cancelado</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Tipo</label>
+                        <select name="tipo" class="ui inverted dropdown">
+                            <option value="">Todos</option>
+                            <option value="Preventivo" @(Model.FiltroTipo == "Preventivo" ? "selected" : "")>Preventivo</option>
+                            <option value="Correctivo" @(Model.FiltroTipo == "Correctivo" ? "selected" : "")>Correctivo</option>
+                            <option value="Instalación" @(Model.FiltroTipo == "Instalación" ? "selected" : "")>Instalación</option>
+                            <option value="Retiro" @(Model.FiltroTipo == "Retiro" ? "selected" : "")>Retiro</option>
+                            <option value="Calibración" @(Model.FiltroTipo == "Calibración" ? "selected" : "")>Calibración</option>
+                            <option value="Emergencia" @(Model.FiltroTipo == "Emergencia" ? "selected" : "")>Emergencia</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Estación</label>
+                        <select name="estacion" class="ui search inverted dropdown">
+                            <option value="">Todas</option>
+                            @foreach (var est in Model.Estaciones)
+                            {
+                                <option value="@est.Id" @(Model.FiltroEstacion == est.Id ? "selected" : "")>@est.Nombre (@est.IdAsignado)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field" style="display: flex; align-items: flex-end;">
+                        <button type="submit" class="ui inverted basic button"><i class="filter icon"></i> Filtrar</button>
+                        <a href="/Maintenance" class="ui inverted basic button" style="margin-left: 6px;"><i class="undo icon"></i></a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tabla -->
+        <table class="ui celled selectable inverted table" id="maintenanceTable">
+            <thead>
+                <tr>
+                    <th style="width:40px;">#</th>
+                    <th>Estación</th>
+                    <th>Tipo</th>
+                    <th>Descripción</th>
+                    <th>Periodo</th>
+                    <th>Estado</th>
+                    <th>Prioridad</th>
+                    <th>Datos</th>
+                    <th style="width:100px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Ordenes.Any())
+                {
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: #888; padding: 40px;">
+                            <i class="inbox icon" style="font-size: 2em;"></i><br/>
+                            No hay órdenes de mantenimiento registradas.
+                        </td>
+                    </tr>
+                }
+                @foreach (var orden in Model.Ordenes)
+                {
+                    var estadoClass = orden.Estado.Replace(" ", "");
+                    var tipoIcon = orden.TipoMantenimiento switch {
+                        "Preventivo" => "shield alternate",
+                        "Correctivo" => "tools",
+                        "Instalación" => "download",
+                        "Retiro" => "upload",
+                        "Calibración" => "sliders horizontal",
+                        "Emergencia" => "exclamation triangle",
+                        _ => "wrench"
+                    };
+                    <tr style="cursor:pointer;" onclick="window.location='/Maintenance/Detail/@orden.Id'">
+                        <td style="color: #888;">@orden.Id</td>
+                        <td>
+                            <div style="font-weight: 700; color: #fff;">@orden.NombreEstacion</div>
+                            <div style="font-size: 0.8em; color: #81c784;">@orden.IdAsignado</div>
+                        </td>
+                        <td>
+                            <i class="@tipoIcon icon tipo-icon" style="color: #64b5f6;"></i>
+                            @orden.TipoMantenimiento
+                        </td>
+                        <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                            @(orden.Descripcion?.Length > 60 ? orden.Descripcion.Substring(0, 60) + "..." : orden.Descripcion)
+                        </td>
+                        <td style="font-size: 0.85em;">
+                            <div><i class="calendar icon" style="color:#81c784;"></i> @orden.FechaInicio.ToString("dd/MM/yyyy HH:mm")</div>
+                            @if (orden.FechaFin.HasValue)
+                            {
+                                <div><i class="calendar check icon" style="color:#64b5f6;"></i> @orden.FechaFin.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                            }
+                            else
+                            {
+                                <div style="color:#888;">Sin fecha fin</div>
+                            }
+                        </td>
+                        <td><span class="estado-badge estado-@estadoClass">@orden.Estado</span></td>
+                        <td><span class="priority-badge priority-@orden.Prioridad">@orden.Prioridad</span></td>
+                        <td>
+                            @if (orden.AislarDatos && (orden.Estado == "En Proceso" || orden.Estado == "Programado"))
+                            {
+                                <span class="isolation-warning"><i class="ban icon"></i> Aislada</span>
+                            }
+                            else
+                            {
+                                <span style="color:#666; font-size:0.8em;">Normal</span>
+                            }
+                        </td>
+                        <td onclick="event.stopPropagation();">
+                            <a href="/Maintenance/Detail/@orden.Id" class="ui tiny inverted blue icon button" title="Ver detalle">
+                                <i class="eye icon"></i>
+                            </a>
+                            @if (orden.Estado != "Completado" && orden.Estado != "Cancelado")
+                            {
+                                <button class="ui tiny inverted green icon button" title="Completar" onclick="changeEstado(@orden.Id, 'Completado')">
+                                    <i class="check icon"></i>
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Nueva Orden de Mantenimiento -->
+<div class="ui small inverted modal" id="createModal">
+    <div class="header"><i class="wrench icon"></i> Nueva Orden de Mantenimiento</div>
+    <div class="scrolling content">
+        <form class="ui inverted form" id="createForm">
+            <div class="field required">
+                <label>Estación</label>
+                <select id="cEstacion" class="ui search inverted dropdown" required>
+                    <option value="">Seleccionar estación...</option>
+                    @foreach (var est in Model.Estaciones)
+                    {
+                        <option value="@est.Id">@est.Nombre (@est.IdAsignado)</option>
+                    }
+                </select>
+            </div>
+            <div class="two fields">
+                <div class="field required">
+                    <label>Tipo de Mantenimiento</label>
+                    <select id="cTipo" class="ui inverted dropdown">
+                        <option value="Preventivo">Preventivo</option>
+                        <option value="Correctivo" selected>Correctivo</option>
+                        <option value="Instalación">Instalación</option>
+                        <option value="Retiro">Retiro</option>
+                        <option value="Calibración">Calibración</option>
+                        <option value="Emergencia">Emergencia</option>
+                    </select>
+                </div>
+                <div class="field required">
+                    <label>Prioridad</label>
+                    <select id="cPrioridad" class="ui inverted dropdown">
+                        <option value="Baja">Baja</option>
+                        <option value="Normal" selected>Normal</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Urgente">Urgente</option>
+                    </select>
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field required">
+                    <label>Fecha Inicio</label>
+                    <input type="datetime-local" id="cFechaInicio" required>
+                </div>
+                <div class="field">
+                    <label>Fecha Fin (estimada)</label>
+                    <input type="datetime-local" id="cFechaFin">
+                </div>
+            </div>
+            <div class="field">
+                <label>Responsable</label>
+                <input type="text" id="cResponsable" placeholder="Nombre del responsable del mantenimiento">
+            </div>
+            <div class="field">
+                <label>Descripción del trabajo</label>
+                <textarea id="cDescripcion" rows="3" placeholder="Describa las actividades a realizar..."></textarea>
+            </div>
+            <div class="field">
+                <label>Observaciones</label>
+                <textarea id="cObservaciones" rows="2" placeholder="Notas adicionales..."></textarea>
+            </div>
+            <div class="field">
+                <div class="ui toggle checkbox" id="cAislarToggle">
+                    <input type="checkbox" id="cAislarDatos" checked>
+                    <label style="color:#fca5a5 !important;">
+                        <i class="ban icon"></i> Aislar datos durante el mantenimiento
+                        <span style="display:block; font-size:0.85em; color:#888; font-weight:normal;">
+                            Los datos recibidos de esta estación se marcarán como aislados y no se incluirán en cálculos, reportes ni alertas.
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <button class="ui cancel inverted button">Cancelar</button>
+        <button class="ui green button" onclick="submitCreate()"><i class="save icon"></i> Crear Orden</button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Initialize dropdowns and checkboxes
+    $('.ui.dropdown').dropdown();
+    $('.ui.checkbox').checkbox();
+
+    function openCreateModal() {
+        // Set default date to now
+        var now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        $('#cFechaInicio').val(now.toISOString().slice(0, 16));
+        $('#createModal').modal('show');
+    }
+
+    function submitCreate() {
+        var estacion = $('#cEstacion').val();
+        if (!estacion) { alert('Seleccione una estación.'); return; }
+
+        var fechaInicio = $('#cFechaInicio').val();
+        if (!fechaInicio) { alert('Seleccione la fecha de inicio.'); return; }
+
+        var data = {
+            idEstacion: estacion,
+            tipoMantenimiento: $('#cTipo').val(),
+            prioridad: $('#cPrioridad').val(),
+            fechaInicio: fechaInicio,
+            fechaFin: $('#cFechaFin').val() || null,
+            responsableNombre: $('#cResponsable').val(),
+            descripcion: $('#cDescripcion').val(),
+            observaciones: $('#cObservaciones').val(),
+            aislarDatos: $('#cAislarDatos').is(':checked')
+        };
+
+        $.ajax({
+            url: '@Url.Action("Create", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function(result) {
+                if (result.success) {
+                    window.location.href = '/Maintenance/Detail/' + result.id;
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            },
+            error: function() { alert('Error de conexión.'); }
+        });
+    }
+
+    function changeEstado(id, estado) {
+        if (!confirm('¿Cambiar estado a "' + estado + '"?')) return;
+
+        $.ajax({
+            url: '@Url.Action("UpdateEstado", "Maintenance")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: id, estado: estado }),
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function(result) {
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            }
+        });
+    }
+</script>
+}
+
+@Html.AntiForgeryToken()

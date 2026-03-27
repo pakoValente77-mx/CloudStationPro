@@ -1,4 +1,9 @@
 psycopg2-binary==2.9.11
 schedule==1.2.2
 pyodbc==5.3.0
-pyinstaller==6.13.0
+flask==3.1.0
+openpyxl>=3.1.0
+shapely>=2.0.0
+pywin32>=308; sys_platform == "win32"
+# pyinstaller solo se necesita en la maquina de desarrollo para generar .exe
+# pip install pyinstaller  (si se requiere)

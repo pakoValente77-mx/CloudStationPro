@@ -45,7 +45,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
-    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
@@ -104,8 +104,10 @@ if (!string.IsNullOrEmpty(msSection["ClientId"]))
 }
 
 // Add services to the container
+builder.Services.AddHttpClient();
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<CloudStationWeb.Services.DataService>();
+builder.Services.AddScoped<CloudStationWeb.Services.FunVasosService>();
 builder.Services.AddScoped<CloudStationWeb.Services.IEmailSender, CloudStationWeb.Services.SmtpEmailSender>();
 
 // CORS for API consumers (mobile, desktop apps)

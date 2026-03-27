@@ -1,0 +1,643 @@
+@model CloudStationWeb.Models.RainForecastIndexViewModel
+@removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["Title"] = "Pronóstico de Lluvia";
+}
+
+@section Styles {
+<style>
+    .forecast-container { padding: 20px 30px 40px; }
+    .forecast-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    .forecast-header h2 { margin: 0; color: #fff; font-weight: 700; }
+    .forecast-header .meta { color: rgba(255,255,255,0.5); font-size: 13px; }
+
+    /* Cuenca cards */
+    .cuenca-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .cuenca-card {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 16px 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .cuenca-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+    .cuenca-card.selected { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 20px rgba(33,150,243,0.3); }
+    .cuenca-card .cuenca-name { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+    .cuenca-card .cuenca-accent {
+        position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .cuenca-card .acum-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .acum-item { text-align: center; }
+    .acum-item .acum-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; }
+    .acum-item .acum-value { font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .acum-item .acum-unit { font-size: 10px; color: rgba(255,255,255,0.4); }
+    .max-row { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 12px; color: rgba(255,255,255,0.5); }
+    .max-row span { color: #ff5252; font-weight: 700; }
+
+    /* Chart panels */
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-row-main { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-panel {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 16px;
+    }
+    .chart-panel h4 { margin: 0 0 12px; color: #fff; font-size: 14px; font-weight: 600; }
+    .chart-panel .chart-box { height: 320px; }
+    .chart-panel.full-width { grid-column: 1 / -1; }
+
+    /* Map panel */
+    #forecast-map { height: 400px; border-radius: 8px; }
+
+    /* Layer control dark theme */
+    .leaflet-control-layers {
+        background: rgba(15, 19, 28, 0.92) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 8px !important;
+        color: rgba(255,255,255,0.85) !important;
+        backdrop-filter: blur(10px);
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+    }
+    .leaflet-control-layers label { color: rgba(255,255,255,0.85); margin-bottom: 3px; display:block; }
+    .leaflet-control-layers-separator { border-top: 1px solid rgba(255,255,255,0.12) !important; }
+
+    /* Subcuenca table */
+    .sub-table { width: 100%; border-collapse: collapse; font-size: 13px; color: #fff; }
+    .sub-table th {
+        text-align: left; padding: 8px 10px; font-weight: 600; font-size: 11px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        color: rgba(255,255,255,0.5); border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sub-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .sub-table tr:hover { background: rgba(255,255,255,0.05); }
+    .sub-table .val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* Recent forecasts */
+    .recent-list { display: flex; gap: 8px; flex-wrap: wrap; }
+    .recent-chip {
+        padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+        background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.7);
+        cursor: pointer; transition: all 0.2s;
+    }
+    .recent-chip:hover, .recent-chip.active { background: rgba(33,150,243,0.3); color: #fff; }
+
+    /* Color coding for rainfall */
+    .rain-low { color: #4fc3f7; }
+    .rain-med { color: #fdd835; }
+    .rain-high { color: #ff9800; }
+    .rain-extreme { color: #f44336; }
+
+    /* Date picker */
+    .date-picker-group { display: flex; align-items: center; gap: 10px; }
+    .date-picker-group select {
+        background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+        color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px;
+    }
+
+    /* Boletín sidebar */
+    .boletin-sidebar {
+        background: linear-gradient(135deg, rgba(30,40,60,0.85), rgba(20,28,45,0.9));
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(66,165,245,0.2);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+    }
+    .boletin-sidebar .boletin-header {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+        padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .boletin-sidebar .boletin-icon {
+        background: rgba(66,165,245,0.15); border-radius: 8px;
+        width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .boletin-sidebar .boletin-body {
+        color: rgba(255,255,255,0.82); font-size: 12.5px; line-height: 1.75;
+        text-align: justify; flex: 1; overflow-y: auto;
+    }
+    .boletin-sidebar .boletin-badge {
+        font-size: 9px; color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.06);
+        padding: 2px 8px; border-radius: 10px; margin-top: 10px; text-align: center;
+    }
+
+    @@media (max-width: 991px) {
+        .cuenca-cards { grid-template-columns: repeat(2, 1fr); }
+        .chart-row { grid-template-columns: 1fr; }
+        .chart-row-main { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 600px) {
+        .cuenca-cards { grid-template-columns: 1fr; }
+        .forecast-container { padding: 12px 15px 30px; }
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(11,14,20,0.7); display: flex; align-items: center; justify-content: center;
+        z-index: 10; border-radius: 12px;
+    }
+</style>
+}
+
+<div class="forecast-container">
+    <!-- Header -->
+    <div class="forecast-header">
+        <div>
+            <h2><i class="cloud rain icon" style="color: #42a5f5;"></i> Pronóstico de Lluvia</h2>
+            <div class="meta">
+                @if (Model.LatestForecast != null)
+                {
+                    <span>Último pronóstico: <strong style="color:#81c784;">@Model.LatestForecast.ForecastDate.ToString("dd/MMM/yyyy")</strong></span>
+                    <span style="margin-left:12px;">Descargado: @Model.LatestForecast.DownloadedAt.ToString("dd/MMM HH:mm") UTC</span>
+                    <span style="margin-left:12px;">Registros: @Model.LatestForecast.RecordCount.ToString("N0")</span>
+                }
+                else
+                {
+                    <span style="color:#ef5350;">Sin pronósticos disponibles. Ejecute sync_rain_forecast.py para descargar datos.</span>
+                }
+            </div>
+        </div>
+        <div class="date-picker-group">
+            <label style="color:rgba(255,255,255,0.5); font-size:12px;">Fecha pronóstico:</label>
+            <select id="forecast-date-select" onchange="changeForecastDate(this.value)">
+                @if (Model.RecentForecasts != null)
+                {
+                    @foreach (var f in Model.RecentForecasts)
+                    {
+                        <option value="@f.ForecastDate.ToString("yyyy-MM-dd")"
+                                @(f.Id == Model.LatestForecast?.Id ? "selected" : "")>
+                            @f.ForecastDate.ToString("dd/MMM/yyyy") (@f.RecordCount.ToString("N0") pts)
+                        </option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    <!-- Cuenca Summary Cards -->
+    <div class="cuenca-cards" id="cuenca-cards">
+        @if (Model.CuencaSummaries != null)
+        {
+            var cuencaColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ANG"] = "#1565C0",
+                ["MMT"] = "#7B1FA2",
+                ["MPS"] = "#00838F",
+                ["PEA"] = "#AD1457"
+            };
+            foreach (var c in Model.CuencaSummaries)
+            {
+                var color = cuencaColors.TryGetValue(c.CuencaCode, out var col) ? col : "#555";
+                <div class="cuenca-card" data-cuenca="@c.CuencaCode" onclick="selectCuenca('@c.CuencaCode')">
+                    <div class="cuenca-accent" style="background: @color;"></div>
+                    <div class="cuenca-name" style="color: @color;">@c.CuencaLabel</div>
+                    <div class="acum-grid">
+                        <div class="acum-item">
+                            <div class="acum-label">24h</div>
+                            <div class="acum-value @GetRainClass(c.LluviaAcum24h)">@c.LluviaAcum24h.ToString("F1")</div>
+                            <div class="acum-unit">mm</div>
+                        </div>
+                        <div class="acum-item">
+                            <div class="acum-label">48h</div>
+                            <div class="acum-value @GetRainClass(c.LluviaAcum48h)">@c.LluviaAcum48h.ToString("F1")</div>
+                            <div class="acum-unit">mm</div>
+                        </div>
+                        <div class="acum-item">
+                            <div class="acum-label">72h</div>
+                            <div class="acum-value @GetRainClass(c.LluviaAcum72h)">@c.LluviaAcum72h.ToString("F1")</div>
+                            <div class="acum-unit">mm</div>
+                        </div>
+                    </div>
+                    <div class="max-row">
+                        Máx. puntual 24h: <span>@c.LluviaMax24h.ToString("F1") mm</span>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Charts Row 1: Hourly forecast + Map -->
+    <div class="chart-row">
+        <div class="chart-panel" style="position:relative;">
+            <h4><i class="chart bar icon"></i> Pronóstico Horario — <span id="chart-cuenca-label">Todas las cuencas</span></h4>
+            <div class="chart-box" id="hourly-chart"></div>
+            <div class="loading-overlay" id="hourly-loading" style="display:none;">
+                <div class="ui active inverted loader"></div>
+            </div>
+        </div>
+        <div class="chart-panel" style="position:relative;">
+            <h4><i class="map marker alternate icon"></i> Distribución Espacial
+                <span style="float:right; font-size:11px; color:rgba(255,255,255,0.4);">
+                    Horizonte:
+                    <select id="heatmap-hours" onchange="loadHeatmap()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">
+                        <option value="24">24h</option>
+                        <option value="48">48h</option>
+                        <option value="72">72h</option>
+                    </select>
+                </span>
+            </h4>
+            <div id="forecast-map"></div>
+            <div class="loading-overlay" id="map-loading" style="display:none;">
+                <div class="ui active inverted loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2: Subcuenca breakdown -->
+    <div class="chart-row">
+        <div class="chart-panel full-width" style="position:relative;">
+            <h4><i class="th list icon"></i> Detalle por Subcuenca — <span id="table-cuenca-label">Seleccione una cuenca</span></h4>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="sub-table" id="subcuenca-table">
+                    <thead>
+                        <tr>
+                            <th>Subcuenca</th>
+                            <th class="val">Acum. 24h (mm)</th>
+                            <th class="val">Acum. 48h (mm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subcuenca-tbody">
+                        <tr><td colspan="3" style="text-align:center; opacity:0.4; padding:20px;">Seleccione una cuenca para ver el detalle</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="loading-overlay" id="table-loading" style="display:none;">
+                <div class="ui active inverted loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Boletín Meteorológico (debajo de todo) -->
+    @if (!string.IsNullOrEmpty(Model.ResumenMeteorologico))
+    {
+        <div style="background: linear-gradient(135deg, rgba(30,40,60,0.85), rgba(20,28,45,0.9)); backdrop-filter: blur(12px); border: 1px solid rgba(66,165,245,0.2); border-left: 4px solid #42a5f5; border-radius: 12px; padding: 18px 22px; margin-bottom: 20px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                <div style="background: rgba(66,165,245,0.15); border-radius:8px; width:36px; height:36px; display:flex; align-items:center; justify-content:center;">
+                    <i class="newspaper outline icon" style="color:#42a5f5; font-size:18px; margin:0;"></i>
+                </div>
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#fff;">Boletín Meteorológico</span>
+                    <span style="display:block; font-size:11px; color:rgba(255,255,255,0.4); margin-top:1px;">Generado automáticamente a partir del modelo numérico y condiciones atmosféricas en tiempo real</span>
+                </div>
+                <span style="margin-left:auto; font-size:10px; color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.06); padding:3px 10px; border-radius:12px;">
+                    <i class="microchip icon"></i> Análisis automático · @Model.LatestForecast?.ForecastDate.ToString("dd/MMM/yyyy") 00Z
+                </span>
+            </div>
+            <div style="color:rgba(255,255,255,0.85); font-size:13.5px; line-height:1.75; text-align:justify;">
+                @Html.Raw(Model.ResumenMeteorologico)
+            </div>
+        </div>
+    }
+</div>
+
+@functions {
+    string GetRainClass(double mm)
+    {
+        if (mm >= 50) return "rain-extreme";
+        if (mm >= 25) return "rain-high";
+        if (mm >= 10) return "rain-med";
+        return "rain-low";
+    }
+}
+
+@section Scripts {
+<script src="~/lib/highcharts/highcharts.js"></script>
+<script src="~/lib/highcharts/modules/exporting.js"></script>
+<script>
+    // ── State ──
+    let selectedCuenca = null;
+    let currentForecastDate = $('#forecast-date-select').val() || null;
+    let forecastMap = null;
+    let heatmapLayer = null;
+
+    // Cuenca colors
+    const CUENCA_COLORS = {
+        'ANG': '#1565C0',
+        'MMT': '#7B1FA2',
+        'MPS': '#00838F',
+        'PEA': '#AD1457'
+    };
+    const CUENCA_LABELS = {
+        'ANG': 'Angostura',
+        'MMT': 'Chicoasén',
+        'MPS': 'Malpaso',
+        'PEA': 'Peñitas'
+    };
+
+    // ── Init ──
+    $(function() {
+        Highcharts.setOptions({
+            time: { timezoneOffset: 6 * 60 },
+            accessibility: { enabled: false }
+        });
+
+        initMap();
+        loadAllCuencasChart();
+        loadHeatmap();
+    });
+
+    // ── Map ──
+    var layerControl = null;
+    var radarLayer = null;
+
+    function initMap() {
+        // Base layers
+        var terrainLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '&copy; Google Maps'
+        });
+        var satelliteLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '&copy; Google Satellite'
+        });
+
+        forecastMap = L.map('forecast-map', {
+            center: [16.8, -93.2],
+            zoom: 8,
+            zoomControl: true,
+            attributionControl: false,
+            layers: [terrainLayer]
+        });
+
+        heatmapLayer = L.layerGroup().addTo(forecastMap);
+
+        // Layer control
+        var baseLayers = {
+            '<i class="mountain icon"></i> Terreno': terrainLayer,
+            '<i class="satellite dish icon"></i> Satélite': satelliteLayer
+        };
+        var overlays = {
+            '<i class="tint icon"></i> Pronóstico lluvia': heatmapLayer
+        };
+
+        layerControl = L.control.layers(baseLayers, overlays, { collapsed: false, position: 'topright' }).addTo(forecastMap);
+
+        // Load weather radar from RainViewer (free, no API key)
+        loadWeatherRadar();
+    }
+
+    function loadWeatherRadar() {
+        // ── RainViewer: Radar de precipitación en tiempo real ──
+        fetch('https://api.rainviewer.com/public/weather-maps.json')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.radar && data.radar.past && data.radar.past.length > 0) {
+                    var latestRadar = data.radar.past[data.radar.past.length - 1];
+                    radarLayer = L.tileLayer(data.host + latestRadar.path + '/256/{z}/{x}/{y}/2/1_1.png', {
+                        opacity: 0.65,
+                        zIndex: 5
+                    });
+                    if (layerControl) {
+                        layerControl.addOverlay(radarLayer, '<i class="broadcast tower icon"></i> Radar precipitación');
+                    }
+                }
+            })
+            .catch(function(err) { console.warn('RainViewer:', err); });
+
+        // ── GOES-16 Banda 13 (IR) — NOAA, cobertura total de México ──
+        var goes16Layer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi', {
+            layers: 'fulldisk_ch13',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            zIndex: 4,
+            attribution: 'GOES-16 NOAA/Iowa Mesonet'
+        });
+        if (layerControl) {
+            layerControl.addOverlay(goes16Layer, '<i class="satellite icon"></i> GOES-16 Infrarrojo');
+        }
+
+        // ── GOES-16 Banda Visible (día) ──
+        var goes16VisLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi', {
+            layers: 'fulldisk_ch02',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.45,
+            zIndex: 4,
+            attribution: 'GOES-16 NOAA/Iowa Mesonet'
+        });
+        if (layerControl) {
+            layerControl.addOverlay(goes16VisLayer, '<i class="sun icon"></i> GOES-16 Visible');
+        }
+    }
+
+    function loadHeatmap() {
+        const hours = parseInt($('#heatmap-hours').val());
+        $('#map-loading').show();
+        $.getJSON('@Url.Action("GetHeatmapData", "RainForecast")', {
+            forecastDate: currentForecastDate,
+            hoursAhead: hours
+        }, function(resp) {
+            heatmapLayer.clearLayers();
+            if (!resp.points || !resp.points.length) {
+                $('#map-loading').hide();
+                return;
+            }
+            const maxRain = Math.max(...resp.points.map(p => p.rain));
+            resp.points.forEach(function(p) {
+                const ratio = maxRain > 0 ? p.rain / maxRain : 0;
+                const color = rainColor(p.rain);
+                const radius = 3 + ratio * 6;
+                L.circleMarker([p.lat, p.lon], {
+                    radius: radius,
+                    fillColor: color,
+                    fillOpacity: 0.65,
+                    stroke: false
+                }).bindTooltip(p.rain.toFixed(1) + ' mm', { className: 'custom-tooltip' })
+                  .addTo(heatmapLayer);
+            });
+            // Fit bounds
+            if (resp.points.length > 0) {
+                const lats = resp.points.map(p => p.lat);
+                const lons = resp.points.map(p => p.lon);
+                forecastMap.fitBounds([
+                    [Math.min(...lats) - 0.1, Math.min(...lons) - 0.1],
+                    [Math.max(...lats) + 0.1, Math.max(...lons) + 0.1]
+                ]);
+            }
+            $('#map-loading').hide();
+        }).fail(function() { $('#map-loading').hide(); });
+    }
+
+    function rainColor(mm) {
+        if (mm >= 50) return '#f44336';
+        if (mm >= 25) return '#ff9800';
+        if (mm >= 10) return '#fdd835';
+        if (mm >= 5)  return '#66bb6a';
+        if (mm >= 1)  return '#42a5f5';
+        return '#90caf9';
+    }
+
+    // ── Cuenca selection ──
+    function selectCuenca(code) {
+        selectedCuenca = code;
+        $('.cuenca-card').removeClass('selected');
+        $(`.cuenca-card[data-cuenca="${code}"]`).addClass('selected');
+        $('#chart-cuenca-label').text(CUENCA_LABELS[code] || code);
+        $('#table-cuenca-label').text(CUENCA_LABELS[code] || code);
+        loadCuencaChart(code);
+        loadSubcuencaTable(code);
+    }
+
+    // ── All cuencas chart ──
+    function loadAllCuencasChart() {
+        @if (Model.CuencaSummaries != null && Model.CuencaSummaries.Any())
+        {
+            <text>
+            var allSeries = [];
+            @foreach (var c in Model.CuencaSummaries)
+            {
+                <text>
+                allSeries.push({
+                    name: '@c.CuencaLabel',
+                    color: CUENCA_COLORS['@c.CuencaCode'] || '#888',
+                    data: [
+                        @foreach (var h in c.Hourly)
+                        {
+                            @:[ new Date('@h.Ts.ToString("o")').getTime(), @h.LluviaMediaMm.ToString(System.Globalization.CultureInfo.InvariantCulture) ],
+                        }
+                    ]
+                });
+                </text>
+            }
+            renderHourlyChart(allSeries, 'Todas las cuencas');
+            </text>
+        }
+        else
+        {
+            <text>
+            $('#hourly-chart').html('<div style="text-align:center;padding:80px 0;opacity:0.4;">Sin datos de pronóstico</div>');
+            </text>
+        }
+    }
+
+    // ── Cuenca hourly chart (AJAX) ──
+    function loadCuencaChart(code) {
+        $('#hourly-loading').show();
+        $.getJSON('@Url.Action("GetCuencaHourly", "RainForecast")', {
+            cuencaCode: code,
+            forecastDate: currentForecastDate
+        }, function(resp) {
+            if (!resp.data || !resp.data.length) {
+                $('#hourly-chart').html('<div style="text-align:center;padding:80px 0;opacity:0.4;">Sin datos para ' + (resp.cuencaLabel || code) + '</div>');
+                $('#hourly-loading').hide();
+                return;
+            }
+            var series = [{
+                name: resp.cuencaLabel + ' (media)',
+                type: 'column',
+                color: CUENCA_COLORS[code] || '#42a5f5',
+                data: resp.data.map(d => [new Date(d.ts).getTime(), d.lluviaMediaMm])
+            }, {
+                name: resp.cuencaLabel + ' (máx)',
+                type: 'spline',
+                color: '#ff5252',
+                lineWidth: 1.5,
+                dashStyle: 'Dash',
+                marker: { enabled: false },
+                data: resp.data.map(d => [new Date(d.ts).getTime(), d.lluviaMaxMm])
+            }];
+            renderHourlyChart(series, resp.cuencaLabel);
+            $('#hourly-loading').hide();
+        }).fail(function() { $('#hourly-loading').hide(); });
+    }
+
+    function renderHourlyChart(series, title) {
+        Highcharts.chart('hourly-chart', {
+            chart: { backgroundColor: 'transparent', zoomType: 'x' },
+            title: { text: null },
+            credits: { enabled: false },
+            xAxis: {
+                type: 'datetime',
+                labels: { style: { color: '#aaa', fontSize: '10px' } },
+                gridLineColor: 'rgba(255,255,255,0.05)',
+                lineColor: 'rgba(255,255,255,0.1)'
+            },
+            yAxis: {
+                title: { text: 'mm', style: { color: '#aaa' } },
+                labels: { style: { color: '#aaa' } },
+                gridLineColor: 'rgba(255,255,255,0.05)',
+                min: 0
+            },
+            tooltip: {
+                shared: true,
+                backgroundColor: 'rgba(15,25,30,0.95)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                style: { color: '#e0e0e0' },
+                xDateFormat: '%d/%m %H:%M',
+                valueSuffix: ' mm'
+            },
+            legend: {
+                itemStyle: { color: '#b0bec5', fontWeight: '400', fontSize: '11px' },
+                itemHoverStyle: { color: '#fff' }
+            },
+            plotOptions: {
+                column: { borderRadius: 2, borderWidth: 0, groupPadding: 0.05 },
+                series: { animation: { duration: 600 } }
+            },
+            series: series
+        });
+    }
+
+    // ── Subcuenca table ──
+    function loadSubcuencaTable(code) {
+        $('#table-loading').show();
+        $.getJSON('@Url.Action("GetSubcuencaDetail", "RainForecast")', {
+            cuencaCode: code,
+            forecastDate: currentForecastDate
+        }, function(resp) {
+            var tbody = $('#subcuenca-tbody');
+            tbody.empty();
+            if (!resp.subcuencas || !resp.subcuencas.length) {
+                tbody.html('<tr><td colspan="3" style="text-align:center;opacity:0.4;padding:20px;">Sin subcuencas</td></tr>');
+                $('#table-loading').hide();
+                return;
+            }
+            resp.subcuencas.forEach(function(s) {
+                tbody.append(
+                    '<tr>' +
+                    '<td>' + s.subcuencaName + '</td>' +
+                    '<td class="val ' + rainCssClass(s.lluviaAcum24h) + '">' + s.lluviaAcum24h.toFixed(1) + '</td>' +
+                    '<td class="val ' + rainCssClass(s.lluviaAcum48h) + '">' + s.lluviaAcum48h.toFixed(1) + '</td>' +
+                    '</tr>'
+                );
+            });
+            $('#table-loading').hide();
+        }).fail(function() { $('#table-loading').hide(); });
+    }
+
+    function rainCssClass(mm) {
+        if (mm >= 50) return 'rain-extreme';
+        if (mm >= 25) return 'rain-high';
+        if (mm >= 10) return 'rain-med';
+        return 'rain-low';
+    }
+
+    // ── Date change ──
+    function changeForecastDate(date) {
+        currentForecastDate = date;
+        // Reload everything
+        if (selectedCuenca) {
+            loadCuencaChart(selectedCuenca);
+            loadSubcuencaTable(selectedCuenca);
+        } else {
+            // Reload page for server-side rendered cards
+            window.location.href = '@Url.Action("Index", "RainForecast")?forecastDate=' + date;
+        }
+        loadHeatmap();
+    }
+</script>
+}

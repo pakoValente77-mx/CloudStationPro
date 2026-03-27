@@ -84,6 +84,8 @@ namespace CloudStationWeb.Models
         public string? NumeroSensor { get; set; }
         public decimal? ValorMinimo { get; set; }
         public decimal? ValorMaximo { get; set; }
+        public decimal? ValorMinError { get; set; }
+        public decimal? ValorMaxError { get; set; }
         public bool Activo { get; set; }
         public int? PeriodoMuestra { get; set; }
         public string? TipoGrafica { get; set; }
@@ -103,6 +105,8 @@ namespace CloudStationWeb.Models
         public bool Activo { get; set; }
         public decimal? ValorMinimo { get; set; }
         public decimal? ValorMaximo { get; set; }
+        public decimal? ValorMinError { get; set; }
+        public decimal? ValorMaxError { get; set; }
         public string? Especificacion { get; set; }
         public int? PeriodoMuestra { get; set; }
         public string? TipoGrafica { get; set; }

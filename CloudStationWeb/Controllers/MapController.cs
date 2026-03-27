@@ -38,7 +38,11 @@ namespace CloudStationWeb.Controllers
         public async Task<JsonResult> GetStationHistory(string stationId, string variable, int hours = 6)
         {
             var history = await _dataService.GetStationHistoryAsync(stationId, variable, hours);
-            return Json(history);
+            var rangeEnd = DateTime.Now;
+            var rangeStart = rangeEnd.AddHours(-hours);
+            var maintenanceIds = await _dataService.GetStationsInMaintenanceDuringAsync(rangeStart, rangeEnd);
+            var isInMaint = maintenanceIds.Contains(stationId);
+            return Json(new { data = history, enMantenimiento = isInMaint });
         }
 
         [HttpGet]
@@ -59,7 +63,11 @@ namespace CloudStationWeb.Controllers
         public async Task<JsonResult> GetStationHyetograph(string stationId, int hours = 24)
         {
             var data = await _dataService.GetStationHyetographAsync(stationId, hours);
-            return Json(data);
+            var rangeEnd = DateTime.Now;
+            var rangeStart = rangeEnd.AddHours(-hours);
+            var maintenanceIds = await _dataService.GetStationsInMaintenanceDuringAsync(rangeStart, rangeEnd);
+            var isInMaint = maintenanceIds.Contains(stationId);
+            return Json(new { data = data, enMantenimiento = isInMaint });
         }
 
         [HttpGet]

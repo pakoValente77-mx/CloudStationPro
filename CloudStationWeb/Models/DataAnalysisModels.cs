@@ -23,6 +23,7 @@ namespace CloudStationWeb.Models
         public string StationName { get; set; } = "";
         public double? MinLimit { get; set; }
         public double? MaxLimit { get; set; }
+        public bool EnMantenimiento { get; set; }
         public List<DataPoint> DataPoints { get; set; } = new();
     }
 

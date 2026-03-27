@@ -1045,7 +1045,11 @@
             $('#modal-hietograma-wrap').show();
             $('#modal-hietograma-title').text(stationName || stationId);
             $('#modal-hietograma-chart').html('<div style="text-align:center; padding:40px;"><i class="notched circle loading icon"></i> Cargando hietograma...</div>');
-            $.getJSON('/Map/GetStationHyetograph', { stationId: stationId, hours: 24 }, function(data) {
+            $.getJSON('/Map/GetStationHyetograph', { stationId: stationId, hours: 24 }, function(resp) {
+                const data = resp.data || resp;
+                if (resp.enMantenimiento) {
+                    $('#modal-hietograma-chart').before('<div style="background:rgba(249,115,22,0.15);color:#f97316;padding:4px 8px;border-radius:4px;font-size:10px;text-align:center;margin-bottom:4px;" class="mtto-hyeto-warn"><i class="wrench icon"></i> Datos en periodo de mantenimiento</div>');
+                }
                 renderHyetograph('modal-hietograma-chart', data, stationName);
             });
         }
@@ -1196,14 +1200,20 @@
                 
                 latLngs.push([d.lat, d.lon]);
 
-                color = d.valorActual === null ? '#333333' : '#2185d0';
-                statusText = d.valorActual === null ? 'N/A' : (d.valorActual.toFixed(2));
+                // Estaciones en mantenimiento: mostrar con indicador especial
+                if (d.enMantenimiento) {
+                    color = '#f97316'; // Naranja mantenimiento
+                    statusText = 'MTTO';
+                } else {
+                    color = d.valorActual === null ? '#333333' : '#2185d0';
+                    statusText = d.valorActual === null ? 'N/A' : (d.valorActual.toFixed(2));
+                }
 
                 let shapeClass = 'custom-marker'; // Circle by default
                 let wrapperClass = '';
 
-                // Colorear dependiendo del organismo
-                if (d.valorActual !== null) {
+                // Colorear dependiendo del organismo (solo si NO está en mantenimiento)
+                if (d.valorActual !== null && !d.enMantenimiento) {
                     if (d.isGolfoCentro) {
                         color = '#00FF00'; // Golfo es Verde siempre
                         shapeClass = 'custom-marker-triangle';
@@ -1265,9 +1275,11 @@
 
                 const popupId = `popup-chart-${d.id}`;
                 const cotaBadge = d.hasCota ? '<span style="background-color:#ff9800; color:white; padding:2px 4px; border-radius:3px; font-size:9px; margin-left:5px; font-weight:bold;">[COTA APLICADA]</span>' : '';
+                const maintBanner = d.enMantenimiento ? '<div style="background:#f97316; color:#fff; padding:4px 8px; border-radius:4px; margin-bottom:6px; font-size:11px; font-weight:bold;"><i class="wrench icon"></i> ESTACIÓN EN MANTENIMIENTO — Datos aislados</div>' : '';
 
                 const popupContent = `
                     <div style="color: #333; width: 350px;">
+                        ${maintBanner}
                         <h4 style="margin: 0 0 8px 0; color: #1a1a1a; font-family: sans-serif;">${d.nombre}</h4>
                         <div id="${popupId}" class="chart-popup-container">
                             <i class="notched circle loading icon"></i> Cargando historial...
@@ -1315,11 +1327,12 @@
 
                 const val = (d.valorActual === null ? 'N/A' : d.valorActual.toFixed(2));
                 const cotaLabel = d.hasCota ? ' <i class="bullseye icon" title="Valor calculado con cota compensatoria" style="color:#ff9800;"></i>' : '';
+                const maintLabel = d.enMantenimiento ? ' <i class="wrench icon" title="En mantenimiento — datos aislados" style="color:#f97316;"></i>' : '';
                 
                 const row = $(`
-                    <tr id="row-${d.id}" data-id="${d.id}">
-                        <td>${d.nombre}</td>
-                        <td class="value-cell">${val}${cotaLabel}</td>
+                    <tr id="row-${d.id}" data-id="${d.id}" ${d.enMantenimiento ? 'style="opacity:0.5;"' : ''}>
+                        <td>${d.nombre}${maintLabel}</td>
+                        <td class="value-cell">${d.enMantenimiento ? '<span style="color:#f97316;">MTTO</span>' : val}${cotaLabel}</td>
                     </tr>
                 `);
 
@@ -1368,7 +1381,7 @@
         }
 
         function updateStats() {
-            const values = sensorData.filter(d => d.valorActual !== null).map(d => d.valorActual);
+            const values = sensorData.filter(d => d.valorActual !== null && !d.enMantenimiento).map(d => d.valorActual);
             if (values.length > 0) {
                 const avg = values.reduce((a, b) => a + b, 0) / values.length;
                 $('#avg-value').text(avg.toFixed(2));
@@ -1379,7 +1392,11 @@
         }
 
         function loadAndRenderChart(stationId, variable, containerId) {
-            $.getJSON('/Map/GetStationHistory', { stationId: stationId, variable: variable }, function(data) {
+            $.getJSON('/Map/GetStationHistory', { stationId: stationId, variable: variable }, function(resp) {
+                const data = resp.data || resp;
+                if (resp.enMantenimiento) {
+                    $(`#${containerId}`).before('<div style="background:rgba(249,115,22,0.15);color:#f97316;padding:4px 8px;border-radius:4px;font-size:10px;text-align:center;margin-bottom:4px;"><i class="wrench icon"></i> Datos en periodo de mantenimiento</div>');
+                }
                 renderHistoryChart(containerId, data, variable);
             });
         }

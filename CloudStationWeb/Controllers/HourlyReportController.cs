@@ -223,10 +223,16 @@ namespace CloudStationWeb.Controllers
                     
                     foreach (var station in stations)
                     {
+                        bool isMaint = station.EnMantenimiento;
                         ws.Cells[row, 1].Value = stationNum++;
                         ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                        ws.Cells[row, 2].Value = station.StationName;
+                        ws.Cells[row, 2].Value = isMaint ? $"{station.StationName} [MTTO]" : station.StationName;
                         ws.Cells[row, 2].Style.Font.Size = 9;
+                        if (isMaint)
+                        {
+                            ws.Cells[row, 2].Style.Font.Color.SetColor(System.Drawing.Color.FromArgb(249, 115, 22));
+                            ws.Cells[row, 2].Style.Font.Italic = true;
+                        }
                         
                         var vmap = BuildValueMap(station);
                         double rowTotal = 0;
@@ -244,7 +250,7 @@ namespace CloudStationWeb.Controllers
                                 ws.Cells[row, col].Style.Numberformat.Format = "0.0";
                                 ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                                 
-                                if (hv.IsValid)
+                                if (hv.IsValid && !isMaint)
                                 {
                                     rowTotal += val;
                                     hourSums[i - 1] += val;
@@ -329,10 +335,10 @@ namespace CloudStationWeb.Controllers
                 }
             }
             
-            // ── Hyetograph data row (hidden, used as chart source) ──
+            // ── Hyetograph data rows (hidden, used as chart source) ──
             int hyetoDataRow = row;
             {
-                // Compute global hourly average across ALL stations
+                // Compute global hourly TOTAL across ALL stations
                 var allMaps = report.Stations.Select(s => BuildValueMap(s)).ToList();
                 for (int i = 1; i <= 24; i++)
                 {
@@ -340,21 +346,20 @@ namespace CloudStationWeb.Controllers
                     int h = ht.Hour == 0 ? 24 : ht.Hour;
                     ws.Cells[hyetoDataRow, i + 2].Value = h; // hour label
                     
-                    double sum = 0; int cnt = 0;
+                    double sum = 0;
                     foreach (var vmap in allMaps)
                     {
                         if (vmap.TryGetValue(DtKey(ht), out var hv) && hv.Value.HasValue && hv.IsValid)
                         {
                             sum += (double)hv.Value.Value;
-                            cnt++;
                         }
                     }
-                    ws.Cells[hyetoDataRow + 1, i + 2].Value = cnt > 0 ? sum / cnt : 0;
+                    ws.Cells[hyetoDataRow + 1, i + 2].Value = sum;
                     ws.Cells[hyetoDataRow + 1, i + 2].Style.Numberformat.Format = "0.0";
                 }
                 // Labels
                 ws.Cells[hyetoDataRow, 2].Value = "Hora";
-                ws.Cells[hyetoDataRow + 1, 2].Value = "Precip. media (mm)";
+                ws.Cells[hyetoDataRow + 1, 2].Value = "Precip. total (mm)";
                 ws.Row(hyetoDataRow).Hidden = true;
                 ws.Row(hyetoDataRow + 1).Hidden = true;
                 row = hyetoDataRow + 3;
@@ -363,7 +368,7 @@ namespace CloudStationWeb.Controllers
             // ── Hyetograph chart ──
             {
                 var chart = ws.Drawings.AddChart("Hietograma", eChartType.ColumnClustered);
-                chart.Title.Text = "Hietograma General — Precipitación Media Horaria (mm)";
+                chart.Title.Text = "Hietograma General — Precipitación Total por Hora (mm)";
                 chart.Title.Font.Size = 12;
                 chart.Title.Font.Bold = true;
                 
@@ -371,7 +376,7 @@ namespace CloudStationWeb.Controllers
                 var dataSeries = chart.Series.Add(
                     ws.Cells[hyetoDataRow + 1, hourStartCol, hyetoDataRow + 1, 26],  // values
                     ws.Cells[hyetoDataRow, hourStartCol, hyetoDataRow, 26]);         // categories (hours)
-                dataSeries.Header = "Precipitación (mm)";
+                dataSeries.Header = "Precipitación total (mm)";
                 
                 // Style bars with green
                 dataSeries.Fill.Style = OfficeOpenXml.Drawing.eFillStyle.SolidFill;
@@ -493,6 +498,7 @@ namespace CloudStationWeb.Controllers
                     double sum = 0; int cnt = 0;
                     foreach (var station in stationsInGroup)
                     {
+                        if (station.EnMantenimiento) continue;
                         if (stationMaps.TryGetValue(station.StationId, out var vmap) &&
                             vmap.TryGetValue(DtKey(ht), out var hv) && hv.Value.HasValue && hv.IsValid)
                         {
@@ -542,75 +548,302 @@ namespace CloudStationWeb.Controllers
         // ============================================================
         //  GENÉRICO – Reporte para otras variables (nivel, temp, etc.)
         // ============================================================
+        private static string GetVariableUnits(string variable)
+        {
+            var v = variable.ToLower();
+            if (v.Contains("precipitación")) return "mm";
+            if (v.Contains("nivel")) return "m";
+            if (v.Contains("temperatura")) return "°C";
+            if (v.Contains("velocidad") && v.Contains("viento")) return "m/s";
+            if (v.Contains("dirección") && v.Contains("viento")) return "°";
+            if (v.Contains("humedad")) return "%";
+            if (v.Contains("presión") || v.Contains("presion")) return "hPa";
+            if (v.Contains("radiación") || v.Contains("radiacion")) return "W/m²";
+            if (v.Contains("batería") || v.Contains("bateria")) return "V";
+            return "";
+        }
+
+        private static string GetVariableDisplayName(string variable)
+        {
+            var v = variable.ToLower();
+            if (v.Contains("nivel")) return "NIVEL DE AGUA";
+            if (v.Contains("temperatura")) return "TEMPERATURA";
+            if (v.Contains("velocidad") && v.Contains("viento")) return "VELOCIDAD DEL VIENTO";
+            if (v.Contains("dirección") && v.Contains("viento")) return "DIRECCIÓN DEL VIENTO";
+            if (v.Contains("humedad")) return "HUMEDAD RELATIVA";
+            if (v.Contains("presión") || v.Contains("presion")) return "PRESIÓN BAROMÉTRICA";
+            if (v.Contains("radiación") || v.Contains("radiacion")) return "RADIACIÓN SOLAR";
+            if (v.Contains("batería") || v.Contains("bateria")) return "BATERÍA";
+            return variable.ToUpper().Replace("_", " ");
+        }
+
+        /// <summary>
+        /// Determina si la variable es acumulativa (se suma) o instantánea (se promedia).
+        /// </summary>
+        private static bool IsAccumulativeVariable(string variable)
+        {
+            var v = variable.ToLower();
+            return v.Contains("precipitación");
+        }
+
         private void BuildGenericSheet(ExcelPackage package, HourlyReportResponse report, string variable, DateTime startTime, bool grouped)
         {
-            var ws = package.Workbook.Worksheets.Add("Reporte Horario");
-            int currentRow = 1;
-            
-            ws.Cells[currentRow, 1].Value = $"Reporte Horario - {variable}";
-            ws.Cells[currentRow, 1].Style.Font.Size = 16;
-            ws.Cells[currentRow, 1].Style.Font.Bold = true;
-            currentRow += 2;
-            
             var endTime = DateTime.Parse(report.EndTime);
-            ws.Cells[currentRow, 1].Value = $"Período: {startTime:dd/MM/yyyy HH:mm} - {endTime:dd/MM/yyyy HH:mm}";
-            currentRow++;
-            ws.Cells[currentRow, 1].Value = $"Estaciones: {report.Stations.Count}";
-            currentRow += 2;
-            
-            int col = 1;
-            ws.Cells[currentRow, col++].Value = "Estación";
+            string displayName = GetVariableDisplayName(variable);
+            string units = GetVariableUnits(variable);
+            bool isAccumulative = IsAccumulativeVariable(variable);
+            string aggregateLabel = isAccumulative ? "TOTAL" : "PROMEDIO";
+            string fmt = isAccumulative ? "0.0" : "0.00";
+
+            // Sheet name (max 31 chars, no invalid chars)
+            string sheetName = displayName.Length > 31 ? displayName.Substring(0, 31) : displayName;
+            var ws = package.Workbook.Worksheets.Add(sheetName);
+
+            // Colors (same as precipitation sheet)
+            var darkGreen  = System.Drawing.Color.FromArgb(27, 94, 32);
+            var medGreen   = System.Drawing.Color.FromArgb(46, 125, 50);
+            var lightGreen = System.Drawing.Color.FromArgb(76, 175, 80);
+            var paleGreen  = System.Drawing.Color.FromArgb(232, 245, 233);
+            var gold       = System.Drawing.Color.FromArgb(194, 147, 28);
+            var white      = System.Drawing.Color.White;
+
+            const int hourStartCol = 3;
+            const int totalCol = 27;
+            const int lastCol = 27;
+
+            int row = 1;
+
+            // ── Row 1: Title ──
+            ws.Cells[row, 1, row, lastCol].Merge = true;
+            SetCell(ws, row, 1, "DEPARTAMENTO REGIONAL DE HIDROMETRÍA", "Arial", 16, true, white, darkGreen, ExcelHorizontalAlignment.Center);
+            ws.Row(row).Height = 28;
+            row++;
+
+            // ── Row 2: Subtitle ──
+            ws.Cells[row, 1, row, lastCol].Merge = true;
+            SetCell(ws, row, 1, "PUESTO CENTRAL DE REGISTRO", "Arial", 12, true, white, darkGreen, ExcelHorizontalAlignment.Center);
+            row++;
+
+            // ── Row 3: Description ──
+            ws.Cells[row, 1, row, lastCol].Merge = true;
+            SetCell(ws, row, 1, "Reporte de la Información Hidrometeorológica Automática", "Arial", 12, true, white, medGreen, ExcelHorizontalAlignment.Center);
+            row++;
+
+            // ── Row 4: Variable + Date ──
+            ws.Cells[row, 1, row, 20].Merge = true;
+            SetCell(ws, row, 1, $"REPORTE DE {displayName}", "Arial", 12, true, white, medGreen, ExcelHorizontalAlignment.Center);
+            ws.Cells[row, 21, row, lastCol].Merge = true;
+            string unitsLabel = string.IsNullOrEmpty(units) ? variable : $"{variable} ({units})";
+            SetCell(ws, row, 21, $"FECHA: {endTime:dd/MM/yyyy}     {unitsLabel}", "Arial", 10, true, white, medGreen, ExcelHorizontalAlignment.Center);
+            row++;
+
+            // ── Row 5: Column headers ──
+            ws.Cells[row, 1].Value = "No.";
+            ws.Cells[row, 2].Value = "ESTACIÓN";
             for (int i = 1; i <= 24; i++)
-                ws.Cells[currentRow, col++].Value = startTime.AddHours(i).ToString("HH:mm");
-            ws.Cells[currentRow, col].Value = "TOTAL";
-            int totalCol = col;
-            
-            using (var range = ws.Cells[currentRow, 1, currentRow, col])
+            {
+                var ht = startTime.AddHours(i);
+                int h = ht.Hour == 0 ? 24 : ht.Hour;
+                ws.Cells[row, i + 2].Value = h;
+            }
+            ws.Cells[row, totalCol].Value = aggregateLabel;
+            using (var range = ws.Cells[row, 1, row, lastCol])
             {
                 range.Style.Font.Bold = true;
+                range.Style.Font.Name = "Arial";
+                range.Style.Font.Size = 10;
                 range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(59, 130, 246));
-                range.Style.Font.Color.SetColor(System.Drawing.Color.White);
+                range.Style.Fill.BackgroundColor.SetColor(lightGreen);
+                range.Style.Font.Color.SetColor(white);
                 range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                range.Style.Border.Bottom.Style = ExcelBorderStyle.Medium;
+                range.Style.Border.Bottom.Color.SetColor(darkGreen);
             }
-            ws.Cells[currentRow, totalCol].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(194, 147, 28));
-            currentRow++;
-            
-            if (grouped)
+            ws.Cells[row, totalCol].Style.Fill.BackgroundColor.SetColor(gold);
+            ws.Cells[row, totalCol].Style.Font.Color.SetColor(System.Drawing.Color.Black);
+            int headerRow = row;
+            row++;
+
+            // ── Data grouped by cuenca / subcuenca (siempre agrupado) ──
+            var cuencaGroups = report.Stations
+                .GroupBy(s => string.IsNullOrWhiteSpace(s.Cuenca) || s.Cuenca.Equals("Indefinida", StringComparison.OrdinalIgnoreCase)
+                    ? "OTRAS ESTACIONES" : s.Cuenca)
+                .OrderBy(g => g.Key == "OTRAS ESTACIONES" ? 1 : 0)
+                .ThenBy(g => g.Key);
+            int stationNum = 1;
+
+            foreach (var cuencaGroup in cuencaGroups)
             {
-                foreach (var cuencaGroup in report.Stations.GroupBy(s => s.Cuenca ?? "Sin Cuenca").OrderBy(g => g.Key))
+                string cuencaLabel = cuencaGroup.Key;
+
+                var subGroups = cuencaGroup
+                    .GroupBy(s => string.IsNullOrWhiteSpace(s.Subcuenca) || s.Subcuenca.Equals("Indefinida", StringComparison.OrdinalIgnoreCase)
+                        ? "" : s.Subcuenca)
+                    .OrderBy(g => g.Key);
+
+                foreach (var subGroup in subGroups)
                 {
-                    ws.Cells[currentRow, 1, currentRow, totalCol].Merge = true;
-                    ws.Cells[currentRow, 1].Value = cuencaGroup.Key;
-                    ws.Cells[currentRow, 1].Style.Font.Bold = true;
-                    ws.Cells[currentRow, 1].Style.Fill.PatternType = ExcelFillStyle.Solid;
-                    ws.Cells[currentRow, 1].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(30, 64, 175));
-                    ws.Cells[currentRow, 1].Style.Font.Color.SetColor(System.Drawing.Color.White);
-                    currentRow++;
-                    
-                    foreach (var subGroup in cuencaGroup.GroupBy(s => s.Subcuenca ?? "Sin Subcuenca").OrderBy(g => g.Key))
+                    // Header row
+                    string header = string.IsNullOrEmpty(subGroup.Key)
+                        ? $"CUENCA {cuencaLabel.ToUpper()}"
+                        : $"SUBCUENCA {subGroup.Key.ToUpper()} — {cuencaLabel.ToUpper()}";
+
+                    ws.Cells[row, 1, row, lastCol].Merge = true;
+                    SetCell(ws, row, 1, header, "Arial", 10, true,
+                        darkGreen, System.Drawing.Color.FromArgb(200, 230, 201), ExcelHorizontalAlignment.Left);
+                    row++;
+
+                    var stations = subGroup.OrderBy(s => s.StationName).ToList();
+
+                    double[] hourSums = new double[24];
+                    int[] hourCounts = new int[24];
+
+                    foreach (var station in stations)
                     {
-                        ws.Cells[currentRow, 1, currentRow, totalCol].Merge = true;
-                        ws.Cells[currentRow, 1].Value = "  " + subGroup.Key;
-                        ws.Cells[currentRow, 1].Style.Font.Bold = true;
-                        ws.Cells[currentRow, 1].Style.Fill.PatternType = ExcelFillStyle.Solid;
-                        ws.Cells[currentRow, 1].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(59, 130, 246));
-                        ws.Cells[currentRow, 1].Style.Font.Color.SetColor(System.Drawing.Color.White);
-                        currentRow++;
-                        foreach (var station in subGroup)
-                            AddGenericRow(ws, currentRow++, station, startTime, variable);
+                        bool isMaint = station.EnMantenimiento;
+                        ws.Cells[row, 1].Value = stationNum++;
+                        ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                        ws.Cells[row, 2].Value = isMaint ? $"{station.StationName} [MTTO]" : station.StationName;
+                        ws.Cells[row, 2].Style.Font.Size = 9;
+                        if (isMaint)
+                        {
+                            ws.Cells[row, 2].Style.Font.Color.SetColor(System.Drawing.Color.FromArgb(249, 115, 22));
+                            ws.Cells[row, 2].Style.Font.Italic = true;
+                        }
+
+                        var vmap = BuildValueMap(station);
+                        double rowSum = 0;
+                        int rowCount = 0;
+                        bool hasAny = false;
+
+                        for (int i = 1; i <= 24; i++)
+                        {
+                            var ht = startTime.AddHours(i);
+                            int col = i + 2;
+
+                            if (vmap.TryGetValue(DtKey(ht), out var hv) && hv.Value.HasValue)
+                            {
+                                double val = (double)hv.Value.Value;
+                                ws.Cells[row, col].Value = val;
+                                ws.Cells[row, col].Style.Numberformat.Format = fmt;
+                                ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+
+                                if (hv.IsValid && !isMaint)
+                                {
+                                    rowSum += val;
+                                    rowCount++;
+                                    hourSums[i - 1] += val;
+                                    hourCounts[i - 1]++;
+                                }
+                                else
+                                {
+                                    ws.Cells[row, col].Style.Font.Color.SetColor(System.Drawing.Color.Red);
+                                    ws.Cells[row, col].Style.Font.Strike = true;
+                                }
+                                hasAny = true;
+                            }
+                            else
+                            {
+                                ws.Cells[row, col].Value = "-";
+                                ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                                ws.Cells[row, col].Style.Font.Color.SetColor(System.Drawing.Color.Gray);
+                            }
+                        }
+
+                        // Aggregate column (TOTAL for accumulative, PROMEDIO for instantaneous)
+                        if (hasAny && rowCount > 0)
+                        {
+                            double aggregate = isAccumulative ? rowSum : rowSum / rowCount;
+                            ws.Cells[row, totalCol].Value = aggregate;
+                            ws.Cells[row, totalCol].Style.Numberformat.Format = fmt;
+                            ws.Cells[row, totalCol].Style.Font.Bold = true;
+                            ws.Cells[row, totalCol].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            ws.Cells[row, totalCol].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(255, 248, 225));
+                        }
+                        else
+                        {
+                            ws.Cells[row, totalCol].Value = "-";
+                            ws.Cells[row, totalCol].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                        }
+
+                        // Thin bottom border
+                        using (var range = ws.Cells[row, 1, row, lastCol])
+                        {
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Hair;
+                            range.Style.Border.Bottom.Color.SetColor(System.Drawing.Color.FromArgb(200, 200, 200));
+                        }
+                        row++;
                     }
+
+                    // ── Average row ──
+                    string avgLabel = isAccumulative
+                        ? "Precipitación media horaria"
+                        : $"Promedio horario — {displayName.ToLower()}";
+                    ws.Cells[row, 2].Value = avgLabel;
+                    ws.Cells[row, 2].Style.Font.Italic = true;
+                    ws.Cells[row, 2].Style.Font.Size = 9;
+                    using (var range = ws.Cells[row, 1, row, lastCol])
+                    {
+                        range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                        range.Style.Fill.BackgroundColor.SetColor(paleGreen);
+                        range.Style.Font.Bold = true;
+                        range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                        range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                        range.Style.Border.Top.Color.SetColor(medGreen);
+                        range.Style.Border.Bottom.Color.SetColor(medGreen);
+                    }
+                    double avgSum = 0;
+                    int avgCount = 0;
+                    for (int i = 0; i < 24; i++)
+                    {
+                        int col = i + hourStartCol;
+                        if (hourCounts[i] > 0)
+                        {
+                            double avg = hourSums[i] / hourCounts[i];
+                            ws.Cells[row, col].Value = avg;
+                            ws.Cells[row, col].Style.Numberformat.Format = fmt;
+                            ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            avgSum += avg;
+                            avgCount++;
+                        }
+                        else
+                        {
+                            ws.Cells[row, col].Value = "-";
+                            ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                        }
+                    }
+                    double finalAvg = isAccumulative ? avgSum : (avgCount > 0 ? avgSum / avgCount : 0);
+                    ws.Cells[row, totalCol].Value = finalAvg;
+                    ws.Cells[row, totalCol].Style.Numberformat.Format = fmt;
+                    ws.Cells[row, totalCol].Style.Font.Bold = true;
+                    row += 2; // blank separator
                 }
             }
-            else
-            {
-                foreach (var station in report.Stations)
-                    AddGenericRow(ws, currentRow++, station, startTime, variable);
-            }
-            
-            ws.Cells.AutoFitColumns();
-            ws.Column(1).Width = 30;
-            ws.View.FreezePanes(7, 2);
+
+            // ── Notes ──
+            ws.Cells[row, 1].Value = "NOTAS:";
+            ws.Cells[row, 1].Style.Font.Bold = true;
+            row++;
+            ws.Cells[row, 1, row, lastCol].Merge = true;
+            ws.Cells[row, 1].Value = "Generado automáticamente por PIH — Plataforma Integral Hidrometeorológica";
+            ws.Cells[row, 1].Style.Font.Italic = true;
+            ws.Cells[row, 1].Style.Font.Size = 8;
+            ws.Cells[row, 1].Style.Font.Color.SetColor(System.Drawing.Color.Gray);
+
+            // ── Column widths ──
+            ws.Column(1).Width = 5;
+            ws.Column(2).Width = 26;
+            for (int i = hourStartCol; i <= 26; i++) ws.Column(i).Width = 7;
+            ws.Column(totalCol).Width = 9;
+
+            // Freeze: row after headers, column after station name
+            ws.View.FreezePanes(headerRow + 1, 3);
+
+            // Print landscape
+            ws.PrinterSettings.Orientation = eOrientation.Landscape;
+            ws.PrinterSettings.FitToPage = true;
+            ws.PrinterSettings.FitToWidth = 1;
+            ws.PrinterSettings.FitToHeight = 0;
         }
         
         // ============================================================
@@ -647,60 +880,6 @@ namespace CloudStationWeb.Controllers
             cell.Style.Fill.BackgroundColor.SetColor(color);
         }
         
-        private void AddGenericRow(ExcelWorksheet ws, int row, HourlyReportData station, DateTime startTime, string variable)
-        {
-            int col = 1;
-            ws.Cells[row, col++].Value = station.StationName;
-            
-            var vmap = BuildValueMap(station);
-            bool isPrecip = variable.ToLower().Contains("precipitación");
-            string fmt = isPrecip ? "0.0" : "0.00";
-            double rowTotal = 0;
-            bool hasAny = false;
-            
-            for (int i = 1; i <= 24; i++)
-            {
-                var ht = startTime.AddHours(i);
-                if (vmap.TryGetValue(DtKey(ht), out var hv) && hv.Value.HasValue)
-                {
-                    double val = (double)hv.Value.Value;
-                    ws.Cells[row, col].Value = val;
-                    ws.Cells[row, col].Style.Numberformat.Format = fmt;
-                    if (!hv.IsValid)
-                    {
-                        ws.Cells[row, col].Style.Font.Color.SetColor(System.Drawing.Color.Red);
-                        ws.Cells[row, col].Style.Font.Strike = true;
-                    }
-                    else
-                    {
-                        rowTotal += val;
-                        if (isPrecip) ApplyPrecipColor(ws.Cells[row, col], val);
-                    }
-                    hasAny = true;
-                }
-                else
-                {
-                    ws.Cells[row, col].Value = "-";
-                    ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                }
-                col++;
-            }
-            
-            if (hasAny)
-            {
-                ws.Cells[row, col].Value = rowTotal;
-                ws.Cells[row, col].Style.Numberformat.Format = fmt;
-                ws.Cells[row, col].Style.Font.Bold = true;
-                ws.Cells[row, col].Style.Fill.PatternType = ExcelFillStyle.Solid;
-                ws.Cells[row, col].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(255, 248, 225));
-            }
-            else
-            {
-                ws.Cells[row, col].Value = "-";
-                ws.Cells[row, col].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-            }
-        }
-
         [HttpGet]
         public async Task<IActionResult> GetGroups()
         {

@@ -17,6 +17,7 @@ namespace CloudStationWeb.Models
         public bool IsCfe { get; set; }
         public bool IsGolfoCentro { get; set; }
         public bool HasCota { get; set; }
+        public bool EnMantenimiento { get; set; }
     }
 
     public class HistoricalMeasurement
@@ -43,9 +44,11 @@ namespace CloudStationWeb.Models
     {
         public string Code { get; set; } = "";
         public string Nombre { get; set; } = "";
+        public string Tipo { get; set; } = "cuenca";
         public string Semaforo { get; set; } = "verde";
         public float PromedioMm { get; set; }
         public float MaxMm { get; set; }
+        public float MinMm { get; set; }
         public int EstacionesConDato { get; set; }
         public int EstacionesTotal { get; set; }
     }

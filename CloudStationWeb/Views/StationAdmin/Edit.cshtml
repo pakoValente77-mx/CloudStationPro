@@ -365,7 +365,7 @@
                                     @if(s.Activo) { <div class="ui green horizontal label" id="lbl-estado-@s.Id">Activo</div> } else { <div class="ui grey horizontal label" id="lbl-estado-@s.Id">Inactivo</div>}
                                 </td>
                                 <td>
-                                    <button type="button" class="ui mini blue icon button" title="Editar Sensor" onclick="openSensorModal('@s.Id', '@s.TipoSensorNombre', '@s.NumeroSensor', '@(s.ValorMinimo.HasValue ? s.ValorMinimo.Value.ToString() : "")', '@(s.ValorMaximo.HasValue ? s.ValorMaximo.Value.ToString() : "")', '@s.Activo.ToString().ToLower()', '@(s.PeriodoMuestra ?? 0)', '@(s.TipoGrafica ?? "")', '@s.IdUnidadMedida')">
+                                    <button type="button" class="ui mini blue icon button" title="Editar Sensor" onclick="openSensorModal('@s.Id', '@s.TipoSensorNombre', '@s.NumeroSensor', '@(s.ValorMinimo.HasValue ? s.ValorMinimo.Value.ToString() : "")', '@(s.ValorMaximo.HasValue ? s.ValorMaximo.Value.ToString() : "")', '@(s.ValorMinError.HasValue ? s.ValorMinError.Value.ToString() : "")', '@(s.ValorMaxError.HasValue ? s.ValorMaxError.Value.ToString() : "")', '@s.Activo.ToString().ToLower()', '@(s.PeriodoMuestra ?? 0)', '@(s.TipoGrafica ?? "")', '@s.IdUnidadMedida')">
                                         <i class="edit icon"></i>
                                     </button>
                                     <button type="button" class="ui mini purple icon button" title="Configurar Umbrales de Gráfica" onclick="openUmbralesModal('@s.Id', '@s.TipoSensorNombre')">
@@ -468,6 +468,17 @@
                 <div class="field">
                     <label>Valor Máximo Físico</label>
                     <input type="number" step="any" id="modalSensorMax">
+                </div>
+            </div>
+
+            <div class="two fields">
+                <div class="field">
+                    <label>Valor Mínimo Error (Descarte)</label>
+                    <input type="number" step="any" id="modalSensorMinError" placeholder="Valores menores se descartan">
+                </div>
+                <div class="field">
+                    <label>Valor Máximo Error (Descarte)</label>
+                    <input type="number" step="any" id="modalSensorMaxError" placeholder="Valores mayores se descartan">
                 </div>
             </div>
 
@@ -684,11 +695,11 @@
                 attributionControl: false
             });
 
-            // Use the dark MapTiler / CartoDB variant to match the CFE theme
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap',
-                subdomains: 'abcd',
-                maxZoom: 19
+            // Google Maps Terrain (relieve topográfico)
+            L.tileLayer('http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+                attribution: '&copy; Google Maps',
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                maxZoom: 20
             }).addTo(map);
 
             var marker = L.marker([defaultLat, defaultLng], {
@@ -737,12 +748,14 @@
         });
 
         // --- SENSOR MODAL LOGIC ---
-        function openSensorModal(id, nombre, serie, min, max, activo, periodo, grafica, idUnidad) {
+        function openSensorModal(id, nombre, serie, min, max, minError, maxError, activo, periodo, grafica, idUnidad) {
             $('#modalSensorId').val(id);
             $('#modalSensorNombre').text(nombre);
             $('#modalSensorSerie').val(serie);
             $('#modalSensorMin').val(min);
             $('#modalSensorMax').val(max);
+            $('#modalSensorMinError').val(minError);
+            $('#modalSensorMaxError').val(maxError);
             $('#modalSensorPeriodo').val(periodo);
             
             // Set the dropdown value safely
@@ -765,6 +778,8 @@
                 NumeroSensor: $('#modalSensorSerie').val(),
                 ValorMinimo: $('#modalSensorMin').val() ? parseFloat($('#modalSensorMin').val()) : null,
                 ValorMaximo: $('#modalSensorMax').val() ? parseFloat($('#modalSensorMax').val()) : null,
+                ValorMinError: $('#modalSensorMinError').val() ? parseFloat($('#modalSensorMinError').val()) : null,
+                ValorMaxError: $('#modalSensorMaxError').val() ? parseFloat($('#modalSensorMaxError').val()) : null,
                 PeriodoMuestra: $('#modalSensorPeriodo').val() ? parseInt($('#modalSensorPeriodo').val()) : null,
                 TipoGrafica: $('#modalSensorGrafica').val(),
                 IdUnidadMedida: $('#modalSensorUnidad').val() || null,

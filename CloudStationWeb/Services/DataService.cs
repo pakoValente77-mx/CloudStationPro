@@ -83,6 +83,9 @@ namespace CloudStationWeb.Services
 
                 var cotasByStation = await LoadCotasForStationsAsync(stationIdsForCotas, sqlVariable, windowStartUtc, windowEndUtc);
 
+                // Load stations in active maintenance for data isolation
+                var maintenanceIds = await GetStationsInMaintenanceAsync();
+
                 // Unir datos y filtrar valores malos
                 var result = sqlStations.Select(s => {
                     string searchId = !string.IsNullOrEmpty(s.IdSatelital) 
@@ -124,6 +127,8 @@ namespace CloudStationWeb.Services
                         validatedValue = ApplyCota(validatedValue.Value, measureTs.Value, s.IdAsignado, cotasByStation);
                     }
 
+                    var isInMaint = !string.IsNullOrEmpty(s.IdAsignado) && maintenanceIds.Contains(s.IdAsignado);
+
                     return new StationMapData
                     {
                         Id = s.IdAsignado,
@@ -134,10 +139,11 @@ namespace CloudStationWeb.Services
                         EstatusColor = status?.color_estatus ?? "NEGRO",
                         UltimaTx = status?.fecha_ultima_tx,
                         VariableActual = variable,
-                        ValorActual = validatedValue,
+                        ValorActual = isInMaint ? null : validatedValue, // Anular valor si está en mantenimiento
                         IsCfe = s.Organismo != null && (s.Organismo == "Comisión Federal de Electricidad" || s.Organismo.Contains("CFE")),
                         IsGolfoCentro = s.Organismo != null && s.Organismo.Contains("GOLFO CENTRO", StringComparison.OrdinalIgnoreCase),
-                        HasCota = s.HasCota
+                        HasCota = s.HasCota,
+                        EnMantenimiento = isInMaint
                     };
                 }).ToList();
 
@@ -362,6 +368,9 @@ namespace CloudStationWeb.Services
                     startTimeUtc,
                     endTimeUtc);
 
+                // Load stations in active maintenance for flagging (historical range)
+                var maintenanceIds = await GetStationsInMaintenanceDuringAsync(startTimeCdmx, endTimeCdmx);
+
                 // Build response
                 var stations = sqlStations.Select(s => {
                     // Si la estación tiene IdSatelital oficial (GOES), lo usamos estrictamente.
@@ -402,6 +411,7 @@ namespace CloudStationWeb.Services
                         Cuenca = s.Cuenca,
                         Subcuenca = s.Subcuenca,
                         HasCota = s.HasCota,
+                        EnMantenimiento = !string.IsNullOrEmpty(s.IdAsignado) && maintenanceIds.Contains(s.IdAsignado),
                         HourlyValues = hourlyValues
                     };
                 }).ToList();
@@ -647,6 +657,9 @@ namespace CloudStationWeb.Services
             // Preload cotas for the requested range (if any)
             var cotasByStation = await LoadCotasForStationsAsync(request.StationIds, sqlVariable, request.StartDate, request.EndDate);
 
+            // Load stations in maintenance for data isolation (historical range)
+            var maintenanceIds = await GetStationsInMaintenanceDuringAsync(request.StartDate, request.EndDate);
+
             using (IDbConnection pgDb = new NpgsqlConnection(_postgresConn))
             {
                 // ... postgres logic ...
@@ -788,12 +801,21 @@ namespace CloudStationWeb.Services
                         }
                     }
 
+                    // Check if station is in maintenance
+                    bool isInMaint = maintenanceIds.Contains(station.IdAsignado);
+                    if (isInMaint)
+                    {
+                        foreach (var dp in dataPoints)
+                            dp.IsValid = false;
+                    }
+
                     series.Add(new TimeSeries
                     {
                         StationId = station.IdAsignado,
                         StationName = station.Nombre ?? "",
                         MinLimit = minLimit,
                         MaxLimit = maxLimit,
+                        EnMantenimiento = isInMaint,
                         DataPoints = dataPoints
                     });
                 }
@@ -1014,23 +1036,23 @@ namespace CloudStationWeb.Services
 
         public async Task<List<CuencaSemaforo>> GetCuencaSemaforoAsync(bool onlyCfe = true)
         {
-            // 1) Get station → cuenca mapping from SQL Server
+            // 1) Get station → cuenca mapping from SQL Server (respects onlyCfe filter)
             var stationMapping = await GetStationCuencaMappingAsync(onlyCfe);
             var stationIds = stationMapping.Select(s => s.IdAsignado).ToArray();
 
-            // 2) Read cuenca code/color from DB Cuenca table
+            // 1b) Exclude stations in active maintenance with data isolation
+            var maintenanceIds = await GetStationsInMaintenanceAsync();
+            stationMapping = stationMapping.Where(s => !maintenanceIds.Contains(s.IdAsignado)).ToList();
+
+            // 2) Read cuenca code from DB Cuenca table
             using IDbConnection sqlDb = new SqlConnection(_sqlServerConn);
-            var cuencaRows = await sqlDb.QueryAsync("SELECT Nombre, Codigo, Color FROM Cuenca WHERE Activo = 1");
-            var cuencaInfoByName = cuencaRows
+            var cuencaRows = await sqlDb.QueryAsync("SELECT Nombre, Codigo FROM Cuenca WHERE Activo = 1");
+            var cuencaCodeByName = cuencaRows
                 .GroupBy(r => ((string)r.Nombre).Trim(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
-                    g => new { Codigo = ((string)(g.First().Codigo ?? "")).Trim(), Color = ((string)(g.First().Color ?? "")).Trim() },
+                    g => ((string)(g.First().Codigo ?? "")).Trim(),
                     StringComparer.OrdinalIgnoreCase);
-
-            // Fallback: read CuencasKml config for legacy entries not yet in DB
-            var kmlConfig = _configuration.GetSection("CuencasKml").Get<List<CuencaKmlConfig>>() ?? new();
-            var configByCuenca = kmlConfig.ToDictionary(c => c.CuencaDb, c => c, StringComparer.OrdinalIgnoreCase);
 
             // 3) Get last hour precipitation per station from PostgreSQL
             using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
@@ -1084,22 +1106,12 @@ namespace CloudStationWeb.Services
                            : promedio < 15f  ? "naranja"
                            : "rojo";
 
-                // Use DB Cuenca table for code/label, fallback to appsettings config
-                string code = cuencaName;
-                string label = cuencaName;
-                if (cuencaInfoByName.TryGetValue(cuencaName, out var dbInfo) && !string.IsNullOrEmpty(dbInfo.Codigo))
-                {
-                    code = dbInfo.Codigo;
-                }
-                else if (configByCuenca.TryGetValue(cuencaName, out var cfg))
-                {
-                    code = cfg.Code;
-                    label = cfg.Label;
-                }
+                string code = cuencaCodeByName.TryGetValue(cuencaName, out var dbCode) && !string.IsNullOrEmpty(dbCode)
+                    ? dbCode : cuencaName;
 
                 result.Add(new CuencaSemaforo
                 {
-                    Code = code, Nombre = label, Semaforo = sem,
+                    Code = code, Nombre = cuencaName, Tipo = "cuenca", Semaforo = sem,
                     PromedioMm = promedio, MaxMm = maxMm,
                     EstacionesConDato = valores.Count, EstacionesTotal = totalEst
                 });
@@ -1121,6 +1133,9 @@ namespace CloudStationWeb.Services
                       WHERE e.Activo = 1 AND o.Nombre = 'Comisión Federal de Electricidad'");
                 stationIds = ids.Where(id => !string.IsNullOrEmpty(id)).Select(id => id.Trim()).ToArray();
             }
+
+            // Exclude stations in active maintenance with data isolation
+            var maintenanceIds = await GetStationsInMaintenanceAsync();
 
             using IDbConnection pgDb = new NpgsqlConnection(_postgresConn);
 
@@ -1147,7 +1162,9 @@ namespace CloudStationWeb.Services
                 DuracionMinutos = r.duracion_minutos,
                 Estado = r.estado,
                 Sospechoso = r.sospechoso
-            }).ToList();
+            })
+            .Where(e => !maintenanceIds.Contains(e.IdAsignado ?? ""))
+            .ToList();
         }
 
         public async Task<List<HistoricalMeasurement>> GetStationHyetographAsync(string stationId, int hours = 24)
@@ -1247,6 +1264,48 @@ namespace CloudStationWeb.Services
                 ConDato = precipRows.ContainsKey(s.IdAsignado),
                 Sospechoso = suspiciousIds.Contains(s.IdAsignado)
             }).OrderByDescending(s => s.PrecipMm).ToList();
+        }
+
+        /// <summary>
+        /// Returns the set of IdAsignado for stations currently in active maintenance with data isolation.
+        /// </summary>
+        public async Task<HashSet<string>> GetStationsInMaintenanceAsync()
+        {
+            using (IDbConnection sqlDb = new SqlConnection(_sqlServerConn))
+            {
+                var ids = await sqlDb.QueryAsync<string>(@"
+                    SELECT DISTINCT e.IdAsignado
+                    FROM MantenimientoOrden o
+                    INNER JOIN Estacion e ON o.IdEstacion = e.Id
+                    WHERE o.AislarDatos = 1 
+                    AND o.Estado IN ('En Proceso', 'Programado')
+                    AND o.FechaInicio <= GETDATE()
+                    AND (o.FechaFin IS NULL OR o.FechaFin >= GETDATE())
+                    AND e.IdAsignado IS NOT NULL");
+                return ids.Where(id => !string.IsNullOrEmpty(id)).ToHashSet();
+            }
+        }
+
+        /// <summary>
+        /// Returns the set of IdAsignado for stations that had maintenance with data isolation
+        /// overlapping the specified date range (includes completed maintenance).
+        /// </summary>
+        public async Task<HashSet<string>> GetStationsInMaintenanceDuringAsync(DateTime rangeStart, DateTime rangeEnd)
+        {
+            using (IDbConnection sqlDb = new SqlConnection(_sqlServerConn))
+            {
+                var ids = await sqlDb.QueryAsync<string>(@"
+                    SELECT DISTINCT e.IdAsignado
+                    FROM MantenimientoOrden o
+                    INNER JOIN Estacion e ON o.IdEstacion = e.Id
+                    WHERE o.AislarDatos = 1 
+                    AND o.Estado IN ('En Proceso', 'Programado', 'Completado')
+                    AND o.FechaInicio <= @RangeEnd
+                    AND (o.FechaFin IS NULL OR o.FechaFin >= @RangeStart)
+                    AND e.IdAsignado IS NOT NULL",
+                    new { RangeStart = rangeStart, RangeEnd = rangeEnd });
+                return ids.Where(id => !string.IsNullOrEmpty(id)).ToHashSet();
+            }
         }
     }
 }
