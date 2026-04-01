@@ -170,6 +170,71 @@ namespace CloudStationWeb.Services
             }
         }
 
+        public async Task<object?> GetStationBannerAsync(string stationId)
+        {
+            string? dcpId = null;
+            string nombre = stationId;
+
+            // 1. Obtener nombre e IdSatelital desde SQL Server
+            using (IDbConnection sqlDb = new SqlConnection(_sqlServerConn))
+            {
+                var info = await sqlDb.QueryFirstOrDefaultAsync<dynamic>(
+                    @"SELECT TOP 1 e.Nombre, g.IdSatelital 
+                      FROM Estacion e
+                      LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                      WHERE e.IdAsignado = @Id", new { Id = stationId });
+
+                if (info != null)
+                {
+                    nombre = info.Nombre ?? stationId;
+                    dcpId = info.IdSatelital;
+                }
+            }
+
+            // 2. Fallback dcpId
+            using (IDbConnection pgDb = new NpgsqlConnection(_postgresConn))
+            {
+                if (string.IsNullOrEmpty(dcpId))
+                {
+                    dcpId = await pgDb.QueryFirstOrDefaultAsync<string>(
+                        "SELECT dcp_id FROM public.resumen_horario WHERE id_asignado = @Id LIMIT 1", new { Id = stationId });
+                }
+                if (string.IsNullOrEmpty(dcpId)) dcpId = stationId;
+
+                // 3. Obtener todas las variables actuales
+                var rows = (await pgDb.QueryAsync<dynamic>(
+                    @"SELECT variable, valor, ts 
+                      FROM public.ultimas_mediciones 
+                      WHERE dcp_id = @DcpId
+                      ORDER BY variable", new { DcpId = dcpId })).ToList();
+
+                DateTime? ultimaTx = rows.Any() ? rows.Max(r => (DateTime?)r.ts) : null;
+
+                var variables = rows.Select(r => new
+                {
+                    variable = (string)r.variable,
+                    valor = r.valor != null ? (double?)Convert.ToDouble(r.valor) : null,
+                    unidad = GetUnidad((string)r.variable)
+                }).ToList();
+
+                return new { nombre, ultimaTx, variables };
+            }
+        }
+
+        private static string GetUnidad(string variable)
+        {
+            if (variable.Contains("precipitaci")) return "mm/h";
+            if (variable.Contains("temperat")) return "°C";
+            if (variable.Contains("humedad")) return "%";
+            if (variable.Contains("velocidad") && variable.Contains("viento")) return "m/s";
+            if (variable.Contains("direcci") && variable.Contains("viento")) return "°";
+            if (variable.Contains("presi")) return "hPa";
+            if (variable.Contains("radiaci")) return "W/m²";
+            if (variable.Contains("batería") || variable.Contains("bateria")) return "V";
+            if (variable.Contains("nivel") || variable.Contains("cota")) return "msnm";
+            return variable;
+        }
+
         public async Task<List<HistoricalMeasurement>> GetStationHistoryAsync(string stationId, string variable, int hours = 6)
         {
             string? dcpId = null;

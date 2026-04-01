@@ -1,0 +1,352 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Solicitar Acceso";
+    var organismos = ViewBag.Organismos as List<dynamic> ?? new List<dynamic>();
+    var centrosTrabajo = ViewBag.CentrosTrabajo as List<CloudStationWeb.Models.CentroTrabajo> ?? new List<CloudStationWeb.Models.CentroTrabajo>();
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PIH - Solicitar Acceso</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2" />
+    <link rel="stylesheet" href="/lib/fomantic-ui/dist/semantic.min.css">
+    <link href="/lib/fonts/inter/inter.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0b0e14 0%, #1a1f2e 50%, #0d1117 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+            animation: bgPulse 8s ease-in-out infinite alternate;
+        }
+
+        @@keyframes bgPulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .register-container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+        }
+
+        .register-card {
+            background: rgba(20, 24, 33, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 44px 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            animation: cardAppear 0.6s ease-out;
+        }
+
+        @@keyframes cardAppear {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .logo-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo-icon {
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+        }
+
+        .logo-icon i { font-size: 24px; color: #fff; }
+
+        .logo-title { font-size: 20px; font-weight: 700; color: #ffffff; }
+        .logo-subtitle { font-size: 13px; color: rgba(255, 255, 255, 0.45); margin-top: 4px; }
+
+        .form-group { margin-bottom: 18px; }
+        .form-group label {
+            display: block; font-size: 13px; font-weight: 500;
+            color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 11px 16px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        .form-group select option {
+            background: #1a1f2e;
+            color: #fff;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 70px;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            border-color: rgba(245, 158, 11, 0.6);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn-register {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+            margin-top: 6px;
+        }
+
+        .btn-register:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            color: #fca5a5;
+            font-size: 13px;
+            animation: shake 0.4s ease-out;
+        }
+
+        @@keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .info-box i { color: #3b82f6; margin-right: 6px; }
+
+        .policy-hint {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.35);
+            margin-top: 4px;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 13px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: #f59e0b; }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-card">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i class="user plus icon"></i>
+                </div>
+                <div class="logo-title">Solicitar Acceso</div>
+                <div class="logo-subtitle">Plataforma Integral Hidrometeorológica</div>
+            </div>
+
+            @if (!ViewContext.ModelState.IsValid)
+            {
+                <div class="error-message">
+                    @foreach (var error in ViewContext.ModelState.Values.SelectMany(v => v.Errors))
+                    {
+                        <div>@error.ErrorMessage</div>
+                    }
+                </div>
+            }
+
+            <div class="info-box">
+                <i class="info circle icon"></i>
+                Su solicitud será revisada por un administrador. Recibirá acceso una vez aprobada.
+            </div>
+
+            <form method="post" asp-action="Register" asp-controller="Account">
+                @Html.AntiForgeryToken()
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Usuario *</label>
+                        <input type="text" name="username" placeholder="Nombre de usuario" required autocomplete="username" />
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre Completo *</label>
+                        <input type="text" name="fullName" placeholder="Nombre y apellidos" required />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Correo Electrónico</label>
+                    <input type="email" name="email" placeholder="correo@ejemplo.com" autocomplete="email" />
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contraseña *</label>
+                        <input type="password" name="password" placeholder="Contraseña" required autocomplete="new-password" />
+                    </div>
+                    <div class="form-group">
+                        <label>Confirmar *</label>
+                        <input type="password" name="confirmPassword" placeholder="Confirmar" required autocomplete="new-password" />
+                    </div>
+                </div>
+                <div class="policy-hint">Mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial.</div>
+
+                <!-- Toggle CFE / Externo -->
+                <div style="margin-top: 18px; margin-bottom: 14px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: rgba(255,255,255,0.85);">
+                        <input type="checkbox" id="chkCFE" name="esTrabajadorCFE" value="true" checked
+                               onchange="toggleCFE()" 
+                               style="width: 18px; height: 18px; accent-color: #f59e0b; cursor: pointer;" />
+                        <i class="building icon" style="color: #f59e0b;"></i>
+                        Soy trabajador de CFE
+                    </label>
+                </div>
+
+                <!-- Sección CFE -->
+                <div id="seccionCFE">
+                    <div class="form-group">
+                        <label>Organismo</label>
+                        <select name="organismoId">
+                            <option value="">— Seleccionar —</option>
+                            @foreach (var org in organismos)
+                            {
+                                <option value="@org.Id">@org.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Centro de Trabajo</label>
+                        <select name="centroTrabajoId">
+                            <option value="">— Seleccionar —</option>
+                            @foreach (var ct in centrosTrabajo)
+                            {
+                                <option value="@ct.Id">@ct.Nombre</option>
+                            }
+                        </select>
+                        <div style="font-size: 11px; color: rgba(245,158,11,0.7); margin-top: 6px;">
+                            <i class="info circle icon" style="font-size: 11px;"></i>
+                            Si su centro de trabajo no aparece en la lista, indíquelo en el motivo de la solicitud.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección Externo -->
+                <div id="seccionExterno" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Empresa</label>
+                            <input type="text" name="empresaExterna" id="inputEmpresa" placeholder="Nombre de la empresa" />
+                        </div>
+                        <div class="form-group">
+                            <label>Departamento</label>
+                            <input type="text" name="departamentoExterno" id="inputDepto" placeholder="Departamento o área" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Motivo de la solicitud</label>
+                    <textarea name="registrationNote" placeholder="Describa brevemente por qué necesita acceso al sistema (área, función, etc.)"></textarea>
+                </div>
+
+                <button type="submit" class="btn-register">
+                    <i class="paper plane icon"></i> Enviar Solicitud
+                </button>
+            </form>
+
+            <a href="@Url.Action("Login", "Account")" class="back-link">
+                <i class="arrow left icon"></i> Volver al inicio de sesión
+            </a>
+
+            <div class="footer-text">
+                © 2026 Plataforma Integral Hidrometeorológica • CFE
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleCFE() {
+            var isCFE = document.getElementById('chkCFE').checked;
+            document.getElementById('seccionCFE').style.display = isCFE ? '' : 'none';
+            document.getElementById('seccionExterno').style.display = isCFE ? 'none' : '';
+            if (isCFE) {
+                document.getElementById('inputEmpresa').value = '';
+                document.getElementById('inputDepto').value = '';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+@{
+    ViewData["Title"] = "Alertas Tempranas";
+    Layout = "_Layout";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="ui container" style="margin-top:80px; padding-bottom:40px;">
+    <h2 class="ui inverted header">
+        <i class="exclamation triangle icon"></i>
+        <div class="content">
+            Sistema de Alertas Tempranas
+            <div class="sub header">Monitoreo automático de umbrales y envío de alertas</div>
+        </div>
+    </h2>
+
+    <!-- Stats Cards -->
+    <div class="ui four stackable cards" id="statsCards">
+        <div class="ui card" style="background:#1a1a2e;">
+            <div class="content">
+                <div class="header" style="color:#81c784;"><i class="shield icon"></i> Umbrales Activos</div>
+                <div class="description" style="font-size:2em; color:#fff;" id="statUmbrales">-</div>
+            </div>
+        </div>
+        <div class="ui card" style="background:#1a1a2e;">
+            <div class="content">
+                <div class="header" style="color:#64b5f6;"><i class="clock icon"></i> Últimas 24h</div>
+                <div class="description" style="font-size:2em; color:#fff;" id="stat24h">-</div>
+            </div>
+        </div>
+        <div class="ui card" style="background:#1a1a2e;">
+            <div class="content">
+                <div class="header" style="color:#fbbf24;"><i class="calendar icon"></i> Últimos 7 días</div>
+                <div class="description" style="font-size:2em; color:#fff;" id="stat7d">-</div>
+            </div>
+        </div>
+        <div class="ui card" style="background:#1a1a2e;">
+            <div class="content">
+                <div class="header" style="color:#e74c3c;"><i class="exclamation icon"></i> Críticas (7d)</div>
+                <div class="description" style="font-size:2em; color:#fff;" id="statCriticas">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="ui top attached inverted tabular menu" style="margin-top:20px;">
+        <a class="item active" data-tab="config"><i class="cog icon"></i> Configuración</a>
+        <a class="item" data-tab="thresholds"><i class="sliders horizontal icon"></i> Umbrales Monitoreados</a>
+        <a class="item" data-tab="history"><i class="history icon"></i> Historial de Alertas</a>
+    </div>
+
+    <!-- Tab: Configuración -->
+    <div class="ui bottom attached inverted tab segment active" data-tab="config">
+        <div class="ui inverted form">
+            <div class="field">
+                <div class="ui toggle checkbox" id="enableToggle">
+                    <input type="checkbox" id="cfgEnabled" @(ViewBag.Enabled ? "checked" : "")>
+                    <label style="color:#fff;">Servicio de alertas automáticas <strong>activado</strong></label>
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Intervalo de evaluación (segundos)</label>
+                    <input type="number" id="cfgInterval" value="@ViewBag.IntervalSeconds" min="30" step="30">
+                    <small style="color:#888;">Cada cuánto se revisan los sensores vs umbrales. Mínimo 30s.</small>
+                </div>
+                <div class="field">
+                    <label>Periodo de cooldown (minutos)</label>
+                    <input type="number" id="cfgCooldown" value="@ViewBag.CooldownMinutes" min="1">
+                    <small style="color:#888;">No re-alertar el mismo umbral dentro de este periodo.</small>
+                </div>
+            </div>
+            <button type="button" class="ui purple button" onclick="saveConfig()">
+                <i class="save icon"></i> Guardar Configuración
+            </button>
+            <div id="configResult" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Umbrales -->
+    <div class="ui bottom attached inverted tab segment" data-tab="thresholds">
+        <p style="color:#aaa;">Estos umbrales se configuran desde <a href="@Url.Action("Index", "StationAdmin")" style="color:#ce93d8;">Administración → Estaciones</a> en la sección de cada sensor.</p>
+        <table class="ui inverted compact striped table" id="thresholdsTable">
+            <thead>
+                <tr>
+                    <th>Estación</th>
+                    <th>Sensor</th>
+                    <th>Variable</th>
+                    <th>Umbral</th>
+                    <th>Operador</th>
+                    <th>Nombre</th>
+                    <th>Periodo (min)</th>
+                    <th>DCP ID</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Tab: Historial -->
+    <div class="ui bottom attached inverted tab segment" data-tab="history">
+        <div class="ui inverted form" style="margin-bottom:12px;">
+            <div class="inline field">
+                <label>Últimos</label>
+                <select id="historyDays" class="ui dropdown" onchange="loadHistory()">
+                    <option value="1">24 horas</option>
+                    <option value="3">3 días</option>
+                    <option value="7" selected>7 días</option>
+                    <option value="30">30 días</option>
+                </select>
+            </div>
+        </div>
+        <table class="ui inverted compact striped table" id="historyTable">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Nivel</th>
+                    <th>Estación</th>
+                    <th>Variable</th>
+                    <th>Valor</th>
+                    <th>Umbral</th>
+                    <th>Nombre</th>
+                    <th>Enviada</th>
+                    <th>Correos</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    $(document).ready(function () {
+        $('.tabular.menu .item').tab();
+        $('#enableToggle').checkbox();
+        loadStats();
+        loadThresholds();
+        loadHistory();
+    });
+
+    function loadStats() {
+        $.get('@Url.Action("GetStats", "EarlyWarning")', function (d) {
+            $('#statUmbrales').text(d.umbralesActivos);
+            $('#stat24h').text(d.last24h);
+            $('#stat7d').text(d.last7d);
+            $('#statCriticas').text(d.criticasLast7d);
+        });
+    }
+
+    function loadThresholds() {
+        $.get('@Url.Action("GetActiveThresholds", "EarlyWarning")', function (data) {
+            var tbody = $('#thresholdsTable tbody');
+            tbody.empty();
+            if (data.length === 0) {
+                tbody.append('<tr><td colspan="8" style="text-align:center; color:#888;">No hay umbrales activos configurados</td></tr>');
+                return;
+            }
+            data.forEach(function (t) {
+                tbody.append('<tr>' +
+                    '<td>' + (t.nombreEstacion || '') + '</td>' +
+                    '<td>' + (t.nombreSensor || '') + '</td>' +
+                    '<td>' + (t.variable || '') + '</td>' +
+                    '<td><strong>' + (t.umbral || '-') + '</strong></td>' +
+                    '<td><code>' + (t.operador || '>=') + '</code></td>' +
+                    '<td>' + (t.nombre || '') + '</td>' +
+                    '<td>' + (t.periodo || 60) + '</td>' +
+                    '<td><code style="font-size:0.85em;">' + (t.dcpId || '') + '</code></td>' +
+                    '</tr>');
+            });
+        });
+    }
+
+    function loadHistory() {
+        var days = $('#historyDays').val();
+        $.get('@Url.Action("GetAlertHistory", "EarlyWarning")?days=' + days, function (data) {
+            var tbody = $('#historyTable tbody');
+            tbody.empty();
+            if (data.length === 0) {
+                tbody.append('<tr><td colspan="9" style="text-align:center; color:#888;">Sin alertas en este periodo</td></tr>');
+                return;
+            }
+            data.forEach(function (a) {
+                var lvlColor = a.nivel === 'CRÍTICA' ? '#e74c3c' : '#f39c12';
+                var fecha = a.fechaAlerta ? new Date(a.fechaAlerta).toLocaleString('es-MX') : '';
+                tbody.append('<tr>' +
+                    '<td>' + fecha + '</td>' +
+                    '<td><span style="color:' + lvlColor + '; font-weight:bold;">' + (a.nivel || '') + '</span></td>' +
+                    '<td>' + (a.nombreEstacion || '') + '</td>' +
+                    '<td>' + (a.variable || '') + '</td>' +
+                    '<td><strong>' + a.valorMedido + '</strong></td>' +
+                    '<td>' + (a.operador || '>=') + ' ' + a.valorUmbral + '</td>' +
+                    '<td>' + (a.nombreUmbral || '') + '</td>' +
+                    '<td>' + (a.enviada ? '<i class="green check icon"></i>' : '<i class="red times icon"></i>') + '</td>' +
+                    '<td>' + a.correosEnviados + '</td>' +
+                    '</tr>');
+            });
+        });
+    }
+
+    function saveConfig() {
+        var data = {
+            enabled: $('#cfgEnabled').is(':checked'),
+            intervalSeconds: parseInt($('#cfgInterval').val()),
+            cooldownMinutes: parseInt($('#cfgCooldown').val())
+        };
+        $.ajax({
+            url: '@Url.Action("UpdateConfig", "EarlyWarning")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+            success: function (r) {
+                if (r.success) {
+                    $('#configResult').html('<div class="ui success message"><i class="check icon"></i> Configuración guardada</div>');
+                }
+            }
+        });
+    }
+</script>
+}

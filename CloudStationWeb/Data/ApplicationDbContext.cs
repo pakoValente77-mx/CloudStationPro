@@ -15,6 +15,8 @@ namespace CloudStationWeb.Data
         public DbSet<DocumentEntry> DocumentEntries { get; set; } = null!;
         public DbSet<DocumentAuditLog> DocumentAuditLogs { get; set; } = null!;
         public DbSet<UserProductPermission> UserProductPermissions { get; set; } = null!;
+        public DbSet<LoginAudit> LoginAudits { get; set; } = null!;
+        public DbSet<CentroTrabajo> CentrosTrabajo { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -28,6 +30,10 @@ namespace CloudStationWeb.Data
             builder.Entity<ApplicationUser>(entity =>
             {
                 entity.Property(u => u.FullName).HasMaxLength(200);
+                entity.HasOne(u => u.CentroTrabajo)
+                      .WithMany()
+                      .HasForeignKey(u => u.CentroTrabajoId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             builder.Entity<DocumentProduct>(entity =>
@@ -45,6 +51,13 @@ namespace CloudStationWeb.Data
             {
                 entity.HasIndex(l => l.Timestamp);
                 entity.HasIndex(l => l.ProductId);
+            });
+
+            builder.Entity<LoginAudit>(entity =>
+            {
+                entity.HasIndex(l => l.Timestamp);
+                entity.HasIndex(l => l.UserId);
+                entity.HasIndex(l => l.UserName);
             });
         }
     }

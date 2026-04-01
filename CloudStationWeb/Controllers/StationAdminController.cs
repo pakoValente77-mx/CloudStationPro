@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace CloudStationWeb.Controllers
 {
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = "SuperAdmin,Administrador")]
     public class StationAdminController : Controller
     {
         private readonly string? _sqlServerConn;

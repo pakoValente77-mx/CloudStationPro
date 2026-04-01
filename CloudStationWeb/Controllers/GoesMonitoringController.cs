@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using CloudStationWeb.Models;
 using CloudStationWeb.Data;
 using Npgsql;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CloudStationWeb.Controllers
 {
+    [Authorize]
     public class GoesMonitoringController : Controller
     {
         private readonly IConfiguration _configuration;
@@ -44,6 +46,7 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> ListTables()
         {
             try
@@ -74,20 +77,34 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> DescribeTable(string tableName = "bitacora_goes")
         {
             try
             {
+                // Whitelist: only allow known safe table names to prevent SQL injection
+                var allowedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "bitacora_goes", "mediciones", "ultimas_mediciones",
+                    "lluvia_acumulada", "pronostico_lluvia", "funvasos_horario"
+                };
+
+                if (!allowedTables.Contains(tableName))
+                {
+                    return Json(new { error = "Tabla no permitida." });
+                }
+
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
 
                 var columns = new List<object>();
-                using (var cmd = new NpgsqlCommand($@"
+                using (var cmd = new NpgsqlCommand(@"
                     SELECT column_name, data_type, is_nullable
                     FROM information_schema.columns 
-                    WHERE table_name = '{tableName}' 
+                    WHERE table_name = @tbl 
                     ORDER BY ordinal_position", conn))
                 {
+                    cmd.Parameters.AddWithValue("tbl", tableName);
                     using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
                     {
@@ -99,7 +116,7 @@ namespace CloudStationWeb.Controllers
                     }
                 }
 
-                // Get sample row
+                // Get sample row — table name is safe (whitelisted above)
                 object? sampleRow = null;
                 using (var cmd = new NpgsqlCommand($"SELECT * FROM {tableName} LIMIT 1", conn))
                 {
@@ -115,7 +132,7 @@ namespace CloudStationWeb.Controllers
                     }
                 }
 
-                // Get row count
+                // Get row count — table name is safe (whitelisted above)
                 long rowCount = 0;
                 using (var cmd = new NpgsqlCommand($"SELECT COUNT(*) FROM {tableName}", conn))
                 {

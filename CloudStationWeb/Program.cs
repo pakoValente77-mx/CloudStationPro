@@ -106,9 +106,14 @@ if (!string.IsNullOrEmpty(msSection["ClientId"]))
 // Add services to the container
 builder.Services.AddHttpClient();
 builder.Services.AddControllersWithViews();
+builder.Services.AddSignalR();
 builder.Services.AddScoped<CloudStationWeb.Services.DataService>();
 builder.Services.AddScoped<CloudStationWeb.Services.FunVasosService>();
+builder.Services.AddScoped<CloudStationWeb.Services.HydroForecastService>();
 builder.Services.AddScoped<CloudStationWeb.Services.IEmailSender, CloudStationWeb.Services.SmtpEmailSender>();
+builder.Services.AddSingleton<CloudStationWeb.Services.PushNotificationService>();
+builder.Services.AddSingleton<CloudStationWeb.Services.EarlyWarningService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudStationWeb.Services.EarlyWarningService>());
 
 // CORS for API consumers (mobile, desktop apps)
 builder.Services.AddCors(options =>
@@ -160,5 +165,7 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Map}/{action=Index}/{id?}");
+
+app.MapHub<CloudStationWeb.Hubs.ChatHub>("/hubs/chat");
 
 app.Run();

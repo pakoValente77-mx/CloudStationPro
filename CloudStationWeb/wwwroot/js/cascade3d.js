@@ -14,24 +14,25 @@
     var _turbineMeshes = [];
     var _ambientParticles;
     var _glowLights = [];
+    var _sparkleSystems = [];
     var _animId = null;
     var _initialized = false;
     var _disposed = false;
     var _animState = 'playing';
 
     /* ====== CAMERA ====== */
-    var _camAngle = 0;
-    var _camRadius = 55;
-    var _camHeight = 22;
+    var _camAngle = Math.PI * 0.18;
+    var _camRadius = 42;
+    var _camHeight = 24;
     var _isMouseDown = false;
     var _prevMouseX = 0;
     var _prevMouseY = 0;
     var _autoRotate = false;
     var _autoRotateTimer = null;
-    var _lookAtX = 0, _lookAtY = 0, _lookAtZ = 0;
+    var _lookAtX = 3, _lookAtY = -1, _lookAtZ = 0;
 
     /* ====== PANORAMIC INTRO ====== */
-    var _introActive = true;
+    var _introActive = false;
     var _introDuration = 25.0;
     var _introElapsed = 0;
     var _introStartAngle = Math.PI * 0.03;
@@ -64,7 +65,7 @@
         'Penitas': 4
     };
 
-    var DAM_W = 5.5, DAM_D = 4.0, WALL_H = 7.0, WALL_T = 0.25;
+    var DAM_W = 5.5, DAM_D = 4.0, WALL_H = 3.0, WALL_T = 0.25;
     var SPACING = 10.5, STEP = 1.8;
     var COLORS = [0x00e676, 0x00bcd4, 0x2196f3, 0xff7043, 0xffc107];
     var RIVER_COLOR = 0x0288d1;
@@ -108,14 +109,8 @@
         _camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 400);
         _clock = new THREE.Clock();
 
-        _introActive = true;
+        _introActive = false;
         _introElapsed = 0;
-        _camAngle = _introStartAngle;
-        _camRadius = _introStartRadius;
-        _camHeight = _introStartHeight;
-        _lookAtX = _introStartLookX;
-        _lookAtY = _introStartLookY;
-        _lookAtZ = 0;
         _autoRotate = false;
         _animState = 'playing';
         _updateCamera();
@@ -135,6 +130,7 @@
         _buildFloor(sx, n + 1);
         _buildStars();
         _buildAmbient();
+        _sparkleSystems = [];
 
         for (var i = 0; i < n; i++) {
             var d = damsData[i];
@@ -143,6 +139,7 @@
             var fp = fillPct(d.key, d.currentElev);
             var col = COLORS[i % COLORS.length];
             _buildDam(x, by, fp, col, d);
+            _buildSparkles(x, by, fp, col);
 
             var totalU = DAM_UNITS[d.key] || 0;
             var activeU = d.activeUnits || 0;
@@ -204,17 +201,147 @@
         }
     };
 
+    /* ====== PUBLIC: EXPORT IMAGE ====== */
+    window.exportCascade3DImage = function () {
+        if (!_renderer || !_scene || !_camera) return;
+
+        // Render one frame to ensure canvas is fresh
+        _renderer.render(_scene, _camera);
+
+        var srcCanvas = _renderer.domElement;
+        var w = 1920, h = 1080;
+
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+
+        // Dark gradient background
+        var grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, '#0a1628');
+        grad.addColorStop(1, '#040c14');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw 3D scene scaled to fill
+        ctx.drawImage(srcCanvas, 0, 0, w, h);
+
+        // Semi-transparent header bar
+        var headerGrad = ctx.createLinearGradient(0, 0, 0, 80);
+        headerGrad.addColorStop(0, 'rgba(4,12,20,0.92)');
+        headerGrad.addColorStop(1, 'rgba(4,12,20,0)');
+        ctx.fillStyle = headerGrad;
+        ctx.fillRect(0, 0, w, 80);
+
+        // CFE Logo/Title
+        ctx.font = 'bold 26px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#00e676';
+        ctx.textAlign = 'left';
+        ctx.shadowColor = 'rgba(0,230,118,0.5)';
+        ctx.shadowBlur = 12;
+        ctx.fillText('⚡ Sistema Hidroeléctrico Grijalva', 30, 42);
+        ctx.shadowBlur = 0;
+
+        // Subtitle
+        ctx.font = '600 15px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#4fc3f7';
+        ctx.fillText('Cascada en Tiempo Real — Comisión Federal de Electricidad', 30, 66);
+
+        // Timestamp
+        var ts = document.getElementById('c3dTimestamp');
+        var tsText = ts ? ts.textContent.trim() : '';
+        if (tsText) {
+            ctx.font = '13px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = '#80cbc4';
+            ctx.textAlign = 'right';
+            ctx.fillText(tsText, w - 30, 42);
+        }
+
+        // Date
+        var now = new Date();
+        var dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        ctx.font = '12px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#90a4ae';
+        ctx.textAlign = 'right';
+        ctx.fillText(dateStr, w - 30, 62);
+
+        // Bottom banner with dam data
+        var bannerH = 110;
+        var bannerY = h - bannerH;
+        var bannerGrad = ctx.createLinearGradient(0, bannerY, 0, h);
+        bannerGrad.addColorStop(0, 'rgba(4,12,20,0)');
+        bannerGrad.addColorStop(0.3, 'rgba(4,12,20,0.88)');
+        bannerGrad.addColorStop(1, 'rgba(4,12,20,0.95)');
+        ctx.fillStyle = bannerGrad;
+        ctx.fillRect(0, bannerY, w, bannerH);
+
+        // Thin accent line
+        ctx.strokeStyle = 'rgba(0,230,118,0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(30, bannerY + 30);
+        ctx.lineTo(w - 30, bannerY + 30);
+        ctx.stroke();
+
+        // Read banner items from DOM
+        var items = document.querySelectorAll('.c3d-banner-item');
+        var colW = (w - 60) / Math.max(items.length, 1);
+        ctx.textAlign = 'center';
+
+        items.forEach(function (item, i) {
+            var cx = 30 + colW * i + colW / 2;
+
+            // Dam name
+            var nameEl = item.querySelector('.c3d-banner-name');
+            var isGulf = item.classList.contains('c3d-banner-gulf');
+            ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = isGulf ? '#4fc3f7' : '#00e676';
+            ctx.shadowColor = isGulf ? 'rgba(79,195,247,0.4)' : 'rgba(0,230,118,0.4)';
+            ctx.shadowBlur = 6;
+            ctx.fillText(nameEl ? nameEl.textContent.trim() : '', cx, bannerY + 48);
+            ctx.shadowBlur = 0;
+
+            // Data rows
+            var rows = item.querySelectorAll('.c3d-banner-row');
+            var ry = bannerY + 66;
+            ctx.font = '12px "Segoe UI", Arial, sans-serif';
+            rows.forEach(function (row) {
+                var label = row.querySelector('.c3d-banner-label');
+                var val = row.querySelector('.c3d-banner-val');
+                var text = '';
+                if (label && val) {
+                    text = label.textContent.trim() + ' ' + val.textContent.trim();
+                } else if (label) {
+                    text = label.textContent.trim();
+                }
+                ctx.fillStyle = '#b0bec5';
+                ctx.fillText(text, cx, ry);
+                ry += 16;
+            });
+        });
+
+        // Watermark
+        ctx.font = '11px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.textAlign = 'right';
+        ctx.fillText('CloudStation — Subgerencia Técnica Grijalva', w - 20, h - 8);
+
+        // Download
+        var link = document.createElement('a');
+        link.download = 'Cascada_Grijalva_' + now.toISOString().slice(0, 10) + '.png';
+        link.href = c.toDataURL('image/png');
+        link.click();
+    };
+
     /* ====== PUBLIC: ANIMATION CONTROLS ====== */
     window.playCascade3D = function () {
         if (_animState === 'playing') return;
         if (_animState === 'stopped') {
-            _introActive = true;
-            _introElapsed = 0;
-            _camAngle = _introStartAngle;
-            _camRadius = _introStartRadius;
-            _camHeight = _introStartHeight;
-            _lookAtX = _introStartLookX;
-            _lookAtY = _introStartLookY;
+            _introActive = false;
+            _camAngle = Math.PI * 0.18;
+            _camRadius = 42;
+            _camHeight = 24;
+            _lookAtX = 3;
+            _lookAtY = -1;
             _autoRotate = false;
         }
         _animState = 'playing';
@@ -234,13 +361,12 @@
     window.stopCascade3D = function () {
         _animState = 'stopped';
         if (_animId) { cancelAnimationFrame(_animId); _animId = null; }
-        _introActive = true;
-        _introElapsed = 0;
-        _camAngle = _introStartAngle;
-        _camRadius = _introStartRadius;
-        _camHeight = _introStartHeight;
-        _lookAtX = _introStartLookX;
-        _lookAtY = _introStartLookY;
+        _introActive = false;
+        _camAngle = Math.PI * 0.18;
+        _camRadius = 42;
+        _camHeight = 24;
+        _lookAtX = 3;
+        _lookAtY = -1;
         _autoRotate = false;
         _updateCamera();
         if (_renderer && _scene && _camera) _renderer.render(_scene, _camera);
@@ -925,6 +1051,38 @@
         sp.scale.set(8, 2.2, 1); sp.position.set(x, y, 0); _scene.add(sp);
     }
 
+    /* ====== BUILD: SPARKLES ====== */
+    function _buildSparkles(x, by, fp, color) {
+        var wl = fp * WALL_H;
+        // Water surface sparkles
+        var nW = 60, pW = new Float32Array(nW * 3), sW = [];
+        for (var i = 0; i < nW; i++) {
+            pW[i*3] = x + (Math.random()-0.5) * DAM_W * 1.6;
+            pW[i*3+1] = by + wl + 0.1 + Math.random() * 0.3;
+            pW[i*3+2] = (Math.random()-0.5) * DAM_D * 1.6;
+            sW.push({ phase: Math.random() * Math.PI * 2, speed: 1.5 + Math.random() * 2.5, baseY: pW[i*3+1] });
+        }
+        var gW = new THREE.BufferGeometry(); gW.setAttribute('position', new THREE.BufferAttribute(pW, 3));
+        var mW = new THREE.PointsMaterial({ color: 0xffffff, size: 0.18, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+        var ptsW = new THREE.Points(gW, mW); _scene.add(ptsW);
+        _sparkleSystems.push({ pts: ptsW, data: sW, type: 'water', color: color });
+
+        // Wall edge sparkles
+        var nE = 30, pE = new Float32Array(nE * 3), sE = [];
+        for (var j = 0; j < nE; j++) {
+            var side = Math.random() > 0.5 ? 1 : -1;
+            var along = (Math.random()-0.5) * DAM_W * 1.8;
+            pE[j*3] = x + along;
+            pE[j*3+1] = by + WALL_H * (0.4 + Math.random() * 0.6);
+            pE[j*3+2] = side * DAM_D * 0.5 + (Math.random()-0.5) * 0.3;
+            sE.push({ phase: Math.random() * Math.PI * 2, speed: 2 + Math.random() * 3 });
+        }
+        var gE = new THREE.BufferGeometry(); gE.setAttribute('position', new THREE.BufferAttribute(pE, 3));
+        var mE = new THREE.PointsMaterial({ color: color, size: 0.12, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+        var ptsE = new THREE.Points(gE, mE); _scene.add(ptsE);
+        _sparkleSystems.push({ pts: ptsE, data: sE, type: 'edge' });
+    }
+
     /* ====== BUILD: AMBIENT ====== */
     function _buildAmbient() {
         var n = 300, p = new Float32Array(n * 3);
@@ -960,14 +1118,10 @@
             _lookAtY = _lerp(_introStartLookY, _introEndLookY, eased);
             if (progress >= 1.0) {
                 _introActive = false;
-                _autoRotate = true;
             }
-        } else if (_autoRotate) {
-            _camAngle += 0.0004;
         }
 
         _updateCamera();
-        _camera.position.y = _camHeight + Math.sin(t * 0.25) * 0.6;
 
         /* -- Water surfaces -- */
         for (var w = 0; w < _waterMeshes.length; w++) {
@@ -980,8 +1134,8 @@
             pa.needsUpdate = true;
         }
 
-        /* -- Glow pulse -- */
-        for (var l = 0; l < _glowLights.length; l++) { _glowLights[l].intensity = 0.4 + 0.2 * Math.sin(t * 1.5 + l * 1.2); }
+        /* -- Glow pulse (static) -- */
+        /* lights remain at their initial intensity */
 
         /* -- River flow -- */
         for (var r = 0; r < _riverSystems.length; r++) {
@@ -1041,11 +1195,38 @@
             if (tm.userData.active) tm.rotation.z += tm.userData.speed;
         }
 
-        /* -- Ambient particles -- */
+        /* -- Sparkle shimmer -- */
+        for (var sk = 0; sk < _sparkleSystems.length; sk++) {
+            var ss = _sparkleSystems[sk];
+            if (ss.type === 'water') {
+                var spos = ss.pts.geometry.attributes.position;
+                for (var si2 = 0; si2 < ss.data.length; si2++) {
+                    var sd = ss.data[si2];
+                    spos.setY(si2, sd.baseY + Math.sin(t * 1.5 + sd.phase) * 0.08);
+                }
+                spos.needsUpdate = true;
+                var twinkle = 0;
+                for (var si3 = 0; si3 < ss.data.length; si3++) {
+                    twinkle += Math.max(0, Math.sin(t * ss.data[si3].speed + ss.data[si3].phase));
+                }
+                ss.pts.material.opacity = 0.15 + 0.55 * (twinkle / ss.data.length);
+            } else {
+                var pulse = 0;
+                for (var si4 = 0; si4 < ss.data.length; si4++) {
+                    pulse += Math.max(0, Math.sin(t * ss.data[si4].speed + ss.data[si4].phase));
+                }
+                ss.pts.material.opacity = 0.1 + 0.4 * (pulse / ss.data.length);
+            }
+        }
+
+        /* -- Ambient float -- */
         if (_ambientParticles) {
             var ap = _ambientParticles.geometry.attributes.position;
-            for (var a = 0; a < ap.count; a++) { var ay = ap.getY(a) + 0.004, ax = ap.getX(a) + Math.sin(t * 0.5 + a * 0.07) * 0.003; if (ay > 22) ay = -3; ap.setX(a, ax); ap.setY(a, ay); }
-            ap.needsUpdate = true; _ambientParticles.material.opacity = 0.2 + 0.15 * Math.sin(t * 0.4);
+            for (var ai = 0; ai < ap.count; ai++) {
+                ap.setY(ai, ap.getY(ai) + Math.sin(t * 0.8 + ai * 0.5) * 0.002);
+            }
+            ap.needsUpdate = true;
+            _ambientParticles.material.opacity = 0.25 + 0.15 * Math.sin(t * 0.6);
         }
 
         _renderer.render(_scene, _camera);
@@ -1063,7 +1244,7 @@
     /* ====== MOUSE / TOUCH ====== */
     function _mdHandler(e) { _isMouseDown = true; _prevMouseX = e.clientX; _prevMouseY = e.clientY; _autoRotate = false; _introActive = false; clearTimeout(_autoRotateTimer); }
     function _mmHandler(e) { if (!_isMouseDown) return; _camAngle -= (e.clientX - _prevMouseX) * 0.005; _camHeight = Math.max(4, Math.min(45, _camHeight + (e.clientY - _prevMouseY) * 0.06)); _prevMouseX = e.clientX; _prevMouseY = e.clientY; }
-    function _muHandler() { _isMouseDown = false; _autoRotateTimer = setTimeout(function () { _autoRotate = true; }, 3000); }
+    function _muHandler() { _isMouseDown = false; }
     function _wheelHandler(e) { e.preventDefault(); _camRadius = Math.max(15, Math.min(100, _camRadius + e.deltaY * 0.04)); }
     function _tsHandler(e) { if (e.touches.length === 1) { e.preventDefault(); _isMouseDown = true; _prevMouseX = e.touches[0].clientX; _prevMouseY = e.touches[0].clientY; _autoRotate = false; _introActive = false; clearTimeout(_autoRotateTimer); } }
     function _tmHandler(e) { if (!_isMouseDown || e.touches.length !== 1) return; e.preventDefault(); _camAngle -= (e.touches[0].clientX - _prevMouseX) * 0.005; _camHeight = Math.max(4, Math.min(45, _camHeight + (e.touches[0].clientY - _prevMouseY) * 0.06)); _prevMouseX = e.touches[0].clientX; _prevMouseY = e.touches[0].clientY; }

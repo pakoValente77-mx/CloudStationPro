@@ -1,0 +1,601 @@
+@{
+    ViewData["Title"] = "Notificaciones";
+    Layout = "_Layout";
+}
+
+@Html.AntiForgeryToken()
+
+@section Styles {
+<style>
+    .notif-page {
+        padding: 24px 32px 60px;
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+
+    /* ── Header ───────────────────────────── */
+    .notif-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+    .notif-header .icon-circle {
+        width: 52px; height: 52px;
+        background: linear-gradient(135deg, #7c3aed, #a855f7);
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 22px; color: #fff;
+        box-shadow: 0 6px 24px rgba(124,58,237,0.35);
+    }
+    .notif-header h1 {
+        font-size: 22px; font-weight: 700; color: #fff; margin: 0;
+    }
+    .notif-header .sub {
+        color: rgba(255,255,255,0.45); font-size: 13px; margin-top: 2px;
+    }
+
+    /* ── Stat cards ───────────────────────── */
+    .notif-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+    .stat-pill {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px;
+        padding: 18px 20px;
+        display: flex; align-items: center; gap: 14px;
+        transition: all 0.25s;
+    }
+    .stat-pill:hover { background: rgba(255,255,255,0.065); transform: translateY(-1px); }
+    .stat-pill .pill-icon {
+        width: 42px; height: 42px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; color: #fff; flex-shrink: 0;
+    }
+    .stat-pill .pill-label { font-size: 11px; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.6px; }
+    .stat-pill .pill-value { font-size: 20px; font-weight: 700; color: #fff; line-height: 1.1; margin-top: 2px; }
+
+    /* ── Tabs ─────────────────────────────── */
+    .notif-tabs {
+        display: flex; gap: 6px; margin-bottom: 0;
+        border-bottom: 2px solid rgba(255,255,255,0.06);
+        padding-bottom: 0;
+    }
+    .notif-tab {
+        padding: 10px 22px;
+        font-size: 13px; font-weight: 600;
+        color: rgba(255,255,255,0.45);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s;
+        display: flex; align-items: center; gap: 7px;
+        background: none; border-top: none; border-left: none; border-right: none;
+        font-family: inherit;
+    }
+    .notif-tab:hover { color: rgba(255,255,255,0.7); }
+    .notif-tab.active {
+        color: #a855f7;
+        border-bottom-color: #a855f7;
+    }
+    .notif-tab i { font-size: 14px; }
+
+    /* ── Tab content panel ────────────────── */
+    .tab-panel {
+        display: none;
+        background: rgba(20,24,33,0.65);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-top: none;
+        border-radius: 0 0 14px 14px;
+        padding: 28px 30px;
+    }
+    .tab-panel.active { display: block; }
+
+    /* ── Form styling ─────────────────────── */
+    .notif-form label {
+        display: block;
+        font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55);
+        text-transform: uppercase; letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .notif-form input[type="text"],
+    .notif-form input[type="number"],
+    .notif-form textarea,
+    .notif-form select {
+        width: 100%;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: #fff;
+        padding: 11px 14px;
+        font-size: 14px;
+        font-family: inherit;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        outline: none;
+    }
+    .notif-form input:focus,
+    .notif-form textarea:focus,
+    .notif-form select:focus {
+        border-color: rgba(168,85,247,0.5);
+        box-shadow: 0 0 0 3px rgba(168,85,247,0.12);
+    }
+    .notif-form textarea { resize: vertical; min-height: 140px; }
+    .notif-form select option { background: #1a1a2e; color: #fff; }
+
+    .field-group { margin-bottom: 18px; }
+    .fields-row { display: grid; gap: 16px; }
+    .fields-row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .fields-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    /* ── Buttons ──────────────────────────── */
+    .btn-send {
+        padding: 12px 28px;
+        border: none; border-radius: 10px;
+        font-family: inherit; font-size: 14px; font-weight: 600;
+        cursor: pointer;
+        display: inline-flex; align-items: center; gap: 8px;
+        transition: all 0.25s;
+        color: #fff;
+    }
+    .btn-send.purple {
+        background: linear-gradient(135deg, #7c3aed, #a855f7);
+        box-shadow: 0 4px 16px rgba(124,58,237,0.3);
+    }
+    .btn-send.purple:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124,58,237,0.45); }
+    .btn-send.red {
+        background: linear-gradient(135deg, #dc2626, #ef4444);
+        box-shadow: 0 4px 16px rgba(220,38,38,0.3);
+    }
+    .btn-send.red:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(220,38,38,0.45); }
+    .btn-send.green {
+        background: linear-gradient(135deg, #059669, #10b981);
+        box-shadow: 0 4px 16px rgba(5,150,105,0.3);
+    }
+    .btn-send.green:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(5,150,105,0.45); }
+    .btn-send.loading { opacity: 0.65; pointer-events: none; }
+
+    .btn-sm {
+        padding: 7px 14px;
+        background: rgba(168,85,247,0.15);
+        border: 1px solid rgba(168,85,247,0.25);
+        border-radius: 8px;
+        color: #c084fc;
+        font-size: 12px; font-weight: 600; font-family: inherit;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-sm:hover { background: rgba(168,85,247,0.25); color: #fff; }
+
+    /* ── SMTP config card ─────────────────── */
+    .smtp-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+    }
+    .smtp-card h4 {
+        font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.7);
+        margin: 0 0 14px 0;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .smtp-card h4 i { color: #10b981; }
+    .smtp-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px;
+    }
+    .smtp-item { display: flex; align-items: center; gap: 8px; }
+    .smtp-item .lbl { font-size: 11px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; min-width: 50px; }
+    .smtp-item .val { font-size: 13px; color: #fff; font-family: 'SF Mono', 'Fira Code', monospace; }
+
+    /* ── Result messages ──────────────────── */
+    .msg-ok {
+        background: rgba(16,185,129,0.1);
+        border: 1px solid rgba(16,185,129,0.2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        color: #6ee7b7;
+        font-size: 13px;
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 16px;
+    }
+    .msg-err {
+        background: rgba(239,68,68,0.1);
+        border: 1px solid rgba(239,68,68,0.2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        color: #fca5a5;
+        font-size: 13px;
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 16px;
+    }
+    .msg-warn {
+        background: rgba(234,179,8,0.1);
+        border: 1px solid rgba(234,179,8,0.2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        color: #fde68a;
+        font-size: 13px;
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 10px;
+    }
+    .sending-indicator {
+        display: inline-flex; align-items: center; gap: 8px;
+        color: rgba(255,255,255,0.5); font-size: 13px; margin-top: 16px;
+    }
+    .sending-indicator .dot-pulse { width: 6px; height: 6px; border-radius: 50%; background: #a855f7; animation: pulse-dot 1s infinite; }
+    @@keyframes pulse-dot { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+    /* ── Dropdown override ────────────────── */
+    .notif-form .ui.dropdown {
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 10px !important;
+        color: #fff !important;
+        padding: 8px 12px !important;
+        min-height: 44px !important;
+    }
+    .notif-form .ui.dropdown .menu {
+        background: rgba(20,24,33,0.98) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 10px !important;
+        max-height: 220px;
+    }
+    .notif-form .ui.dropdown .menu .item {
+        color: rgba(255,255,255,0.75) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+        padding: 10px 14px !important;
+        font-size: 13px !important;
+    }
+    .notif-form .ui.dropdown .menu .item:hover,
+    .notif-form .ui.dropdown .menu .item.active {
+        background: rgba(168,85,247,0.15) !important;
+        color: #fff !important;
+    }
+    .notif-form .ui.dropdown > .text { color: rgba(255,255,255,0.7) !important; }
+    .notif-form .ui.dropdown .default.text { color: rgba(255,255,255,0.3) !important; }
+    .notif-form .ui.dropdown a.ui.label {
+        background: rgba(168,85,247,0.2) !important;
+        color: #c084fc !important;
+        border: 1px solid rgba(168,85,247,0.3) !important;
+        border-radius: 6px !important;
+        font-size: 12px !important;
+    }
+
+    /* ── Hint text ────────────────────────── */
+    .hint-text {
+        color: rgba(255,255,255,0.35); font-size: 12px; margin-top: 14px;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .hint-text i { font-size: 13px; }
+
+    @@media (max-width: 768px) {
+        .notif-stats { grid-template-columns: 1fr; }
+        .fields-row.cols-2, .fields-row.cols-3 { grid-template-columns: 1fr; }
+        .notif-tabs { flex-wrap: wrap; }
+        .notif-page { padding: 16px; }
+    }
+</style>
+}
+
+<div class="notif-page">
+    <!-- Header -->
+    <div class="notif-header">
+        <div class="icon-circle"><i class="bell icon" style="margin:0;"></i></div>
+        <div>
+            <h1>Centro de Notificaciones</h1>
+            <div class="sub">Envía correos electrónicos y alertas manuales a los usuarios del sistema</div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="notif-stats">
+        <div class="stat-pill">
+            <div class="pill-icon" style="background:linear-gradient(135deg,#7c3aed,#a855f7);">
+                <i class="users icon" style="margin:0;"></i>
+            </div>
+            <div>
+                <div class="pill-label">Destinatarios</div>
+                <div class="pill-value" id="statRecipients">—</div>
+            </div>
+        </div>
+        <div class="stat-pill">
+            <div class="pill-icon" style="background:linear-gradient(135deg,#059669,#10b981);">
+                <i class="server icon" style="margin:0;"></i>
+            </div>
+            <div>
+                <div class="pill-label">Servidor SMTP</div>
+                <div class="pill-value" style="font-size:13px;">@(ViewBag.SmtpHost ?? "No config.")</div>
+            </div>
+        </div>
+        <div class="stat-pill">
+            <div class="pill-icon" style="background:linear-gradient(135deg,#2563eb,#3b82f6);">
+                <i class="at icon" style="margin:0;"></i>
+            </div>
+            <div>
+                <div class="pill-label">Remitente</div>
+                <div class="pill-value" style="font-size:12px;">@(ViewBag.SmtpFrom ?? "No config.")</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="notif-tabs">
+        <button class="notif-tab active" data-target="panelCustom">
+            <i class="envelope outline icon"></i> Correo Personalizado
+        </button>
+        <button class="notif-tab" data-target="panelAlert">
+            <i class="exclamation triangle icon"></i> Alerta Manual
+        </button>
+        <button class="notif-tab" data-target="panelTest">
+            <i class="flask icon"></i> Prueba SMTP
+        </button>
+    </div>
+
+    <!-- ════════ Tab: Correo Personalizado ════════ -->
+    <div class="tab-panel active" id="panelCustom">
+        <div class="notif-form" id="customMailForm">
+            <div class="field-group">
+                <label>Destinatarios</label>
+                <div class="ui fluid multiple search selection dropdown" id="recipientDropdown">
+                    <input type="hidden" id="selectedRecipients">
+                    <i class="dropdown icon"></i>
+                    <div class="default text">Busca y selecciona destinatarios...</div>
+                    <div class="menu" id="recipientMenu"></div>
+                </div>
+                <div style="margin-top:8px;">
+                    <button type="button" class="btn-sm" onclick="selectAllRecipients()">
+                        <i class="check double icon"></i> Seleccionar Todos
+                    </button>
+                </div>
+            </div>
+            <div class="field-group">
+                <label>Asunto</label>
+                <input type="text" id="mailSubject" placeholder="Escribe el asunto del correo...">
+            </div>
+            <div class="field-group">
+                <label>Cuerpo del mensaje <span style="font-weight:400;opacity:0.5;">(HTML permitido)</span></label>
+                <textarea id="mailBody" placeholder="Escribe el contenido del correo aquí..."></textarea>
+            </div>
+            <button type="button" class="btn-send purple" onclick="sendCustomMail()" id="btnCustom">
+                <i class="paper plane icon"></i> Enviar Correo
+            </button>
+        </div>
+        <div id="customResult"></div>
+    </div>
+
+    <!-- ════════ Tab: Alerta Manual ════════ -->
+    <div class="tab-panel" id="panelAlert">
+        <div class="notif-form">
+            <p style="color:rgba(255,255,255,0.4); font-size:13px; margin:0 0 20px 0;">
+                <i class="info circle icon"></i>
+                Envía una alerta predefinida por correo a <strong style="color:#fca5a5;">todos</strong> los usuarios registrados con email.
+            </p>
+            <div class="fields-row cols-2">
+                <div class="field-group">
+                    <label>Estación</label>
+                    <input type="text" id="alertStation" placeholder="Ej: Peñitas, Angostura">
+                </div>
+                <div class="field-group">
+                    <label>Variable</label>
+                    <select id="alertVariable">
+                        <option value="Nivel (msnm)">Nivel (msnm)</option>
+                        <option value="Almacenamiento (Mm³)">Almacenamiento (Mm³)</option>
+                        <option value="Gasto Descarga (m³/s)">Gasto Descarga (m³/s)</option>
+                        <option value="Precipitación (mm)">Precipitación (mm)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="fields-row cols-3">
+                <div class="field-group">
+                    <label>Valor Registrado</label>
+                    <input type="number" step="any" id="alertValue" placeholder="93.5">
+                </div>
+                <div class="field-group">
+                    <label>Umbral</label>
+                    <input type="number" step="any" id="alertThreshold" placeholder="92.0">
+                </div>
+                <div class="field-group">
+                    <label>Fecha / Hora</label>
+                    <input type="text" id="alertTimestamp" placeholder="28/Mar/2026 14:00">
+                </div>
+            </div>
+            <button type="button" class="btn-send red" onclick="sendAlert()" id="btnAlert">
+                <i class="exclamation triangle icon"></i> Enviar Alerta a Todos
+            </button>
+        </div>
+        <div id="alertResult"></div>
+    </div>
+
+    <!-- ════════ Tab: Prueba SMTP ════════ -->
+    <div class="tab-panel" id="panelTest">
+        <div class="smtp-card">
+            <h4><i class="cog icon"></i> Configuración SMTP Actual</h4>
+            <div class="smtp-grid">
+                <div class="smtp-item">
+                    <span class="lbl">Host</span>
+                    <span class="val">@(ViewBag.SmtpHost ?? "(no configurado)")</span>
+                </div>
+                <div class="smtp-item">
+                    <span class="lbl">Puerto</span>
+                    <span class="val">@(ViewBag.SmtpPort ?? "—")</span>
+                </div>
+                <div class="smtp-item">
+                    <span class="lbl">From</span>
+                    <span class="val">@(ViewBag.SmtpFrom ?? "(no configurado)")</span>
+                </div>
+                <div class="smtp-item">
+                    <span class="lbl">SSL</span>
+                    <span class="val">@(ViewBag.SmtpSsl ?? "—")</span>
+                </div>
+            </div>
+        </div>
+        <div class="hint-text">
+            <i class="info circle icon"></i>
+            Se enviará un correo de prueba a tu dirección de email registrada en el sistema.
+        </div>
+        <div style="margin-top:18px;">
+            <button type="button" class="btn-send green" onclick="sendTestEmail()" id="btnTest">
+                <i class="paper plane icon"></i> Enviar Correo de Prueba
+            </button>
+        </div>
+        <div id="testResult"></div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var allRecipients = [];
+
+    $(document).ready(function () {
+        // Tab switching
+        $('.notif-tab').on('click', function () {
+            $('.notif-tab').removeClass('active');
+            $(this).addClass('active');
+            $('.tab-panel').removeClass('active');
+            $('#' + $(this).data('target')).addClass('active');
+        });
+
+        loadRecipients();
+
+        // Set default timestamp
+        var now = new Date();
+        var formatted = now.toLocaleString('es-MX', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+        $('#alertTimestamp').val(formatted);
+    });
+
+    function loadRecipients() {
+        $.get('@Url.Action("GetRecipients", "Notification")', function (data) {
+            allRecipients = data;
+            $('#statRecipients').text(data.length);
+            var menu = $('#recipientMenu');
+            menu.empty();
+            data.forEach(function (u) {
+                menu.append('<div class="item" data-value="' + u.email + '">' +
+                    '<strong>' + u.userName + '</strong> &lt;' + u.email + '&gt;</div>');
+            });
+            $('#recipientDropdown').dropdown({ fullTextSearch: true });
+        });
+    }
+
+    function selectAllRecipients() {
+        var emails = allRecipients.map(function (u) { return u.email; });
+        $('#recipientDropdown').dropdown('set selected', emails);
+    }
+
+    function sendCustomMail() {
+        var recipients = $('#selectedRecipients').val();
+        if (!recipients) { alert('Selecciona al menos un destinatario'); return; }
+
+        var data = {
+            recipients: recipients.split(','),
+            subject: $('#mailSubject').val(),
+            htmlBody: $('#mailBody').val()
+        };
+
+        if (!data.subject || !data.htmlBody) { alert('Asunto y mensaje son requeridos'); return; }
+
+        $('#customResult').html('<div class="sending-indicator"><div class="dot-pulse"></div> Enviando correo(s)...</div>');
+        $('#btnCustom').addClass('loading');
+
+        $.ajax({
+            url: '@Url.Action("SendCustom", "Notification")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+            success: function (r) {
+                $('#btnCustom').removeClass('loading');
+                if (r.success) {
+                    var html = '<div class="msg-ok"><i class="check circle icon"></i> '
+                        + r.sent + ' correo(s) enviado(s) exitosamente.</div>';
+                    if (r.errors && r.errors.length > 0) {
+                        html += '<div class="msg-warn"><i class="exclamation triangle icon"></i> Errores: '
+                            + r.errors.join('<br>') + '</div>';
+                    }
+                    $('#customResult').html(html);
+                } else {
+                    $('#customResult').html('<div class="msg-err"><i class="times circle icon"></i> ' + r.message + '</div>');
+                }
+            },
+            error: function () {
+                $('#btnCustom').removeClass('loading');
+                $('#customResult').html('<div class="msg-err"><i class="times circle icon"></i> Error de conexión con el servidor.</div>');
+            }
+        });
+    }
+
+    function sendAlert() {
+        var data = {
+            stationName: $('#alertStation').val(),
+            variable: $('#alertVariable').val(),
+            value: parseFloat($('#alertValue').val()),
+            threshold: parseFloat($('#alertThreshold').val()),
+            timestamp: $('#alertTimestamp').val()
+        };
+
+        if (!data.stationName || isNaN(data.value) || isNaN(data.threshold)) {
+            alert('Completa todos los campos');
+            return;
+        }
+
+        if (!confirm('¿Enviar alerta a TODOS los usuarios con email confirmado?')) return;
+
+        $('#alertResult').html('<div class="sending-indicator"><div class="dot-pulse"></div> Enviando alertas...</div>');
+        $('#btnAlert').addClass('loading');
+
+        $.ajax({
+            url: '@Url.Action("SendAlert", "Notification")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+            success: function (r) {
+                $('#btnAlert').removeClass('loading');
+                if (r.success) {
+                    $('#alertResult').html('<div class="msg-ok"><i class="check circle icon"></i> Alerta enviada a '
+                        + r.sent + ' de ' + r.total + ' usuario(s).</div>');
+                } else {
+                    $('#alertResult').html('<div class="msg-err"><i class="times circle icon"></i> ' + r.message + '</div>');
+                }
+            },
+            error: function () {
+                $('#btnAlert').removeClass('loading');
+                $('#alertResult').html('<div class="msg-err"><i class="times circle icon"></i> Error de conexión con el servidor.</div>');
+            }
+        });
+    }
+
+    function sendTestEmail() {
+        $('#btnTest').addClass('loading');
+        $('#testResult').html('<div class="sending-indicator"><div class="dot-pulse"></div> Enviando prueba...</div>');
+
+        $.ajax({
+            url: '@Url.Action("SendTestEmail", "Notification")',
+            type: 'POST',
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+            success: function (r) {
+                $('#btnTest').removeClass('loading');
+                if (r.success) {
+                    $('#testResult').html('<div class="msg-ok"><i class="check circle icon"></i> ' + r.message + '</div>');
+                } else {
+                    $('#testResult').html('<div class="msg-err"><i class="times circle icon"></i> ' + r.message + '</div>');
+                }
+            },
+            error: function () {
+                $('#btnTest').removeClass('loading');
+                $('#testResult').html('<div class="msg-err"><i class="times circle icon"></i> Error de conexión con el servidor.</div>');
+            }
+        });
+    }
+</script>
+}

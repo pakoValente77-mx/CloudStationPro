@@ -1,0 +1,223 @@
+@{
+    ViewData["Title"] = "Chat";
+    Layout = "_Layout";
+}
+
+<style>
+    #chatContainer { margin-top: 80px; height: calc(100vh - 120px); display: flex; }
+    #roomList { width: 220px; background: rgba(14,18,26,0.95); border-right: 1px solid rgba(255,255,255,0.08); overflow-y: auto; }
+    #roomList .room-item { padding: 12px 16px; cursor: pointer; color: #ccc; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    #roomList .room-item:hover, #roomList .room-item.active { background: rgba(128,90,213,0.2); color: #fff; }
+    #chatMain { flex: 1; display: flex; flex-direction: column; background: rgba(14,18,26,0.85); }
+    #chatHeader { padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; }
+    #chatHeader h3 { margin: 0; color: #fff; }
+    #messageArea { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .msg { margin-bottom: 12px; }
+    .msg .meta { font-size: 0.8em; color: #888; margin-bottom: 2px; }
+    .msg .meta .author { color: #ce93d8; font-weight: 600; }
+    .msg .bubble { background: rgba(255,255,255,0.06); padding: 8px 14px; border-radius: 8px; color: #e0e0e0; display: inline-block; max-width: 80%; word-wrap: break-word; }
+    .msg.mine .bubble { background: rgba(128,90,213,0.25); }
+    .msg.mine { text-align: right; }
+    .msg.system { text-align: center; }
+    .msg.system .bubble { background: transparent; color: #666; font-style: italic; font-size: 0.85em; }
+    #chatInput { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; }
+    #chatInput input { flex: 1; }
+    #onlinePanel { width: 200px; background: rgba(14,18,26,0.95); border-left: 1px solid rgba(255,255,255,0.08); padding: 12px; overflow-y: auto; }
+    #onlinePanel h4 { color: #81c784; margin-bottom: 10px; }
+    .online-user { padding: 4px 0; color: #ccc; font-size: 0.9em; }
+    .online-user::before { content: "●"; color: #81c784; margin-right: 6px; }
+    .conn-status { font-size: 0.8em; padding: 3px 8px; border-radius: 10px; }
+    .conn-status.connected { background: rgba(129,199,132,0.2); color: #81c784; }
+    .conn-status.disconnected { background: rgba(231,76,60,0.2); color: #e74c3c; }
+</style>
+
+<div id="chatContainer">
+    <!-- Room List -->
+    <div id="roomList">
+        <div style="padding:12px 16px; font-weight:bold; color:#fff; border-bottom:1px solid rgba(255,255,255,0.1);">
+            <i class="comments icon"></i> Salas
+        </div>
+        <div class="room-item active" data-room="general" onclick="switchRoom('general')">
+            <i class="hashtag icon" style="color:#64b5f6;"></i> General
+        </div>
+        <div class="room-item" data-room="operacion" onclick="switchRoom('operacion')">
+            <i class="hashtag icon" style="color:#fbbf24;"></i> Operación
+        </div>
+        <div class="room-item" data-room="alertas" onclick="switchRoom('alertas')">
+            <i class="hashtag icon" style="color:#e74c3c;"></i> Alertas
+        </div>
+        <div class="room-item" data-room="hidrologia" onclick="switchRoom('hidrologia')">
+            <i class="hashtag icon" style="color:#81c784;"></i> Hidrología
+        </div>
+    </div>
+
+    <!-- Main Chat -->
+    <div id="chatMain">
+        <div id="chatHeader">
+            <h3><i class="hashtag icon" style="color:#64b5f6;"></i> <span id="currentRoomName">general</span></h3>
+            <span class="conn-status disconnected" id="connStatus">Desconectado</span>
+        </div>
+        <div id="messageArea"></div>
+        <div id="chatInput">
+            <div class="ui inverted input" style="flex:1;">
+                <input type="text" id="msgInput" placeholder="Escribe un mensaje..." autocomplete="off">
+            </div>
+            <button class="ui purple icon button" onclick="sendMessage()" id="btnSend">
+                <i class="send icon"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Online Users -->
+    <div id="onlinePanel">
+        <h4><i class="users icon"></i> En línea (<span id="onlineCount">0</span>)</h4>
+        <div id="onlineList"></div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+<script>
+    var connection = null;
+    var currentRoom = 'general';
+    var currentUser = '@User.Identity.Name';
+
+    $(document).ready(function () {
+        initSignalR();
+
+        $('#msgInput').keypress(function (e) {
+            if (e.which === 13) { sendMessage(); }
+        });
+    });
+
+    function initSignalR() {
+        connection = new signalR.HubConnectionBuilder()
+            .withUrl("/hubs/chat")
+            .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+            .build();
+
+        connection.on("ReceiveMessage", function (msg) {
+            if (msg.room === currentRoom) {
+                appendMessage(msg);
+            }
+        });
+
+        connection.on("SystemMessage", function (data) {
+            appendSystemMessage(data.message);
+        });
+
+        connection.on("UserConnected", function (data) {
+            $('#onlineCount').text(data.onlineCount);
+            refreshOnlineUsers();
+        });
+
+        connection.on("UserDisconnected", function (data) {
+            $('#onlineCount').text(data.onlineCount);
+            refreshOnlineUsers();
+        });
+
+        connection.onreconnecting(function () {
+            $('#connStatus').removeClass('connected').addClass('disconnected').text('Reconectando...');
+        });
+
+        connection.onreconnected(function () {
+            $('#connStatus').removeClass('disconnected').addClass('connected').text('Conectado');
+            connection.invoke("JoinRoom", currentRoom);
+        });
+
+        connection.onclose(function () {
+            $('#connStatus').removeClass('connected').addClass('disconnected').text('Desconectado');
+        });
+
+        startConnection();
+    }
+
+    function startConnection() {
+        connection.start().then(function () {
+            $('#connStatus').removeClass('disconnected').addClass('connected').text('Conectado');
+            loadHistory(currentRoom);
+            refreshOnlineUsers();
+        }).catch(function (err) {
+            console.error('SignalR error:', err);
+            setTimeout(startConnection, 5000);
+        });
+    }
+
+    function switchRoom(room) {
+        if (room === currentRoom) return;
+
+        // Leave old room
+        if (connection.state === signalR.HubConnectionState.Connected) {
+            connection.invoke("LeaveRoom", currentRoom);
+        }
+
+        currentRoom = room;
+        $('#currentRoomName').text(room);
+        $('.room-item').removeClass('active');
+        $('[data-room="' + room + '"]').addClass('active');
+        $('#messageArea').empty();
+
+        if (connection.state === signalR.HubConnectionState.Connected) {
+            connection.invoke("JoinRoom", room);
+        }
+        loadHistory(room);
+    }
+
+    function loadHistory(room) {
+        $.get('@Url.Action("History", "Chat")?room=' + encodeURIComponent(room) + '&limit=100', function (msgs) {
+            $('#messageArea').empty();
+            msgs.forEach(function (m) { appendMessage(m); });
+            scrollToBottom();
+        });
+    }
+
+    function sendMessage() {
+        var text = $('#msgInput').val().trim();
+        if (!text || connection.state !== signalR.HubConnectionState.Connected) return;
+
+        connection.invoke("SendMessage", currentRoom, text).catch(function (err) {
+            console.error('Send error:', err);
+        });
+        $('#msgInput').val('').focus();
+    }
+
+    function appendMessage(msg) {
+        var isMine = msg.userName === currentUser;
+        var time = new Date(msg.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        var html = '<div class="msg ' + (isMine ? 'mine' : '') + '">' +
+            '<div class="meta"><span class="author">' + escHtml(msg.fullName || msg.userName) + '</span> · ' + time + '</div>' +
+            '<div class="bubble">' + escHtml(msg.message) + '</div>' +
+            '</div>';
+        $('#messageArea').append(html);
+        scrollToBottom();
+    }
+
+    function appendSystemMessage(text) {
+        $('#messageArea').append('<div class="msg system"><div class="bubble">' + escHtml(text) + '</div></div>');
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        var area = document.getElementById('messageArea');
+        area.scrollTop = area.scrollHeight;
+    }
+
+    function refreshOnlineUsers() {
+        if (connection.state !== signalR.HubConnectionState.Connected) return;
+        connection.invoke("GetOnlineUsers").then(function (users) {
+            var html = '';
+            users.forEach(function (u) {
+                html += '<div class="online-user">' + escHtml(u.fullName || u.userName) + '</div>';
+            });
+            $('#onlineList').html(html);
+            $('#onlineCount').text(users.length);
+        });
+    }
+
+    function escHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text || ''));
+        return div.innerHTML;
+    }
+</script>
+}

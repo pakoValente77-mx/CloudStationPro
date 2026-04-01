@@ -120,7 +120,7 @@ namespace CloudStationWeb.Controllers
 
         // POST: /FunVasos/SaveReferencia
         [HttpPost]
-        [IgnoreAntiforgeryToken]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveReferencia([FromBody] FunVasosReferenciaDto model)
         {
             _logger.LogInformation("[FunVasos] SaveReferencia called. Model is null: {IsNull}", model == null);
@@ -161,7 +161,7 @@ namespace CloudStationWeb.Controllers
 
         // POST: /FunVasos/DeleteReferencia?id=1
         [HttpPost]
-        [IgnoreAntiforgeryToken]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteReferencia(long id)
         {
             if (id <= 0) return Json(new { success = false, message = "ID inválido" });
@@ -179,7 +179,7 @@ namespace CloudStationWeb.Controllers
 
         // POST: /FunVasos/ToggleReferencia
         [HttpPost]
-        [IgnoreAntiforgeryToken]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleReferencia([FromBody] FunVasosReferenciaDto model)
         {
             if (model == null || model.Id <= 0) return Json(new { success = false, message = "ID inválido" });

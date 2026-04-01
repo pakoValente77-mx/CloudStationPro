@@ -1,0 +1,163 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Verificación en Dos Pasos";
+    var returnUrl = ViewData["ReturnUrl"]?.ToString();
+    var rememberMe = (bool)(ViewData["RememberMe"] ?? false);
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PIH - Verificación 2FA</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2" />
+    <link rel="stylesheet" href="/lib/fomantic-ui/dist/semantic.min.css">
+    <link href="/lib/fonts/inter/inter.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0b0e14 0%, #1a1f2e 50%, #0d1117 100%);
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
+            animation: bgPulse 8s ease-in-out infinite alternate;
+        }
+        @@keyframes bgPulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .card {
+            position: relative; z-index: 1;
+            background: rgba(20, 24, 33, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 48px 40px;
+            width: 100%; max-width: 420px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: cardIn 0.5s ease-out;
+        }
+        @@keyframes cardIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .logo-section { text-align: center; margin-bottom: 32px; }
+        .logo-icon {
+            width: 64px; height: 64px; margin: 0 auto 16px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 16px; display: flex; align-items: center; justify-content: center;
+            font-size: 28px; box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+        }
+        .logo-title { font-size: 20px; font-weight: 700; color: #fff; }
+        .logo-subtitle { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 4px; }
+
+        .info-box {
+            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+            border-radius: 12px; padding: 14px 16px; margin-bottom: 24px;
+            font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5;
+        }
+        .info-box i { color: #60a5fa; margin-right: 6px; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block; font-size: 13px; font-weight: 500;
+            color: rgba(255,255,255,0.7); margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%; padding: 14px 16px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; color: #fff;
+            font-family: 'Inter', monospace; font-size: 22px;
+            text-align: center; letter-spacing: 8px; outline: none;
+            transition: all 0.25s ease;
+        }
+        .form-group input:focus {
+            border-color: rgba(245,158,11,0.6);
+            box-shadow: 0 0 0 3px rgba(245,158,11,0.15);
+        }
+        .form-group input::placeholder {
+            color: rgba(255,255,255,0.2); letter-spacing: 4px; font-size: 16px;
+        }
+
+        .btn-verify {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff; border: none; border-radius: 12px;
+            font-family: 'Inter'; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.25s;
+            box-shadow: 0 4px 15px rgba(245,158,11,0.3);
+        }
+        .btn-verify:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(245,158,11,0.4); }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+            color: #fca5a5; font-size: 13px;
+        }
+
+        .back-link {
+            display: block; text-align: center; margin-top: 20px;
+            color: rgba(255,255,255,0.4); font-size: 13px; text-decoration: none;
+        }
+        .back-link:hover { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo-section">
+            <div class="logo-icon">🔐</div>
+            <div class="logo-title">Verificación en Dos Pasos</div>
+            <div class="logo-subtitle">Ingrese el código de su aplicación autenticadora</div>
+        </div>
+
+        @if (!ViewContext.ModelState.IsValid)
+        {
+            <div class="error-message">
+                @foreach (var error in ViewContext.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <div class="info-box">
+            <i class="mobile alternate icon"></i>
+            Abra su aplicación autenticadora (Google Authenticator, Authy, etc.) e ingrese el código de 6 dígitos.
+        </div>
+
+        <form method="post" asp-action="LoginWith2fa" asp-controller="Account">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@returnUrl" />
+            <input type="hidden" name="rememberMe" value="@rememberMe" />
+
+            <div class="form-group">
+                <label>Código de Verificación</label>
+                <input type="text" name="twoFactorCode" placeholder="000000"
+                       autocomplete="one-time-code" inputmode="numeric" maxlength="7"
+                       pattern="[0-9 -]*" autofocus required />
+            </div>
+
+            <button type="submit" class="btn-verify">
+                <i class="shield alternate icon"></i> Verificar
+            </button>
+        </form>
+
+        <a href="@Url.Action("Login", "Account")" class="back-link">
+            <i class="arrow left icon"></i> Volver al inicio de sesión
+        </a>
+    </div>
+</body>
+</html>

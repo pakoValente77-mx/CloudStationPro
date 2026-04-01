@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="EPPlus" Version="8.4.2" />
+    <PackageReference Include="FirebaseAdmin" Version="3.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="8.0.*" />

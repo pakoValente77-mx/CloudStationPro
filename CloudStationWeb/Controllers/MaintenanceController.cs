@@ -12,7 +12,7 @@ using System.Collections.Generic;
 
 namespace CloudStationWeb.Controllers
 {
-    [Authorize(Roles = "Administrador,Operador")]
+    [Authorize(Roles = "SuperAdmin,Administrador,Operador")]
     public class MaintenanceController : Controller
     {
         private readonly string? _sqlServerConn;
