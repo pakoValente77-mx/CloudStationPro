@@ -1029,10 +1029,116 @@ def _ensure_pg_tables():
             ON public.funvasos_horario(ts DESC);
         """)
 
+        # --- lluvia_acumulada ---
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.lluvia_acumulada (
+                id_asignado     CHARACTER VARYING(50) NOT NULL,
+                dcp_id          CHARACTER VARYING(20) NOT NULL,
+                sensor_id       CHARACTER VARYING(20) NOT NULL,
+                variable        CHARACTER VARYING(50),
+                periodo_inicio  TIMESTAMP WITH TIME ZONE NOT NULL,
+                periodo_fin     TIMESTAMP WITH TIME ZONE NOT NULL,
+                tipo_periodo    CHARACTER VARYING(10) NOT NULL,
+                acumulado       REAL DEFAULT 0,
+                horas_con_dato  INTEGER DEFAULT 0,
+                ultima_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                CONSTRAINT lluvia_acumulada_pkey 
+                    PRIMARY KEY (id_asignado, sensor_id, tipo_periodo)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_lluvia_tipo_periodo 
+            ON public.lluvia_acumulada (tipo_periodo);
+        """)
+
+        # --- alertas_precipitacion ---
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.alertas_precipitacion (
+                ts                  TIMESTAMPTZ NOT NULL,
+                id_asignado         VARCHAR(50) NOT NULL,
+                dcp_id              VARCHAR(20) NOT NULL,
+                sensor_id           VARCHAR(20) NOT NULL,
+                estacion_nombre     VARCHAR(200),
+                umbral_id           BIGINT NOT NULL,
+                umbral_nombre       VARCHAR(100),
+                valor_referencia    REAL,
+                valor_medido        REAL,
+                operador            VARCHAR(2),
+                periodo_minutos     INT,
+                color               VARCHAR(50),
+                activa              BOOLEAN DEFAULT TRUE,
+                notificada          BOOLEAN DEFAULT FALSE,
+                CONSTRAINT alertas_precipitacion_pkey
+                    PRIMARY KEY (ts, dcp_id, sensor_id, umbral_id)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_alertas_precip_estacion
+            ON public.alertas_precipitacion (id_asignado, ts DESC);
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_alertas_precip_activa
+            ON public.alertas_precipitacion (activa, notificada);
+        """)
+
+        # --- eventos_lluvia ---
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.eventos_lluvia (
+                id                   BIGSERIAL PRIMARY KEY,
+                id_asignado          VARCHAR(50) NOT NULL,
+                dcp_id               VARCHAR(20) NOT NULL,
+                sensor_id            VARCHAR(20) NOT NULL,
+                estacion_nombre      VARCHAR(200),
+                inicio               TIMESTAMPTZ NOT NULL,
+                fin                  TIMESTAMPTZ,
+                acumulado_mm         REAL DEFAULT 0,
+                intensidad_max_mmh   REAL DEFAULT 0,
+                duracion_minutos     INT DEFAULT 0,
+                estado               VARCHAR(20) DEFAULT 'activo',
+                sospechoso           BOOLEAN DEFAULT FALSE,
+                motivo_sospecha      TEXT,
+                ceros_consecutivos   INT DEFAULT 0,
+                ultimo_ts_procesado  TIMESTAMPTZ,
+                ultima_actualizacion TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            DO $$ BEGIN
+                ALTER TABLE public.eventos_lluvia ADD COLUMN IF NOT EXISTS sospechoso BOOLEAN DEFAULT FALSE;
+                ALTER TABLE public.eventos_lluvia ADD COLUMN IF NOT EXISTS motivo_sospecha TEXT;
+            END $$;
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_eventos_lluvia_activo
+            ON public.eventos_lluvia (id_asignado, sensor_id, estado);
+        """)
+
+        # --- precipitacion_cuenca ---
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.precipitacion_cuenca (
+                ts                  TIMESTAMPTZ NOT NULL,
+                tipo                VARCHAR(10) NOT NULL,
+                nombre              VARCHAR(200) NOT NULL,
+                promedio_mm         REAL DEFAULT 0,
+                max_mm              REAL DEFAULT 0,
+                min_mm              REAL DEFAULT 0,
+                estaciones_con_dato INTEGER DEFAULT 0,
+                estaciones_total    INTEGER DEFAULT 0,
+                semaforo            VARCHAR(10),
+                ultima_actualizacion TIMESTAMPTZ DEFAULT NOW(),
+                CONSTRAINT precipitacion_cuenca_pkey
+                    PRIMARY KEY (ts, tipo, nombre)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_precip_cuenca_ts
+            ON public.precipitacion_cuenca (ts DESC, tipo);
+        """)
+
         conn.commit()
         cur.close()
         _tables_ensured = True
-        print("[PG] ✅ Tablas y triggers verificados/creados")
+        print("[PG] ✅ Tablas y triggers verificados/creados (12 tablas)")
 
     except Exception as e:
         print(f"[ERROR] Falló verificación de tablas: {e}")
