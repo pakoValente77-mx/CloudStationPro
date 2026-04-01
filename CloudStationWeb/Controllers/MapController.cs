@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 
 namespace CloudStationWeb.Controllers
 {
@@ -111,6 +112,16 @@ namespace CloudStationWeb.Controllers
                 cuencas = config.Select(c => new { code = c.Code, label = c.Label, kmlFile = c.KmlFile, color = c.Color }),
                 subcuencas = new object[0]
             });
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetStationBanner(string stationId)
+        {
+            if (string.IsNullOrEmpty(stationId))
+                return Json(new { });
+
+            var result = await _dataService.GetStationBannerAsync(stationId);
+            return Json(result ?? new { });
         }
     }
 }

@@ -3,6 +3,13 @@
     ViewData["Title"] = "Administración de Usuarios";
     var userRoles = ViewBag.UserRoles as Dictionary<string, IList<string>>;
     var roles = ViewBag.Roles as List<string>;
+    var user2fa = ViewBag.User2fa as Dictionary<string, bool>;
+    var userLastLogin = ViewBag.UserLastLogin as Dictionary<string, DateTime?>;
+    var pendingUsers = ViewBag.PendingUsers as List<CloudStationWeb.Models.ApplicationUser> ?? new List<CloudStationWeb.Models.ApplicationUser>();
+    var pendingRoles = ViewBag.PendingRoles as Dictionary<string, IList<string>> ?? new Dictionary<string, IList<string>>();
+    var isSuperAdmin = (bool)(ViewBag.IsSuperAdmin ?? false);
+    var organismos = ViewBag.Organismos as List<CloudStationWeb.Models.CatalogItemInt> ?? new List<CloudStationWeb.Models.CatalogItemInt>();
+    var centrosTrabajo = ViewBag.CentrosTrabajo as List<CloudStationWeb.Models.CentroTrabajo> ?? new List<CloudStationWeb.Models.CentroTrabajo>();
 }
 
 @section Styles {
@@ -120,6 +127,7 @@
     .role-Administrador { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
     .role-Operador { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
     .role-Visualizador { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+    .role-SuperAdmin { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 
     .status-active { color: #10b981; }
     .status-inactive { color: #ef4444; }
@@ -246,15 +254,182 @@
     .modal-btn:hover { transform: translateY(-1px); }
 
     @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Pending requests */
+    .pending-section {
+        margin-bottom: 28px;
+        background: rgba(245, 158, 11, 0.06);
+        border: 1px solid rgba(245, 158, 11, 0.15);
+        border-radius: 14px;
+        padding: 24px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .pending-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #f59e0b;
+    }
+
+    .pending-header .count-badge {
+        background: #f59e0b;
+        color: #000;
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .pending-card {
+        background: rgba(20, 24, 33, 0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        transition: background 0.2s;
+    }
+
+    .pending-card:last-child { margin-bottom: 0; }
+    .pending-card:hover { background: rgba(20, 24, 33, 0.8); }
+
+    .pending-avatar {
+        width: 44px; height: 44px;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        flex-shrink: 0;
+    }
+
+    .pending-info { flex: 1; min-width: 0; }
+
+    .pending-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .pending-meta {
+        font-size: 12px;
+        color: rgba(255,255,255,0.45);
+        margin-top: 2px;
+    }
+
+    .pending-note {
+        font-size: 12px;
+        color: rgba(255,255,255,0.55);
+        background: rgba(255,255,255,0.04);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-top: 6px;
+        font-style: italic;
+        max-width: 420px;
+    }
+
+    .pending-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .pending-actions select {
+        padding: 7px 12px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: #fff;
+        font-family: 'Inter';
+        font-size: 12px;
+        outline: none;
+    }
+
+    .pending-actions select option { background: #1a1f2e; }
+
+    .btn-approve {
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-family: 'Inter';
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-approve:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+
+    .btn-reject {
+        padding: 8px 16px;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239,68,68,0.3);
+        color: #fca5a5;
+        border-radius: 8px;
+        font-family: 'Inter';
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-reject:hover { background: rgba(239,68,68,0.2); }
+
+    .inline-select {
+        padding: 5px 8px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.8);
+        font-family: 'Inter';
+        font-size: 11px;
+        outline: none;
+        max-width: 150px;
+        width: 100%;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .inline-select:hover { border-color: rgba(139,92,246,0.4); }
+    .inline-select:focus { border-color: rgba(139,92,246,0.6); }
+    .inline-select option { background: #1a1f2e; color: #fff; }
 </style>
 }
 
 <div class="admin-container">
     <div class="admin-header">
         <h2><i class="users cog icon"></i>Administración de Usuarios</h2>
-        <button class="btn-new-user" onclick="openModal('create')">
-            <i class="plus icon"></i> Nuevo Usuario
-        </button>
+        <div style="display: flex; gap: 10px;">
+            @if (isSuperAdmin)
+            {
+                <button class="btn-new-user" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);" onclick="openCatalogModal()">
+                    <i class="database icon"></i> Catálogos
+                </button>
+            }
+            <a href="@Url.Action("AuditLog", "Admin")" class="btn-new-user" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <i class="clipboard list icon"></i> Bitácora
+            </a>
+            <button class="btn-new-user" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);" onclick="openEmailModal()">
+                <i class="envelope icon"></i> Notificar
+            </button>
+            <button class="btn-new-user" onclick="openModal('create')">
+                <i class="plus icon"></i> Nuevo Usuario
+            </button>
+        </div>
     </div>
 
     @if (TempData["Success"] != null)
@@ -266,6 +441,57 @@
         <div class="alert-error"><i class="exclamation circle icon"></i> @TempData["Error"]</div>
     }
 
+    @if (pendingUsers.Any())
+    {
+        <div class="pending-section">
+            <div class="pending-header">
+                <i class="clock outline icon"></i>
+                Solicitudes Pendientes
+                <span class="count-badge">@pendingUsers.Count</span>
+            </div>
+            @foreach (var pu in pendingUsers)
+            {
+                var puRole = pendingRoles.ContainsKey(pu.Id) ? pendingRoles[pu.Id].FirstOrDefault() ?? "Visualizador" : "Visualizador";
+                <div class="pending-card">
+                    <div class="pending-avatar">@(pu.FullName.Length > 0 ? pu.FullName[0].ToString().ToUpper() : "?")</div>
+                    <div class="pending-info">
+                        <div class="pending-name">@pu.FullName <span style="color:rgba(255,255,255,0.35);font-weight:400;font-size:12px;">(@pu.UserName)</span></div>
+                        <div class="pending-meta">
+                            @(pu.Email ?? "Sin email") • Registrado @pu.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        </div>
+                        @if (!string.IsNullOrEmpty(pu.RegistrationNote))
+                        {
+                            <div class="pending-note">
+                                <i class="quote left icon" style="font-size:10px;"></i> @pu.RegistrationNote
+                            </div>
+                        }
+                    </div>
+                    <div class="pending-actions">
+                        <form method="post" asp-action="ApproveUser" style="display:flex;align-items:center;gap:8px;">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="userId" value="@pu.Id" />
+                            <select name="role" title="Rol a asignar">
+                                @if (roles != null)
+                                {
+                                    @foreach (var r in roles)
+                                    {
+                                        <option value="@r" selected="@(r == puRole)">@r</option>
+                                    }
+                                }
+                            </select>
+                            <button type="submit" class="btn-approve" title="Aprobar solicitud">
+                                <i class="check icon"></i> Aprobar
+                            </button>
+                        </form>
+                        <button type="button" class="btn-reject" onclick="openRejectModal('@pu.Id', '@pu.FullName')" title="Rechazar solicitud">
+                            <i class="times icon"></i> Rechazar
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
     <table class="users-table">
         <thead>
             <tr>
@@ -273,21 +499,56 @@
                 <th>Nombre Completo</th>
                 <th>Email</th>
                 <th>Rol</th>
+                <th>Organismo</th>
+                <th>Centro Trabajo</th>
+                <th>2FA</th>
                 <th>Estado</th>
-                <th>Creado</th>
+                <th>Último Acceso</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-            @foreach (var user in Model)
+            @foreach (var user in Model.Where(u => u.IsApproved))
             {
                 var role = userRoles![user.Id].FirstOrDefault() ?? "Sin rol";
+                var has2fa = user2fa != null && user2fa.ContainsKey(user.Id) && user2fa[user.Id];
+                var lastLogin = userLastLogin != null && userLastLogin.ContainsKey(user.Id) ? userLastLogin[user.Id] : null;
+                var orgName = user.OrganismoId.HasValue ? organismos.FirstOrDefault(o => o.Id == user.OrganismoId)?.Nombre ?? "—" : "—";
+                var ctName = user.CentroTrabajoId.HasValue ? centrosTrabajo.FirstOrDefault(c => c.Id == user.CentroTrabajoId)?.Nombre ?? "—" : "—";
                 <tr>
                     <td><strong>@user.UserName</strong></td>
                     <td>@user.FullName</td>
                     <td style="color: rgba(255,255,255,0.5);">@user.Email</td>
                     <td>
                         <span class="role-badge role-@role">@role</span>
+                    </td>
+                    <td>
+                        <select class="inline-select" onchange="changeOrganismo('@user.Id', this.value)" title="Asignar Organismo">
+                            <option value="">— Sin asignar —</option>
+                            @foreach (var org in organismos)
+                            {
+                                <option value="@org.Id" selected="@(user.OrganismoId == org.Id)">@org.Nombre</option>
+                            }
+                        </select>
+                    </td>
+                    <td>
+                        <select class="inline-select" onchange="changeCentroTrabajo('@user.Id', this.value)" title="Asignar Centro de Trabajo">
+                            <option value="">— Sin asignar —</option>
+                            @foreach (var ct in centrosTrabajo)
+                            {
+                                <option value="@ct.Id" selected="@(user.CentroTrabajoId == ct.Id)">@ct.Nombre</option>
+                            }
+                        </select>
+                    </td>
+                    <td>
+                        @if (has2fa)
+                        {
+                            <span style="color: #10b981;" title="2FA activo"><i class="shield alternate icon"></i></span>
+                        }
+                        else
+                        {
+                            <span style="color: rgba(255,255,255,0.2);" title="Sin 2FA"><i class="shield icon"></i></span>
+                        }
                     </td>
                     <td>
                         @if (user.IsActive)
@@ -300,7 +561,14 @@
                         }
                     </td>
                     <td style="color: rgba(255,255,255,0.4); font-size: 13px;">
-                        @user.CreatedAt.ToString("dd/MM/yyyy")
+                        @if (lastLogin.HasValue)
+                        {
+                            @lastLogin.Value.ToLocalTime().ToString("dd/MM HH:mm")
+                        }
+                        else
+                        {
+                            <span style="font-style:italic;">Nunca</span>
+                        }
                     </td>
                     <td>
                         @if (user.UserName != "administrador")
@@ -319,8 +587,21 @@
                                 <i class="key icon"></i>
                             </button>
                             <a href="@Url.Action("UserPermissions", "Admin", new { userId = user.Id })" class="action-btn" title="Asignar Productos">
-                                <i class="shield alternate icon"></i>
+                                <i class="folder icon"></i>
                             </a>
+                            @if (has2fa)
+                            {
+                                <form method="post" asp-action="Toggle2fa" style="display:inline;" onsubmit="return confirm('¿Desactivar 2FA para este usuario?')">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="userId" value="@user.Id" />
+                                    <button type="submit" class="action-btn" title="Desactivar 2FA" style="color:#f59e0b;">
+                                        <i class="shield alternate icon"></i>
+                                    </button>
+                                </form>
+                            }
+                            <button class="action-btn" onclick="openEmailModal('@user.Id', '@user.FullName', '@user.Email')" title="Enviar Correo" style="color:#8b5cf6;">
+                                <i class="envelope icon"></i>
+                            </button>
                             <form method="post" asp-action="DeleteUser" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este usuario?')">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="userId" value="@user.Id" />
@@ -371,6 +652,26 @@
                         {
                             <option value="@r">@r</option>
                         }
+                    }
+                </select>
+            </div>
+            <div class="modal-group">
+                <label>Organismo</label>
+                <select name="organismoId">
+                    <option value="">— Sin asignar —</option>
+                    @foreach (var org in organismos)
+                    {
+                        <option value="@org.Id">@org.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="modal-group">
+                <label>Centro de Trabajo</label>
+                <select name="centroTrabajoId">
+                    <option value="">— Sin asignar —</option>
+                    @foreach (var ct in centrosTrabajo)
+                    {
+                        <option value="@ct.Id">@ct.Nombre</option>
                     }
                 </select>
             </div>
@@ -428,6 +729,100 @@
     </div>
 </div>
 
+<!-- Send Email Modal -->
+<div id="emailModal" class="modal-overlay">
+    <div class="modal-card" style="max-width:540px;">
+        <h3><i class="envelope icon" style="color:#8b5cf6;"></i>Enviar Notificación</h3>
+        <p id="emailRecipientInfo" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:18px;"></p>
+        <form method="post" asp-action="SendNotification">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="userId" id="emailUserId" />
+            <input type="hidden" name="sendToAll" id="emailSendToAll" value="false" />
+            <div class="modal-group">
+                <label>Destinatario</label>
+                <div style="display:flex;gap:10px;margin-bottom:12px;">
+                    <button type="button" id="btnSingle" class="action-btn" style="flex:1;padding:8px;font-size:13px;background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.4);color:#a78bfa;" onclick="setEmailMode(false)">Usuario específico</button>
+                    <button type="button" id="btnAll" class="action-btn" style="flex:1;padding:8px;font-size:13px;" onclick="setEmailMode(true)">Todos los usuarios</button>
+                </div>
+            </div>
+            <div class="modal-group">
+                <label>Asunto *</label>
+                <input type="text" name="subject" id="emailSubject" required placeholder="Asunto del correo" />
+            </div>
+            <div class="modal-group">
+                <label>Mensaje *</label>
+                <textarea name="message" id="emailMessage" required placeholder="Escriba el mensaje para el usuario..." style="width:100%;min-height:120px;padding:12px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:'Inter';font-size:14px;outline:none;resize:vertical;"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeModal('emailModal')">Cancelar</button>
+                <button type="submit" class="modal-btn submit" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);"><i class="paper plane icon"></i> Enviar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reject User Modal -->
+<div id="rejectModal" class="modal-overlay">
+    <div class="modal-card">
+        <h3><i class="times circle icon" style="color:#ef4444;"></i>Rechazar Solicitud</h3>
+        <p style="color:rgba(255,255,255,0.6);font-size:14px;margin-bottom:18px;">
+            ¿Está seguro de rechazar la solicitud de <strong id="rejectUserName" style="color:#fff;"></strong>?
+        </p>
+        <form method="post" asp-action="RejectUser">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="userId" id="rejectUserId" />
+            <div class="modal-group">
+                <label>Motivo del rechazo (opcional)</label>
+                <input type="text" name="reason" placeholder="Ej: No pertenece al área autorizada" />
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeModal('rejectModal')">Cancelar</button>
+                <button type="submit" class="modal-btn submit" style="background:linear-gradient(135deg, #ef4444, #dc2626);">Rechazar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Catalog Management Modal (SuperAdmin only) -->
+<div id="catalogModal" class="modal-overlay">
+    <div class="modal-card" style="max-width:680px;">
+        <h3><i class="database icon" style="color:#8b5cf6;"></i>Gestión de Catálogos</h3>
+        <div style="display:flex;gap:10px;margin-bottom:20px;">
+            <button type="button" id="tabOrg" class="action-btn" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.4);color:#a78bfa;" onclick="switchCatalogTab('org')">
+                <i class="building icon"></i> Organismos
+            </button>
+            <button type="button" id="tabCt" class="action-btn" style="flex:1;padding:10px;font-size:13px;font-weight:600;" onclick="switchCatalogTab('ct')">
+                <i class="briefcase icon"></i> Centros de Trabajo
+            </button>
+        </div>
+
+        <!-- Organismos Tab -->
+        <div id="orgTab">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <input type="text" id="orgNombre" placeholder="Nombre del Organismo" style="flex:2;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:'Inter';font-size:14px;outline:none;" />
+                <input type="text" id="orgIniciales" placeholder="Iniciales" style="flex:0.6;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:'Inter';font-size:14px;outline:none;text-transform:uppercase;" maxlength="10" />
+                <input type="hidden" id="orgEditId" value="0" />
+                <button type="button" class="modal-btn submit" style="white-space:nowrap;" onclick="saveOrganismo()"><i class="save icon"></i> Guardar</button>
+            </div>
+            <div id="orgList" style="max-height:320px;overflow-y:auto;"></div>
+        </div>
+
+        <!-- Centros de Trabajo Tab -->
+        <div id="ctTab" style="display:none;">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <input type="text" id="ctNombre" placeholder="Nombre del Centro de Trabajo" style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:'Inter';font-size:14px;outline:none;" />
+                <input type="hidden" id="ctEditId" value="0" />
+                <button type="button" class="modal-btn submit" style="white-space:nowrap;" onclick="saveCentroTrabajo()"><i class="save icon"></i> Guardar</button>
+            </div>
+            <div id="ctList" style="max-height:320px;overflow-y:auto;"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top:20px;">
+            <button type="button" class="modal-btn cancel" onclick="closeModal('catalogModal')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
 <script>
     function openModal(type, userId, currentRole) {
@@ -443,6 +838,51 @@
         }
     }
 
+    function openRejectModal(userId, fullName) {
+        document.getElementById('rejectUserId').value = userId;
+        document.getElementById('rejectUserName').textContent = fullName;
+        document.getElementById('rejectModal').classList.add('active');
+    }
+
+    function openEmailModal(userId, fullName, email) {
+        document.getElementById('emailSubject').value = '';
+        document.getElementById('emailMessage').value = '';
+        if (userId) {
+            document.getElementById('emailUserId').value = userId;
+            document.getElementById('emailSendToAll').value = 'false';
+            document.getElementById('emailRecipientInfo').innerHTML = 'Para: <strong style="color:#fff;">' + fullName + '</strong> (' + (email || 'sin email') + ')';
+            setEmailMode(false);
+        } else {
+            document.getElementById('emailUserId').value = '';
+            document.getElementById('emailSendToAll').value = 'true';
+            document.getElementById('emailRecipientInfo').innerHTML = 'Enviar notificación a <strong style="color:#fff;">todos los usuarios activos</strong> con email registrado.';
+            setEmailMode(true);
+        }
+        document.getElementById('emailModal').classList.add('active');
+    }
+
+    function setEmailMode(all) {
+        document.getElementById('emailSendToAll').value = all ? 'true' : 'false';
+        var btnSingle = document.getElementById('btnSingle');
+        var btnAll = document.getElementById('btnAll');
+        if (all) {
+            btnAll.style.background = 'rgba(139,92,246,0.15)';
+            btnAll.style.borderColor = 'rgba(139,92,246,0.4)';
+            btnAll.style.color = '#a78bfa';
+            btnSingle.style.background = 'rgba(255,255,255,0.05)';
+            btnSingle.style.borderColor = 'rgba(255,255,255,0.1)';
+            btnSingle.style.color = 'rgba(255,255,255,0.7)';
+            document.getElementById('emailRecipientInfo').innerHTML = 'Enviar notificación a <strong style="color:#fff;">todos los usuarios activos</strong> con email registrado.';
+        } else {
+            btnSingle.style.background = 'rgba(139,92,246,0.15)';
+            btnSingle.style.borderColor = 'rgba(139,92,246,0.4)';
+            btnSingle.style.color = '#a78bfa';
+            btnAll.style.background = 'rgba(255,255,255,0.05)';
+            btnAll.style.borderColor = 'rgba(255,255,255,0.1)';
+            btnAll.style.color = 'rgba(255,255,255,0.7)';
+        }
+    }
+
     function closeModal(id) {
         document.getElementById(id).classList.remove('active');
     }
@@ -453,5 +893,176 @@
             if (e.target === this) this.classList.remove('active');
         });
     });
+
+    // ─── Catalog Management ───
+    function openCatalogModal() {
+        switchCatalogTab('org');
+        document.getElementById('catalogModal').classList.add('active');
+    }
+
+    function switchCatalogTab(tab) {
+        var tabOrg = document.getElementById('tabOrg');
+        var tabCt = document.getElementById('tabCt');
+        var orgTab = document.getElementById('orgTab');
+        var ctTab = document.getElementById('ctTab');
+        if (tab === 'org') {
+            tabOrg.style.background = 'rgba(139,92,246,0.15)';
+            tabOrg.style.borderColor = 'rgba(139,92,246,0.4)';
+            tabOrg.style.color = '#a78bfa';
+            tabCt.style.background = 'rgba(255,255,255,0.05)';
+            tabCt.style.borderColor = 'rgba(255,255,255,0.1)';
+            tabCt.style.color = 'rgba(255,255,255,0.7)';
+            orgTab.style.display = 'block';
+            ctTab.style.display = 'none';
+            loadOrganismos();
+        } else {
+            tabCt.style.background = 'rgba(139,92,246,0.15)';
+            tabCt.style.borderColor = 'rgba(139,92,246,0.4)';
+            tabCt.style.color = '#a78bfa';
+            tabOrg.style.background = 'rgba(255,255,255,0.05)';
+            tabOrg.style.borderColor = 'rgba(255,255,255,0.1)';
+            tabOrg.style.color = 'rgba(255,255,255,0.7)';
+            ctTab.style.display = 'block';
+            orgTab.style.display = 'none';
+            loadCentrosTrabajo();
+        }
+    }
+
+    var antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+    function loadOrganismos() {
+        fetch('@Url.Action("Organismos", "Admin")').then(r => r.json()).then(data => {
+            var html = '';
+            data.forEach(function(o) {
+                var statusColor = o.Activo ? '#10b981' : '#ef4444';
+                var statusText = o.Activo ? 'Activo' : 'Inactivo';
+                html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.05);">' +
+                    '<div style="flex:1;"><strong style="color:#fff;">' + o.Nombre + '</strong> <span style="color:rgba(255,255,255,0.4);font-size:12px;">(' + o.Iniciales + ')</span></div>' +
+                    '<span style="color:' + statusColor + ';font-size:12px;"><i class="circle icon" style="font-size:8px;"></i> ' + statusText + '</span>' +
+                    '<button type="button" class="action-btn" onclick="editOrganismo(' + o.Id + ',\'' + o.Nombre.replace(/'/g, "\\'") + '\',\'' + o.Iniciales + '\')" title="Editar"><i class="edit icon"></i></button>' +
+                    '<button type="button" class="action-btn" onclick="toggleOrganismo(' + o.Id + ')" title="' + (o.Activo ? 'Desactivar' : 'Activar') + '"><i class="' + (o.Activo ? 'ban' : 'check') + ' icon"></i></button>' +
+                    '</div>';
+            });
+            document.getElementById('orgList').innerHTML = html || '<p style="color:rgba(255,255,255,0.4);text-align:center;">No hay organismos.</p>';
+        });
+    }
+
+    function editOrganismo(id, nombre, iniciales) {
+        document.getElementById('orgEditId').value = id;
+        document.getElementById('orgNombre').value = nombre;
+        document.getElementById('orgIniciales').value = iniciales;
+    }
+
+    function saveOrganismo() {
+        var id = parseInt(document.getElementById('orgEditId').value) || 0;
+        var nombre = document.getElementById('orgNombre').value.trim();
+        var iniciales = document.getElementById('orgIniciales').value.trim();
+        if (!nombre || !iniciales) { alert('Nombre e Iniciales son requeridos.'); return; }
+        var form = new FormData();
+        form.append('id', id);
+        form.append('nombre', nombre);
+        form.append('iniciales', iniciales);
+        fetch('@Url.Action("SaveOrganismo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => {
+            if (res.success) {
+                document.getElementById('orgEditId').value = '0';
+                document.getElementById('orgNombre').value = '';
+                document.getElementById('orgIniciales').value = '';
+                loadOrganismos();
+            } else { alert(res.message || 'Error'); }
+        });
+    }
+
+    function toggleOrganismo(id) {
+        var form = new FormData();
+        form.append('id', id);
+        fetch('@Url.Action("ToggleOrganismo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => { if (res.success) loadOrganismos(); });
+    }
+
+    function loadCentrosTrabajo() {
+        fetch('@Url.Action("CentrosTrabajo", "Admin")').then(r => r.json()).then(data => {
+            var html = '';
+            data.forEach(function(c) {
+                var statusColor = c.activo ? '#10b981' : '#ef4444';
+                var statusText = c.activo ? 'Activo' : 'Inactivo';
+                html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.05);">' +
+                    '<div style="flex:1;"><strong style="color:#fff;">' + c.nombre + '</strong></div>' +
+                    '<span style="color:' + statusColor + ';font-size:12px;"><i class="circle icon" style="font-size:8px;"></i> ' + statusText + '</span>' +
+                    '<button type="button" class="action-btn" onclick="editCentroTrabajo(' + c.id + ',\'' + c.nombre.replace(/'/g, "\\'") + '\')" title="Editar"><i class="edit icon"></i></button>' +
+                    '<button type="button" class="action-btn" onclick="toggleCentroTrabajo(' + c.id + ')" title="' + (c.activo ? 'Desactivar' : 'Activar') + '"><i class="' + (c.activo ? 'ban' : 'check') + ' icon"></i></button>' +
+                    '</div>';
+            });
+            document.getElementById('ctList').innerHTML = html || '<p style="color:rgba(255,255,255,0.4);text-align:center;">No hay centros de trabajo.</p>';
+        });
+    }
+
+    function editCentroTrabajo(id, nombre) {
+        document.getElementById('ctEditId').value = id;
+        document.getElementById('ctNombre').value = nombre;
+    }
+
+    function saveCentroTrabajo() {
+        var id = parseInt(document.getElementById('ctEditId').value) || 0;
+        var nombre = document.getElementById('ctNombre').value.trim();
+        if (!nombre) { alert('Nombre es requerido.'); return; }
+        var form = new FormData();
+        form.append('id', id);
+        form.append('nombre', nombre);
+        fetch('@Url.Action("SaveCentroTrabajo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => {
+            if (res.success) {
+                document.getElementById('ctEditId').value = '0';
+                document.getElementById('ctNombre').value = '';
+                loadCentrosTrabajo();
+            } else { alert(res.message || 'Error'); }
+        });
+    }
+
+    function toggleCentroTrabajo(id) {
+        var form = new FormData();
+        form.append('id', id);
+        fetch('@Url.Action("ToggleCentroTrabajo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => { if (res.success) loadCentrosTrabajo(); });
+    }
+
+    // ─── Inline Organismo / CentroTrabajo assignment ───
+    function changeOrganismo(userId, orgId) {
+        var form = new FormData();
+        form.append('userId', userId);
+        if (orgId) form.append('organismoId', orgId);
+        fetch('@Url.Action("ChangeOrganismo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => {
+            if (!res.success) alert('Error al cambiar organismo');
+        });
+    }
+
+    function changeCentroTrabajo(userId, ctId) {
+        var form = new FormData();
+        form.append('userId', userId);
+        if (ctId) form.append('centroTrabajoId', ctId);
+        fetch('@Url.Action("ChangeCentroTrabajo", "Admin")', {
+            method: 'POST',
+            headers: { 'RequestVerificationToken': antiForgeryToken },
+            body: form
+        }).then(r => r.json()).then(res => {
+            if (!res.success) alert('Error al cambiar centro de trabajo');
+        });
+    }
 </script>
 }

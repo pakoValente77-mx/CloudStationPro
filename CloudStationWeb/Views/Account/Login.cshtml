@@ -319,9 +319,12 @@
                 <button type="submit" class="btn-login">Iniciar Sesión</button>
             </form>
 
-            <div style="text-align: center; margin-top: 14px;">
+            <div style="text-align: center; margin-top: 14px; display: flex; justify-content: center; gap: 20px;">
                 <a href="@Url.Action("ForgotPassword", "Account")" style="color: rgba(255,255,255,0.4); font-size: 13px; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
                     ¿Olvidó su contraseña?
+                </a>
+                <a href="@Url.Action("Register", "Account")" style="color: rgba(245,158,11,0.7); font-size: 13px; text-decoration: none; transition: color 0.2s; font-weight: 500;" onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='rgba(245,158,11,0.7)'">
+                    Solicitar Acceso
                 </a>
             </div>
 

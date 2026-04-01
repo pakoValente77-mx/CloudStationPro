@@ -96,7 +96,7 @@ namespace CloudStationWeb.Controllers
         // POST: /Documents/Upload
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Administrador,Operador")]
+        [Authorize(Roles = "SuperAdmin,Administrador,Operador")]
         public async Task<IActionResult> Upload(int productId, IFormFile file, string? notes)
         {
             if (file == null || file.Length == 0)
@@ -298,7 +298,7 @@ namespace CloudStationWeb.Controllers
         // POST: /Documents/UploadHistorical
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Administrador,Operador")]
+        [Authorize(Roles = "SuperAdmin,Administrador,Operador")]
         public async Task<IActionResult> UploadHistorical(int productId, IFormFile file, DateTime reportDate)
         {
             if (file == null || file.Length == 0)
@@ -543,7 +543,7 @@ namespace CloudStationWeb.Controllers
         }
 
         // GET: /Documents/AuditLog
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> AuditLog(int? productId, string? action, int page = 1)
         {
             var query = _context.DocumentAuditLogs
@@ -578,7 +578,7 @@ namespace CloudStationWeb.Controllers
         }
 
         // GET: /Documents/ManageProducts (Admin)
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> ManageProducts()
         {
             var products = await _context.DocumentProducts
@@ -590,7 +590,7 @@ namespace CloudStationWeb.Controllers
         // POST: /Documents/CreateProduct
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> CreateProduct(string name, string code, string? description, bool requiredDaily)
         {
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(code))
@@ -625,7 +625,7 @@ namespace CloudStationWeb.Controllers
         // POST: /Documents/ToggleProduct/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> ToggleProduct(int id)
         {
             var product = await _context.DocumentProducts.FindAsync(id);
@@ -639,7 +639,7 @@ namespace CloudStationWeb.Controllers
         }
 
         // GET: /Documents/StorageSettings (Admin)
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> StorageSettings()
         {
             var products = await _context.DocumentProducts
@@ -651,7 +651,7 @@ namespace CloudStationWeb.Controllers
         // POST: /Documents/UpdateStoragePath
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = "SuperAdmin,Administrador")]
         public async Task<IActionResult> UpdateStoragePath(int id, string storagePath)
         {
             var product = await _context.DocumentProducts.FindAsync(id);

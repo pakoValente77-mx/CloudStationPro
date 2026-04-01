@@ -1,0 +1,231 @@
+@{
+    ViewData["Title"] = "Bitácora de Accesos";
+    var logs = ViewBag.Logs as List<CloudStationWeb.Models.LoginAudit>;
+    int page = ViewBag.Page;
+    int totalPages = ViewBag.TotalPages;
+    string search = ViewBag.Search ?? "";
+    string filter = ViewBag.Filter ?? "";
+    int totalRecords = ViewBag.TotalRecords;
+}
+
+@section Styles {
+<style>
+    .audit-container {
+        padding: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+        overflow: auto;
+    }
+
+    .audit-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 24px; flex-wrap: wrap; gap: 16px;
+    }
+    .audit-header h2 {
+        font-size: 22px; font-weight: 600; color: #fff;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .audit-header h2 i { color: #f59e0b; }
+
+    .filters {
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+
+    .filter-input {
+        padding: 9px 14px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; color: #fff;
+        font-family: 'Inter'; font-size: 13px; outline: none;
+        width: 220px;
+    }
+    .filter-input:focus { border-color: rgba(59,130,246,0.5); }
+    .filter-input::placeholder { color: rgba(255,255,255,0.3); }
+
+    .filter-btn {
+        padding: 9px 16px; border-radius: 10px;
+        font-family: 'Inter'; font-size: 13px; font-weight: 500;
+        cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7);
+        transition: all 0.2s; text-decoration: none;
+    }
+    .filter-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .filter-btn.active { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.4); color: #93c5fd; }
+
+    .stats-bar {
+        display: flex; gap: 16px; margin-bottom: 20px;
+    }
+    .stat-chip {
+        padding: 6px 14px; border-radius: 20px;
+        font-size: 12px; font-weight: 600;
+    }
+    .stat-total { background: rgba(59,130,246,0.12); color: #93c5fd; }
+
+    .log-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .log-table thead th {
+        padding: 13px 16px; text-align: left;
+        font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        color: rgba(255,255,255,0.5);
+        background: rgba(255,255,255,0.03);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .log-table tbody td {
+        padding: 11px 16px; font-size: 13px;
+        color: rgba(255,255,255,0.8);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .log-table tbody tr:last-child td { border-bottom: none; }
+    .log-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+    .badge-success {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 14px; font-size: 11px; font-weight: 600;
+        background: rgba(16,185,129,0.12); color: #6ee7b7;
+    }
+    .badge-fail {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 14px; font-size: 11px; font-weight: 600;
+        background: rgba(239,68,68,0.12); color: #fca5a5;
+    }
+    .badge-provider {
+        display: inline-block; padding: 2px 8px; border-radius: 10px;
+        font-size: 11px; font-weight: 500;
+        background: rgba(99,102,241,0.12); color: #a5b4fc;
+    }
+
+    .ip-cell { font-family: 'Courier New', monospace; font-size: 12px; color: rgba(255,255,255,0.5); }
+    .ua-cell { font-size: 11px; color: rgba(255,255,255,0.35); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .pagination {
+        display: flex; justify-content: center; gap: 6px;
+        margin-top: 20px;
+    }
+    .page-btn {
+        padding: 8px 14px; border-radius: 10px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+        font-family: 'Inter'; font-size: 13px;
+        cursor: pointer; text-decoration: none;
+        transition: all 0.2s;
+    }
+    .page-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .page-btn.current { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); color: #93c5fd; }
+    .page-btn.disabled { opacity: 0.3; pointer-events: none; }
+
+    .btn-back {
+        padding: 9px 18px; border-radius: 10px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+        font-family: 'Inter'; font-size: 13px; font-weight: 500;
+        text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-back:hover { background: rgba(255,255,255,0.1); color: #fff; }
+</style>
+}
+
+<div class="audit-container">
+    <div class="audit-header">
+        <h2><i class="clipboard list icon"></i> Bitácora de Accesos</h2>
+        <a href="@Url.Action("Index", "Admin")" class="btn-back">
+            <i class="arrow left icon"></i> Volver a Usuarios
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="filters" style="margin-bottom: 20px;">
+        <input type="text" name="search" value="@search" class="filter-input" placeholder="Buscar por usuario o IP..." />
+        <a href="@Url.Action("AuditLog", "Admin", new { search })" class="filter-btn @(string.IsNullOrEmpty(filter) ? "active" : "")">Todos</a>
+        <a href="@Url.Action("AuditLog", "Admin", new { search, filter = "success" })" class="filter-btn @(filter == "success" ? "active" : "")">
+            <i class="check icon"></i> Exitosos
+        </a>
+        <a href="@Url.Action("AuditLog", "Admin", new { search, filter = "failed" })" class="filter-btn @(filter == "failed" ? "active" : "")">
+            <i class="times icon"></i> Fallidos
+        </a>
+        <button type="submit" class="filter-btn" style="background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); color: #93c5fd;">
+            <i class="search icon"></i> Buscar
+        </button>
+    </form>
+
+    <div class="stats-bar">
+        <span class="stat-chip stat-total"><i class="database icon"></i> @totalRecords registros</span>
+    </div>
+
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th>Fecha/Hora</th>
+                <th>Usuario</th>
+                <th>Estado</th>
+                <th>Método</th>
+                <th>Detalle</th>
+                <th>IP</th>
+                <th>Navegador</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (logs != null)
+            {
+                @foreach (var log in logs)
+                {
+                    <tr>
+                        <td>@log.Timestamp.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                        <td><strong>@log.UserName</strong></td>
+                        <td>
+                            @if (log.Success)
+                            {
+                                <span class="badge-success"><i class="check icon"></i> Exitoso</span>
+                            }
+                            else
+                            {
+                                <span class="badge-fail"><i class="times icon"></i> Fallido</span>
+                            }
+                        </td>
+                        <td><span class="badge-provider">@log.Provider</span></td>
+                        <td style="font-size: 12px; color: rgba(255,255,255,0.5);">@(log.FailureReason ?? "—")</td>
+                        <td class="ip-cell">@log.IpAddress</td>
+                        <td class="ua-cell" title="@log.UserAgent">
+                            @{
+                                var ua = log.UserAgent ?? "";
+                                var shortUa = ua.Contains("Chrome") ? "Chrome" :
+                                              ua.Contains("Firefox") ? "Firefox" :
+                                              ua.Contains("Safari") ? "Safari" :
+                                              ua.Contains("Edge") ? "Edge" :
+                                              ua.Length > 30 ? ua[..30] + "..." : ua;
+                            }
+                            @shortUa
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    @if (totalPages > 1)
+    {
+        <div class="pagination">
+            <a href="@Url.Action("AuditLog", "Admin", new { page = page - 1, search, filter })" class="page-btn @(page <= 1 ? "disabled" : "")">
+                <i class="chevron left icon"></i>
+            </a>
+            @for (int p = Math.Max(1, page - 3); p <= Math.Min(totalPages, page + 3); p++)
+            {
+                <a href="@Url.Action("AuditLog", "Admin", new { page = p, search, filter })" class="page-btn @(p == page ? "current" : "")">@p</a>
+            }
+            <a href="@Url.Action("AuditLog", "Admin", new { page = page + 1, search, filter })" class="page-btn @(page >= totalPages ? "disabled" : "")">
+                <i class="chevron right icon"></i>
+            </a>
+        </div>
+    }
+</div>

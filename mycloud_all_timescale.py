@@ -125,7 +125,10 @@ def generar_archivo_mis(dcp_id, meta, raw_header, raw_payload, valores, estacion
         timestamp = meta['timestamp']
         # Nombre de archivo: DCPID_YYYYMMDDHHMMEX.mis
         filename = f"{dcp_id}_{timestamp.strftime('%Y%m%d%H%M')}EX.mis"
-        filepath = os.path.join(MIS_OUT_DIR, filename)
+        # Agrupar por año/mes/dia para evitar acumulación excesiva
+        sub_dir = os.path.join(MIS_OUT_DIR, timestamp.strftime('%Y'), timestamp.strftime('%m'), timestamp.strftime('%d'))
+        os.makedirs(sub_dir, exist_ok=True)
+        filepath = os.path.join(sub_dir, filename)
         
         id_asignado = estacion_data.get("id_asignado", "")
         
@@ -369,35 +372,41 @@ def importar_directorio_mis(directorio, sensores_global, estaciones_global, patr
 def importar_mis_automatico():
     """Importa archivos .mis desde la carpeta de entrada y los mueve a procesados.
     Se ejecuta periódicamente desde el scheduler."""
-    import glob
-    import shutil
+    try:
+        import glob
+        import shutil
 
-    mis_import_dir = config.get('paths', 'mis_import_dir_windows' if platform.system() == 'Windows' else 'mis_import_dir_mac', fallback='')
-    if not mis_import_dir or not os.path.isdir(mis_import_dir):
-        return  # No configurado o no existe, silenciosamente ignorar
+        mis_import_dir = config.get('paths', 'mis_import_dir_windows' if platform.system() == 'Windows' else 'mis_import_dir_mac', fallback='')
+        if not mis_import_dir or not os.path.isdir(mis_import_dir):
+            return  # No configurado o no existe, silenciosamente ignorar
 
-    procesados_dir = os.path.join(mis_import_dir, 'procesados')
-    errores_dir = os.path.join(mis_import_dir, 'errores')
+        procesados_dir = os.path.join(mis_import_dir, 'procesados')
+        errores_dir = os.path.join(mis_import_dir, 'errores')
 
-    archivos = sorted(glob.glob(os.path.join(mis_import_dir, '*.mis')))
-    if not archivos:
-        return  # Sin archivos pendientes
+        archivos = sorted(glob.glob(os.path.join(mis_import_dir, '*.mis')))
+        if not archivos:
+            return  # Sin archivos pendientes
 
-    os.makedirs(procesados_dir, exist_ok=True)
-    os.makedirs(errores_dir, exist_ok=True)
+        os.makedirs(procesados_dir, exist_ok=True)
+        os.makedirs(errores_dir, exist_ok=True)
 
-    print(f"[AUTO-IMPORT] {len(archivos)} archivos .mis pendientes en {mis_import_dir}")
-    total_reg = 0
-    for filepath in archivos:
-        nombre = os.path.basename(filepath)
-        n = importar_archivo_mis(filepath, SENSORES, ESTACIONES)
-        if n > 0:
-            shutil.move(filepath, os.path.join(procesados_dir, nombre))
-            total_reg += n
-        else:
-            shutil.move(filepath, os.path.join(errores_dir, nombre))
+        print(f"[AUTO-IMPORT] {len(archivos)} archivos .mis pendientes en {mis_import_dir}")
+        total_reg = 0
+        for filepath in archivos:
+            try:
+                nombre = os.path.basename(filepath)
+                n = importar_archivo_mis(filepath, SENSORES, ESTACIONES)
+                if n > 0:
+                    shutil.move(filepath, os.path.join(procesados_dir, nombre))
+                    total_reg += n
+                else:
+                    shutil.move(filepath, os.path.join(errores_dir, nombre))
+            except Exception as ef:
+                print(f"[AUTO-IMPORT] Error procesando {os.path.basename(filepath)}: {ef}")
 
-    print(f"[AUTO-IMPORT] Finalizado: {total_reg} registros importados, {len(archivos)} archivos procesados")
+        print(f"[AUTO-IMPORT] Finalizado: {total_reg} registros importados, {len(archivos)} archivos procesados")
+    except Exception as e:
+        print(f"[ERROR AUTO-IMPORT] {e}")
 
 
 # ==================== IMPORTACIÓN AUTOMÁTICA DE EXCEL FUNVASOS ====================
@@ -582,74 +591,80 @@ def _funvasos_insertar_pg(fecha, registros):
 def importar_funvasos_automatico():
     """Monitorea carpeta de entrada, parsea Excel FunVasos, inserta en DB y archiva.
     Se ejecuta periódicamente desde el scheduler."""
-    import glob as glob_mod
-    import shutil
+    try:
+        import glob as glob_mod
+        import shutil
 
-    inbox_key = 'funvasos_inbox_windows' if platform.system() == 'Windows' else 'funvasos_inbox_mac'
-    inbox_dir = config.get('paths', inbox_key, fallback='')
-    if not inbox_dir or not os.path.isdir(inbox_dir):
-        return
+        inbox_key = 'funvasos_inbox_windows' if platform.system() == 'Windows' else 'funvasos_inbox_mac'
+        inbox_dir = config.get('paths', inbox_key, fallback='')
+        if not inbox_dir or not os.path.isdir(inbox_dir):
+            return
 
-    repo_key = 'funvasos_repo_windows' if platform.system() == 'Windows' else 'funvasos_repo_mac'
-    repo_dir = config.get('paths', repo_key, fallback='')
+        repo_key = 'funvasos_repo_windows' if platform.system() == 'Windows' else 'funvasos_repo_mac'
+        repo_dir = config.get('paths', repo_key, fallback='')
 
-    procesados_dir = os.path.join(inbox_dir, 'procesados')
-    errores_dir = os.path.join(inbox_dir, 'errores')
+        procesados_dir = os.path.join(inbox_dir, 'procesados')
+        errores_dir = os.path.join(inbox_dir, 'errores')
 
-    # Buscar archivos .xlsx y .xls
-    archivos = sorted(
-        glob_mod.glob(os.path.join(inbox_dir, '*.xlsx')) +
-        glob_mod.glob(os.path.join(inbox_dir, '*.xls')) +
-        glob_mod.glob(os.path.join(inbox_dir, '*.xlsm'))
-    )
-    if not archivos:
-        return
+        # Buscar archivos .xlsx y .xls
+        archivos = sorted(
+            glob_mod.glob(os.path.join(inbox_dir, '*.xlsx')) +
+            glob_mod.glob(os.path.join(inbox_dir, '*.xls')) +
+            glob_mod.glob(os.path.join(inbox_dir, '*.xlsm'))
+        )
+        if not archivos:
+            return
 
-    os.makedirs(procesados_dir, exist_ok=True)
-    os.makedirs(errores_dir, exist_ok=True)
-    if repo_dir:
-        os.makedirs(repo_dir, exist_ok=True)
-
-    print(f"[FUNVASOS] {len(archivos)} archivos Excel pendientes en {inbox_dir}")
-
-    for filepath in archivos:
-        nombre = os.path.basename(filepath)
-        print(f"[FUNVASOS] Procesando: {nombre}")
-
-        fecha, registros, errores = _funvasos_parsear_excel(filepath)
-
-        if errores:
-            for err in errores:
-                print(f"[FUNVASOS]   Error: {err}")
-
-        if not fecha or not registros:
-            print(f"[FUNVASOS]   → Movido a errores/")
-            shutil.move(filepath, os.path.join(errores_dir, nombre))
-            continue
-
-        # Insertar en PostgreSQL
-        ok = _funvasos_insertar_pg(fecha, registros)
-        if not ok:
-            print(f"[FUNVASOS]   → Error BD, movido a errores/")
-            shutil.move(filepath, os.path.join(errores_dir, nombre))
-            continue
-
-        # Copiar al repositorio de documentos con nombre estándar FINddmmyy.xlsx
+        os.makedirs(procesados_dir, exist_ok=True)
+        os.makedirs(errores_dir, exist_ok=True)
         if repo_dir:
-            ext = os.path.splitext(nombre)[1]
-            repo_name = f"FIN{fecha.strftime('%d%m%y')}{ext}"
-            repo_path = os.path.join(repo_dir, repo_name)
+            os.makedirs(repo_dir, exist_ok=True)
+
+        print(f"[FUNVASOS] {len(archivos)} archivos Excel pendientes en {inbox_dir}")
+
+        for filepath in archivos:
             try:
-                shutil.copy2(filepath, repo_path)
-                print(f"[FUNVASOS]   → Archivado en repo: {repo_name}")
-            except Exception as e:
-                print(f"[FUNVASOS]   Advertencia copiando a repo: {e}")
+                nombre = os.path.basename(filepath)
+                print(f"[FUNVASOS] Procesando: {nombre}")
 
-        # Mover a procesados
-        shutil.move(filepath, os.path.join(procesados_dir, nombre))
-        print(f"[FUNVASOS]   → {len(registros)} registros importados ({fecha.strftime('%d/%m/%Y')})")
+                fecha, registros, errores = _funvasos_parsear_excel(filepath)
 
-    print(f"[FUNVASOS] Procesamiento completado.")
+                if errores:
+                    for err in errores:
+                        print(f"[FUNVASOS]   Error: {err}")
+
+                if not fecha or not registros:
+                    print(f"[FUNVASOS]   → Movido a errores/")
+                    shutil.move(filepath, os.path.join(errores_dir, nombre))
+                    continue
+
+                # Insertar en PostgreSQL
+                ok = _funvasos_insertar_pg(fecha, registros)
+                if not ok:
+                    print(f"[FUNVASOS]   → Error BD, movido a errores/")
+                    shutil.move(filepath, os.path.join(errores_dir, nombre))
+                    continue
+
+                # Copiar al repositorio de documentos con nombre estándar FINddmmyy.xlsx
+                if repo_dir:
+                    ext = os.path.splitext(nombre)[1]
+                    repo_name = f"FIN{fecha.strftime('%d%m%y')}{ext}"
+                    repo_path = os.path.join(repo_dir, repo_name)
+                    try:
+                        shutil.copy2(filepath, repo_path)
+                        print(f"[FUNVASOS]   → Archivado en repo: {repo_name}")
+                    except Exception as e:
+                        print(f"[FUNVASOS]   Advertencia copiando a repo: {e}")
+
+                # Mover a procesados
+                shutil.move(filepath, os.path.join(procesados_dir, nombre))
+                print(f"[FUNVASOS]   → {len(registros)} registros importados ({fecha.strftime('%d/%m/%Y')})")
+            except Exception as ef:
+                print(f"[FUNVASOS] Error procesando {os.path.basename(filepath)}: {ef}")
+
+        print(f"[FUNVASOS] Procesamiento completado.")
+    except Exception as e:
+        print(f"[ERROR FUNVASOS] {e}")
 
 
 # Pool de conexiones a TimescaleDB (reutiliza conexiones en lugar de abrir/cerrar cada vez)
@@ -2115,6 +2130,7 @@ def insertar_datos_mapeados(dcp_id: str, id_asignado: str, timestamp_goes: datet
 
         for sensor in sensores:
             try:
+                cur.execute("SAVEPOINT sp_resumen_horario")
                 cur.execute("""
                     INSERT INTO resumen_horario 
                     (ts, dcp_id, sensor_id, id_asignado, variable, tipo,
@@ -2145,8 +2161,10 @@ def insertar_datos_mapeados(dcp_id: str, id_asignado: str, timestamp_goes: datet
                         maximo = EXCLUDED.maximo,
                         acumulado = EXCLUDED.acumulado;
                 """, (id_asignado, sensor["numero_sensor"], ts_inicio, ts_fin))
+                cur.execute("RELEASE SAVEPOINT sp_resumen_horario")
                 
             except Exception as e:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_resumen_horario")
                 print(f"[WARN] Resumen horario falló: {e}")
         
         # ==================== RESÚMENES DIARIOS ====================
@@ -2164,6 +2182,7 @@ def insertar_datos_mapeados(dcp_id: str, id_asignado: str, timestamp_goes: datet
         for fecha_resumen in fechas_afectadas:
             for sensor in sensores:
                 try:
+                    cur.execute("SAVEPOINT sp_resumen_diario")
                     cur.execute("""
                         INSERT INTO resumen_diario 
                         (fecha, dcp_id, sensor_id, id_asignado, variable, tipo,
@@ -2194,8 +2213,10 @@ def insertar_datos_mapeados(dcp_id: str, id_asignado: str, timestamp_goes: datet
                             maximo = EXCLUDED.maximo,
                             acumulado = EXCLUDED.acumulado;
                     """, (id_asignado, sensor["numero_sensor"], fecha_resumen))
+                    cur.execute("RELEASE SAVEPOINT sp_resumen_diario")
                     
                 except Exception as e:
+                    cur.execute("ROLLBACK TO SAVEPOINT sp_resumen_diario")
                     print(f"[WARN] Resumen diario falló para {fecha_resumen}: {e}")
         
         conn.commit()
@@ -2379,7 +2400,10 @@ def dds_recv(sock: socket.socket, timeout: float = 30.0):
     if hdr[:4] != b"FAF0":
         raise ValueError(f"Encabezado inválido: {hdr[:4]}")
     type_code = hdr[4:5].decode("ascii")
-    length = int(hdr[5:10].decode("ascii"))
+    try:
+        length = int(hdr[5:10].decode("ascii"))
+    except ValueError:
+        raise ValueError(f"invalid literal for int() with base 10: {hdr[5:10].decode('ascii', errors='replace')!r}")
     body = b""
     while len(body) < length:
         chunk = sock.recv(length - len(body))
@@ -2510,9 +2534,8 @@ def fetch_from_host(host: str, dcp_id: str, nombre: str, since: str = "now - 2 h
                         if _procesar_mensaje(resp, dcp_id, host):
                             msg_count += 1
                             print(f"[OK] Mensaje {msg_count} procesado")
-                        else:
-                            break
-                    except (ConnectionError, socket.timeout, OSError):
+                    except Exception as e:
+                        print(f"[WARN] Error en mensaje extra: {e}")
                         break
                 print(f"[RECOVER] {dcp_id}: {msg_count} mensajes recuperados")
 
@@ -2541,22 +2564,27 @@ def fetch_messages_for_dcp(dcp_id: str, since: str = "now - 2 hours", until: str
         return False
 
 def fetch_messages_for_dcp_wrapper(dcp_id):
-    if dcp_id not in ESTACIONES:
-        print(f"[WARN] {dcp_id} ya no existe en configuración, ignorando.")
+    try:
+        if dcp_id not in ESTACIONES:
+            print(f"[WARN] {dcp_id} ya no existe en configuración, ignorando.")
+            _retry_state.pop(dcp_id, None)
+            return schedule.CancelJob
+        data = ESTACIONES[dcp_id]
+        nombre = data["nombre"]
+        print(f"[INFO] {dcp_id} | {nombre} en minuto {datetime.datetime.now().minute:02d}")
+
+        # Cancelar reintentos pendientes de ciclos anteriores
+        schedule.clear(f"retry_{dcp_id}")
         _retry_state.pop(dcp_id, None)
-        return schedule.CancelJob
-    data = ESTACIONES[dcp_id]
-    nombre = data["nombre"]
-    print(f"[INFO] {dcp_id} | {nombre} en minuto {datetime.datetime.now().minute:02d}")
 
-    # Cancelar reintentos pendientes de ciclos anteriores
-    schedule.clear(f"retry_{dcp_id}")
-    _retry_state.pop(dcp_id, None)
+        success = fetch_messages_for_dcp(dcp_id)
 
-    success = fetch_messages_for_dcp(dcp_id)
-
-    if not success:
-        _programar_reintento(dcp_id, intento=1)
+        if not success:
+            _programar_reintento(dcp_id, intento=1)
+    except Exception as e:
+        print(f"[ERROR WRAPPER] {dcp_id}: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # ==================== REINTENTO POR ESTACIÓN ====================
@@ -2590,36 +2618,40 @@ def _programar_reintento(dcp_id, intento):
 
 def _ejecutar_reintento(dcp_id):
     """Ejecuta un reintento one-shot y programa el siguiente si falla."""
-    if dcp_id not in ESTACIONES:
+    try:
+        if dcp_id not in ESTACIONES:
+            _retry_state.pop(dcp_id, None)
+            return schedule.CancelJob
+
+        state = _retry_state.get(dcp_id)
+        if not state:
+            return schedule.CancelJob
+
+        intento = state["intentos"]
+        nombre = ESTACIONES[dcp_id]["nombre"]
+
+        # Rotar hosts: usar orden invertido en reintentos impares para diversificar
+        hosts_orden = list(reversed(HOSTS)) if intento % 2 == 0 else HOSTS
+        print(f"[RETRY {intento}/{MAX_RETRIES}] {dcp_id} | {nombre} → intentando ({hosts_orden[0]}...)")
+
+        success = False
+        data = ESTACIONES[dcp_id]
+        for host in hosts_orden:
+            if fetch_from_host(host, dcp_id, nombre, since="now - 2 hours", until="now", multi=False):
+                success = True
+                break
+
+        if success:
+            print(f"[RETRY OK] {dcp_id} | {nombre} → datos recuperados en intento {intento}")
+            _retry_state.pop(dcp_id, None)
+        else:
+            log_to_pg(dcp_id, False, None, None)
+            # Limpiar este job antes de programar el siguiente
+            schedule.clear(f"retry_{dcp_id}")
+            _programar_reintento(dcp_id, intento + 1)
+    except Exception as e:
+        print(f"[ERROR RETRY] {dcp_id}: {e}")
         _retry_state.pop(dcp_id, None)
-        return schedule.CancelJob
-
-    state = _retry_state.get(dcp_id)
-    if not state:
-        return schedule.CancelJob
-
-    intento = state["intentos"]
-    nombre = ESTACIONES[dcp_id]["nombre"]
-
-    # Rotar hosts: usar orden invertido en reintentos impares para diversificar
-    hosts_orden = list(reversed(HOSTS)) if intento % 2 == 0 else HOSTS
-    print(f"[RETRY {intento}/{MAX_RETRIES}] {dcp_id} | {nombre} → intentando ({hosts_orden[0]}...)")
-
-    success = False
-    data = ESTACIONES[dcp_id]
-    for host in hosts_orden:
-        if fetch_from_host(host, dcp_id, nombre, since="now - 2 hours", until="now", multi=False):
-            success = True
-            break
-
-    if success:
-        print(f"[RETRY OK] {dcp_id} | {nombre} → datos recuperados en intento {intento}")
-        _retry_state.pop(dcp_id, None)
-    else:
-        log_to_pg(dcp_id, False, None, None)
-        # Limpiar este job antes de programar el siguiente
-        schedule.clear(f"retry_{dcp_id}")
-        _programar_reintento(dcp_id, intento + 1)
 
     return schedule.CancelJob
 
@@ -2718,37 +2750,40 @@ def detectar_huecos(horas=6):
 def recuperacion_automatica():
     """Detecta huecos y recupera datos faltantes automáticamente.
     Se ejecuta periódicamente desde el scheduler."""
-    recover_hours = config.getint('settings', 'auto_recover_hours', fallback=6)
-    print(f"[AUTO-RECOVER] Analizando huecos en las últimas {recover_hours} horas...")
-    estaciones_con_huecos = detectar_huecos(recover_hours)
+    try:
+        recover_hours = config.getint('settings', 'auto_recover_hours', fallback=6)
+        print(f"[AUTO-RECOVER] Analizando huecos en las últimas {recover_hours} horas...")
+        estaciones_con_huecos = detectar_huecos(recover_hours)
 
-    if not estaciones_con_huecos:
-        print(f"[AUTO-RECOVER] Sin huecos detectados.")
-        return
+        if not estaciones_con_huecos:
+            print(f"[AUTO-RECOVER] Sin huecos detectados.")
+            return
 
-    # Solo recuperar estaciones con huecos reales (HUECO o SIN DATOS), no simples retrasos
-    estaciones_a_recuperar = [
-        est for est in estaciones_con_huecos
-        if any(h["tipo"] in ("HUECO", "SIN DATOS") for h in est["huecos"])
-    ]
+        # Solo recuperar estaciones con huecos reales (HUECO o SIN DATOS), no simples retrasos
+        estaciones_a_recuperar = [
+            est for est in estaciones_con_huecos
+            if any(h["tipo"] in ("HUECO", "SIN DATOS") for h in est["huecos"])
+        ]
 
-    if not estaciones_a_recuperar:
-        retrasos = len(estaciones_con_huecos)
-        print(f"[AUTO-RECOVER] Solo {retrasos} estaciones con retraso (se recuperarán en su próxima TX).")
-        return
+        if not estaciones_a_recuperar:
+            retrasos = len(estaciones_con_huecos)
+            print(f"[AUTO-RECOVER] Solo {retrasos} estaciones con retraso (se recuperarán en su próxima TX).")
+            return
 
-    print(f"[AUTO-RECOVER] {len(estaciones_a_recuperar)} estaciones con huecos → recuperando...")
-    for est in estaciones_a_recuperar:
-        max_h = max(h["duracion_h"] for h in est["huecos"])
-        recover_h = min(int(max_h + 2), recover_hours)
-        since = f"now - {recover_h} hours"
-        print(f"  [FIX] {est['dcp_id']} | {est['nombre']} → recover {recover_h}h "
-              f"({len(est['huecos'])} huecos)")
-        try:
-            fetch_messages_for_dcp(est["dcp_id"], since=since, multi=True)
-        except Exception as e:
-            print(f"  [ERROR] {est['dcp_id']}: {e}")
-    print(f"[AUTO-RECOVER] Recuperación finalizada.")
+        print(f"[AUTO-RECOVER] {len(estaciones_a_recuperar)} estaciones con huecos → recuperando...")
+        for est in estaciones_a_recuperar:
+            max_h = max(h["duracion_h"] for h in est["huecos"])
+            recover_h = min(int(max_h + 2), recover_hours)
+            since = f"now - {recover_h} hours"
+            print(f"  [FIX] {est['dcp_id']} | {est['nombre']} → recover {recover_h}h "
+                  f"({len(est['huecos'])} huecos)")
+            try:
+                fetch_messages_for_dcp(est["dcp_id"], since=since, multi=True)
+            except Exception as e:
+                print(f"  [ERROR] {est['dcp_id']}: {e}")
+        print(f"[AUTO-RECOVER] Recuperación finalizada.")
+    except Exception as e:
+        print(f"[ERROR AUTO-RECOVER] {e}")
 
 # ==================== RECARGA DE CONFIGURACIÓN ====================
 _scheduled_dcp_ids = set()
@@ -3561,7 +3596,7 @@ def api_mis_status():
             errores_count = len(glob_mod.glob(os.path.join(err_dir, "*.mis")))
 
     if os.path.isdir(output_dir):
-        output_count = len(glob_mod.glob(os.path.join(output_dir, "*.mis")))
+        output_count = len(glob_mod.glob(os.path.join(output_dir, "**", "*.mis"), recursive=True))
 
     return jsonify({
         "generar_mis": generar,
@@ -3680,9 +3715,22 @@ def main():
     monitor_thread.start()
 
     print("[INFO] Scheduler activo...")
+    _consecutive_errors = 0
     while True:
-        if _scheduler_running.is_set():
-            schedule.run_pending()
+        try:
+            if _scheduler_running.is_set():
+                schedule.run_pending()
+            _consecutive_errors = 0
+        except Exception as e:
+            _consecutive_errors += 1
+            print(f"[ERROR SCHEDULER] Excepción en run_pending (#{_consecutive_errors}): {e}")
+            import traceback
+            traceback.print_exc()
+            # Si hay muchos errores consecutivos, esperar más tiempo
+            if _consecutive_errors >= 10:
+                print(f"[WARN] {_consecutive_errors} errores consecutivos, esperando 5 minutos...")
+                time.sleep(300)
+                _consecutive_errors = 0
         time.sleep(30)
 
 # ==================== CARGA INICIAL ====================
@@ -3779,8 +3827,13 @@ if platform.system() == 'Windows':
                 monitor_thread.start()
 
                 while self._running:
-                    if _scheduler_running.is_set():
-                        schedule.run_pending()
+                    try:
+                        if _scheduler_running.is_set():
+                            schedule.run_pending()
+                    except Exception as e:
+                        print(f"[SERVICE ERROR] Excepción en run_pending: {e}")
+                        import traceback
+                        traceback.print_exc()
                     # Revisar stop cada 5 segundos para respuesta rápida
                     rc = win32event.WaitForSingleObject(self.hWaitStop, 5000)
                     if rc == win32event.WAIT_OBJECT_0:

@@ -216,6 +216,116 @@
         height: 260px;
         overflow: hidden;
     }
+
+    /* ── Weather Layers (integrated in left panel) ── */
+    .weather-section .layer-toggle {
+        display: flex;
+        align-items: center;
+        padding: 3px 0;
+    }
+    .weather-section .ui.toggle.checkbox { margin: 0; }
+    .weather-section .ui.toggle.checkbox label { color: rgba(255,255,255,0.85) !important; font-size: 11px !important; padding-left: 3.2em !important; }
+    .weather-section .ui.toggle.checkbox label::before { background: rgba(255,255,255,0.15) !important; }
+    .weather-section .opacity-slider {
+        width: 100%;
+        margin: 2px 0 4px 8px;
+        -webkit-appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255,255,255,0.15);
+        outline: none;
+    }
+    .weather-section .opacity-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        background: #42a5f5;
+        cursor: pointer;
+    }
+
+    /* ── Station Weather Banner ── */
+    .station-weather-banner {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1001;
+        padding: 0;
+        display: none;
+        background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.9) 100%);
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        pointer-events: none;
+    }
+    .station-weather-banner .banner-inner {
+        display: flex;
+        align-items: center;
+        padding: 14px 24px 16px;
+        pointer-events: auto;
+    }
+    .station-weather-banner .banner-name-section {
+        display: flex;
+        flex-direction: column;
+        min-width: 140px;
+        padding-right: 18px;
+        border-right: 1px solid rgba(255,255,255,0.1);
+        margin-right: 18px;
+    }
+    .station-weather-banner .banner-name {
+        font-weight: 700;
+        font-size: 13px;
+        color: #fff;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+    .station-weather-banner .banner-tx {
+        font-size: 10px;
+        color: rgba(255,255,255,0.4);
+        margin-top: 2px;
+        font-family: monospace;
+    }
+    .station-weather-banner .banner-close {
+        position: absolute;
+        top: 4px; right: 14px;
+        cursor: pointer;
+        color: rgba(255,255,255,0.3);
+        font-size: 11px;
+        pointer-events: auto;
+        transition: color 0.15s;
+    }
+    .station-weather-banner .banner-close:hover { color: #fff; }
+    .station-weather-banner .banner-metrics {
+        display: flex;
+        gap: 6px;
+        flex: 1;
+        overflow-x: auto;
+    }
+    .station-weather-banner .metric {
+        text-align: center;
+        min-width: 68px;
+        padding: 5px 10px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: background 0.2s;
+    }
+    .station-weather-banner .metric:hover {
+        background: rgba(255,255,255,0.12);
+    }
+    .station-weather-banner .metric .metric-value {
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+    }
+    .station-weather-banner .metric .metric-label {
+        font-size: 9px;
+        color: rgba(255,255,255,0.4);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 1px;
+    }
     .leaflet-popup-content-wrapper {
         border-radius: 12px;
         padding: 5px;
@@ -224,6 +334,35 @@
         margin: 10px 15px;
         line-height: 1.4;
     }
+    .custom-zoom-controls {
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1100;
+        display: flex;
+        gap: 2px;
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+    .custom-zoom-controls button {
+        width: 40px;
+        height: 40px;
+        border: none;
+        background: rgba(30,30,40,0.88);
+        color: #fff;
+        font-size: 20px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+        transition: background 0.15s;
+    }
+    .custom-zoom-controls button:hover { background: rgba(66,165,245,0.7); }
+    .custom-zoom-controls button:active { background: rgba(66,165,245,0.9); }
     
     /* Animación de Flujo para Ríos (KML) */
     .river-flow {
@@ -245,7 +384,25 @@
 }
 
 <div style="display: flex; height: 100%; overflow: hidden;">
-    <div id="map-container" style="flex: 1; position: relative;"></div>
+    <div id="map-wrapper" style="flex: 1; position: relative;">
+        <div id="map-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;"></div>
+        <!-- Custom zoom controls -->
+        <div class="custom-zoom-controls" id="custom-zoom">
+            <button onclick="map.zoomIn()" title="Acercar">+</button>
+            <button onclick="map.zoomOut()" title="Alejar">&minus;</button>
+        </div>
+        <!-- Station Weather Banner (outside Leaflet container, positioned over map) -->
+        <div class="station-weather-banner" id="station-weather-banner">
+            <span class="banner-close" onclick="$('#station-weather-banner').fadeOut(200);"><i class="close icon"></i></span>
+            <div class="banner-inner">
+                <div class="banner-name-section">
+                    <div class="banner-name" id="banner-station-name">─</div>
+                    <div class="banner-tx" id="banner-tx-time"></div>
+                </div>
+                <div class="banner-metrics" id="banner-metrics"></div>
+            </div>
+        </div>
+    </div>
     
     <!-- Panel Lateral Derecho (Tabla) -->
     <div class="glass-panel" style="width: 380px; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 1000; overflow: hidden; display: flex; flex-direction: column;">
@@ -407,16 +564,19 @@
 </div>
 
 <!-- Panel de Control Flotante Izquierdo -->
-<div class="glass-panel" style="position: absolute; top: 70px; left: 20px; width: 280px; padding: 15px; z-index: 1000;">
-    <h3 class="ui inverted header">
-        <i class="filter icon"></i>
-        Visualización
-    </h3>
+<div class="glass-panel" style="position: absolute; top: 70px; left: 20px; bottom: 20px; width: 260px; padding: 0; z-index: 1000; display: flex; flex-direction: column; overflow: hidden;">
+    <div style="padding: 12px 14px 0; flex-shrink: 0;">
+        <h3 class="ui inverted header" style="margin-bottom: 8px; font-size: 15px;">
+            <i class="filter icon"></i>
+            Visualización
+        </h3>
+    </div>
     
+    <div style="flex: 1; overflow-y: auto; padding: 0 14px 12px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;">
     <div class="ui inverted form">
         <div class="field">
-            <label>Variable del Sensor</label>
-            <div id="variable-dropdown" class="ui inverted selection dropdown">
+            <label style="font-size: 11px;">Variable del Sensor</label>
+            <div id="variable-dropdown" class="ui inverted selection dropdown" style="font-size: 12px;">
                 <input type="hidden" name="variable" value="precipitación">
                 <i class="dropdown icon"></i>
                 <div class="default text">Variable</div>
@@ -431,26 +591,97 @@
         <div class="field">
             <div id="only-cfe-toggle" class="ui inverted checkbox">
                 <input type="checkbox" name="only_cfe" checked>
-                <label>Solo CFE</label>
+                <label style="font-size: 12px;">Solo CFE</label>
             </div>
         </div>
 
         <div id="cuencas-left-panel">
-        <div class="ui inverted divider"></div>
-        <div style="font-size: 11px; margin-bottom: 5px;"><strong>Cuencas KML</strong></div>
+        <div class="ui inverted divider" style="margin: 8px 0;"></div>
+        <div style="font-size: 11px; margin-bottom: 4px; cursor: pointer;" onclick="$('#cuenca-toggles-wrap').slideToggle(150); $(this).find('i.caret').toggleClass('down right');"><strong>Cuencas KML</strong> <i class="caret down icon" style="font-size: 10px;"></i></div>
         
-        <div id="semaforo-toggle-wrap" class="field" style="margin-bottom: 5px;">
+        <div id="cuenca-toggles-wrap">
+        <div id="semaforo-toggle-wrap" class="field" style="margin-bottom: 4px;">
             <div id="semaforo-cuencas-toggle" class="ui inverted checkbox">
                 <input type="checkbox" checked>
-                <label>Semáforo Lluvia</label>
+                <label style="font-size: 11px;">Semáforo Lluvia</label>
             </div>
         </div>
 
         <div id="cuenca-toggles-container">
             <!-- Cuenca toggles rendered dynamically from /Map/GetCuencasKml -->
         </div>
+        </div>
         </div><!-- /cuencas-left-panel -->
 
+        <div class="ui inverted divider" style="margin: 8px 0;"></div>
+        <!-- Weather Layers (integrated) -->
+        <div class="weather-section">
+            <div style="font-size: 11px; margin-bottom: 4px; cursor: pointer;" onclick="$('#weather-toggles-wrap').slideToggle(150); $(this).find('i.caret').toggleClass('down right');"><strong><i class="layer group icon" style="color:#42a5f5;"></i> Capas Meteorológicas</strong> <i class="caret down icon" style="font-size: 10px;"></i></div>
+            <div id="weather-toggles-wrap">
+
+            <!-- ── Radar & Precipitación ── -->
+            <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; margin: 6px 0 3px 2px;">Radar & Precipitación</div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-radar"><input type="checkbox"><label><i class="broadcast tower icon" style="color:#ff5252;"></i> Radar (RainViewer)</label></div>
+            </div>
+            <div id="radar-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="radar-opacity" min="0" max="100" value="65"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-mrms"><input type="checkbox"><label><i class="cloud showers heavy icon" style="color:#42a5f5;"></i> MRMS (NOAA)</label></div>
+            </div>
+            <div id="mrms-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="mrms-opacity" min="0" max="100" value="60"></div>
+
+            <!-- ── Satélite GOES-16 ── -->
+            <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; margin: 8px 0 3px 2px;">Satélite GOES-16</div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-goes-ir"><input type="checkbox"><label><i class="satellite icon" style="color:#ce93d8;"></i> Infrarrojo (Ch13)</label></div>
+            </div>
+            <div id="goes-ir-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="goes-ir-opacity" min="0" max="100" value="50"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-goes-vis"><input type="checkbox"><label><i class="sun icon" style="color:#fdd835;"></i> Visible (Ch02)</label></div>
+            </div>
+            <div id="goes-vis-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="goes-vis-opacity" min="0" max="100" value="45"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-goes-wv"><input type="checkbox"><label><i class="water icon" style="color:#4fc3f7;"></i> Vapor de Agua (Ch09)</label></div>
+            </div>
+            <div id="goes-wv-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="goes-wv-opacity" min="0" max="100" value="50"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-goes-daycloud"><input type="checkbox"><label><i class="cloud icon" style="color:#b0bec5;"></i> IR Enhanced</label></div>
+            </div>
+            <div id="goes-daycloud-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="goes-daycloud-opacity" min="0" max="100" value="45"></div>
+
+            <!-- ── Análisis de Superficie ── -->
+            <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; margin: 8px 0 3px 2px;">Análisis de Superficie</div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-owm-temp"><input type="checkbox"><label><i class="thermometer half icon" style="color:#ff7043;"></i> Temperatura</label></div>
+            </div>
+            <div id="owm-temp-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="owm-temp-opacity" min="0" max="100" value="50"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-owm-wind"><input type="checkbox"><label><i class="wind icon" style="color:#fdd835;"></i> Viento</label></div>
+            </div>
+            <div id="owm-wind-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="owm-wind-opacity" min="0" max="100" value="50"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-owm-clouds"><input type="checkbox"><label><i class="cloud icon" style="color:#90a4ae;"></i> Nubosidad</label></div>
+            </div>
+            <div id="owm-clouds-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="owm-clouds-opacity" min="0" max="100" value="45"></div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-owm-pressure"><input type="checkbox"><label><i class="tachometer alternate icon" style="color:#ce93d8;"></i> Presión Atm.</label></div>
+            </div>
+            <div id="owm-pressure-opacity-wrap" style="display:none;"><input type="range" class="opacity-slider" id="owm-pressure-opacity" min="0" max="100" value="50"></div>
+
+            <!-- ── Fenómenos Severos ── -->
+            <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; margin: 8px 0 3px 2px;">Fenómenos Severos</div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-lightning"><input type="checkbox"><label><i class="bolt icon" style="color:#ffeb3b;"></i> Rayos</label></div>
+            </div>
+
+            <!-- ── Mapas Base ── -->
+            <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; margin: 8px 0 3px 2px;">Mapas Base</div>
+            <div class="layer-toggle">
+                <div class="ui toggle checkbox" id="toggle-satellite"><input type="checkbox"><label><i class="satellite dish icon" style="color:#66bb6a;"></i> Satélite (Google)</label></div>
+            </div>
+
+            </div>
+        </div>
 
     </div>
 
@@ -460,29 +691,31 @@
             <div class="value" id="avg-value" style="font-size: 1.5rem !important;">--</div>
         </div>
     </div>
-</div>
 
-<!-- Leyenda Flotante -->
-<div class="glass-panel" style="position: absolute; bottom: 20px; left: 20px; padding: 15px; z-index: 1000;">
-        <div class="item" id="legend-verde"><i class="circle icon" style="color: #00FF00;"></i> <span class="legend-text">CFE</span></div>
-        <div class="item" id="legend-triangulo"><i class="caret up icon" style="color: #00FF00;"></i> <span class="legend-text">Golfo</span></div>
-        <div class="item" id="legend-azul"><i class="circle icon" style="color: #2185d0;"></i> <span class="legend-text">Conagua</span></div>
-        <div class="item" id="legend-negro"><i class="circle icon" style="color: #333333; border: 1px solid white; border-radius: 50%;"></i> <span class="legend-text">Sin datos</span></div>
-    
-    <div class="ui inverted divider" style="margin: 10px 0;"></div>
-    <div id="semaforo-legend" style="font-size: 11px;">
-        <div style="margin-bottom: 3px;"><strong>Semáforo Lluvia (mm/h)</strong></div>
-        <div><i class="square icon" style="color: #00C853;"></i> Verde: &lt; 2.5</div>
-        <div><i class="square icon" style="color: #FFD600;"></i> Amarillo: 2.5 - 7.5</div>
-        <div><i class="square icon" style="color: #FF6D00;"></i> Naranja: 7.5 - 15</div>
-        <div><i class="square icon" style="color: #D50000;"></i> Rojo: &ge; 15</div>
+    <div class="ui inverted divider" style="margin: 8px 0;"></div>
+
+    <!-- Leyenda (integrada) -->
+    <div style="font-size: 11px;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+            <span id="legend-verde"><i class="circle icon" style="color: #00FF00;"></i>CFE</span>
+            <span id="legend-triangulo"><i class="caret up icon" style="color: #00FF00;"></i>Golfo</span>
+            <span id="legend-azul"><i class="circle icon" style="color: #2185d0;"></i>Conagua</span>
+            <span id="legend-negro"><i class="circle icon" style="color: #555;"></i>Sin datos</span>
+        </div>
+        <div id="semaforo-legend" style="display: flex; gap: 6px; flex-wrap: wrap; font-size: 10px;">
+            <span><i class="square icon" style="color: #00C853;"></i>&lt;2.5</span>
+            <span><i class="square icon" style="color: #FFD600;"></i>2.5-7.5</span>
+            <span><i class="square icon" style="color: #FF6D00;"></i>7.5-15</span>
+            <span><i class="square icon" style="color: #D50000;"></i>&ge;15</span>
+        </div>
     </div>
 
-    <div class="ui inverted divider" style="margin: 10px 0;"></div>
-    
-    <div style="font-size: 11px; opacity: 0.9; color: white;">
-        <div id="real-time-clock" style="margin-bottom: 5px;"><i class="clock outline icon"></i> --:--:--</div>
-        <div id="last-update-text"><i class="sync icon"></i> --:--:--</div>
+    </div><!-- /scrollable area -->
+
+    <!-- Clock (fixed at bottom) -->
+    <div style="padding: 6px 14px; border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; font-size: 10px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between;">
+        <span id="real-time-clock"><i class="clock outline icon"></i> --:--:--</span>
+        <span id="last-update-text"><i class="sync icon"></i> --:--:--</span>
     </div>
 </div>
 
@@ -558,6 +791,7 @@
             });
 
             initMap();
+            initWeatherToggles();
 
             // Cerrar modal al hacer clic fuera del contenido
             $('#eventos-modal, #cuenca-estaciones-modal').on('click', function(e) {
@@ -645,8 +879,7 @@
                 zoomControl: false
             });
 
-            // Añadir control de zoom en la parte inferior derecha
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            // Zoom controls are custom HTML buttons in #map-wrapper
 
             currentMapTheme = 'topo';
             
@@ -1278,7 +1511,7 @@
                 const maintBanner = d.enMantenimiento ? '<div style="background:#f97316; color:#fff; padding:4px 8px; border-radius:4px; margin-bottom:6px; font-size:11px; font-weight:bold;"><i class="wrench icon"></i> ESTACIÓN EN MANTENIMIENTO — Datos aislados</div>' : '';
 
                 const popupContent = `
-                    <div style="color: #333; width: 350px;">
+                    <div style="color: #333; width: 370px;">
                         ${maintBanner}
                         <h4 style="margin: 0 0 8px 0; color: #1a1a1a; font-family: sans-serif;">${d.nombre}</h4>
                         <div id="${popupId}" class="chart-popup-container">
@@ -1298,6 +1531,10 @@
                 
                 marker.on('popupopen', function() {
                     loadAndRenderChart(d.id, d.variableActual, popupId);
+                    showStationBanner(d.id);
+                });
+                marker.on('popupclose', function() {
+                    $('#station-weather-banner').fadeOut(200);
                 });
 
                 markersLayer.addLayer(marker);
@@ -1392,18 +1629,132 @@
         }
 
         function loadAndRenderChart(stationId, variable, containerId) {
-            $.getJSON('/Map/GetStationHistory', { stationId: stationId, variable: variable }, function(resp) {
-                const data = resp.data || resp;
-                if (resp.enMantenimiento) {
-                    $(`#${containerId}`).before('<div style="background:rgba(249,115,22,0.15);color:#f97316;padding:4px 8px;border-radius:4px;font-size:10px;text-align:center;margin-bottom:4px;"><i class="wrench icon"></i> Datos en periodo de mantenimiento</div>');
-                }
-                renderHistoryChart(containerId, data, variable);
+            const normalizedVar = variable.toLowerCase();
+            const isRain = normalizedVar.includes('precipitacion') || normalizedVar.includes('precipitación');
+
+            if (isRain) {
+                // Para precipitación: usar hietograma con acumulado (24h)
+                $.getJSON('/Map/GetStationHyetograph', { stationId: stationId, hours: 24 }, function(resp) {
+                    const data = resp.data || resp;
+                    if (resp.enMantenimiento) {
+                        $(`#${containerId}`).before('<div style="background:rgba(249,115,22,0.15);color:#f97316;padding:4px 8px;border-radius:4px;font-size:10px;text-align:center;margin-bottom:4px;"><i class="wrench icon"></i> Datos en periodo de mantenimiento</div>');
+                    }
+                    renderHyetograph(containerId, data);
+                });
+            } else {
+                $.getJSON('/Map/GetStationHistory', { stationId: stationId, variable: variable }, function(resp) {
+                    const data = resp.data || resp;
+                    if (resp.enMantenimiento) {
+                        $(`#${containerId}`).before('<div style="background:rgba(249,115,22,0.15);color:#f97316;padding:4px 8px;border-radius:4px;font-size:10px;text-align:center;margin-bottom:4px;"><i class="wrench icon"></i> Datos en periodo de mantenimiento</div>');
+                    }
+                    renderHistoryChart(containerId, data, variable);
+                });
+            }
+        }
+
+        function renderHyetograph(containerId, data) {
+            // Preparar barras horarias y línea acumulada
+            const barData = data.map(d => [new Date(d.ts).getTime(), d.valor]);
+            let acum = 0;
+            const acumData = data.map(d => {
+                acum += (d.valor || 0);
+                return [new Date(d.ts).getTime(), Math.round(acum * 100) / 100];
+            });
+            const totalAcum = acum.toFixed(1);
+
+            Highcharts.chart(containerId, {
+                chart: {
+                    backgroundColor: 'transparent',
+                    height: 280,
+                    width: 340,
+                    spacingBottom: 15,
+                    spacingTop: 10,
+                    spacingLeft: 5,
+                    spacingRight: 5,
+                    style: { fontFamily: "'Inter', sans-serif" }
+                },
+                title: {
+                    text: `🌧️ Hietograma 24h — Acum: ${totalAcum} mm`,
+                    style: { fontSize: '11px', fontWeight: '700', color: '#1a73e8' },
+                    align: 'left'
+                },
+                credits: { enabled: false },
+                xAxis: {
+                    type: 'datetime',
+                    labels: {
+                        style: { fontSize: '9px', color: '#888' },
+                        format: '{value:%H:%M}'
+                    },
+                    gridLineWidth: 0,
+                    tickLength: 3,
+                    crosshair: { color: 'rgba(33,133,208,0.15)', width: 20 }
+                },
+                yAxis: [{
+                    // Eje izq: barras precipitación horaria
+                    title: { text: 'mm/h', style: { fontSize: '9px', color: '#2185d0' } },
+                    labels: { style: { fontSize: '9px', color: '#2185d0' }, format: '{value:.1f}' },
+                    gridLineColor: 'rgba(0,0,0,0.06)',
+                    min: 0
+                }, {
+                    // Eje der: acumulado
+                    title: { text: 'Acum (mm)', style: { fontSize: '9px', color: '#f57c00' } },
+                    labels: { style: { fontSize: '9px', color: '#f57c00' }, format: '{value:.1f}' },
+                    opposite: true,
+                    gridLineWidth: 0,
+                    min: 0
+                }],
+                tooltip: {
+                    shared: true,
+                    xDateFormat: '%d/%m %H:%M',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderColor: '#2185d0',
+                    borderRadius: 8,
+                    style: { fontSize: '11px' },
+                    headerFormat: '<b>{point.key}</b><br/>',
+                    pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y:.2f} mm</b><br/>'
+                },
+                legend: {
+                    enabled: true,
+                    align: 'center',
+                    verticalAlign: 'bottom',
+                    itemStyle: { fontSize: '9px', color: '#555' },
+                    symbolHeight: 8,
+                    symbolWidth: 12,
+                    padding: 2,
+                    margin: 5
+                },
+                plotOptions: {
+                    column: {
+                        borderRadius: 2,
+                        groupPadding: 0.05,
+                        pointPadding: 0.05
+                    }
+                },
+                series: [{
+                    type: 'column',
+                    name: 'Precipitación',
+                    data: barData,
+                    color: {
+                        linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [[0, '#42a5f5'], [1, '#1565c0']]
+                    },
+                    borderWidth: 0,
+                    yAxis: 0
+                }, {
+                    type: 'spline',
+                    name: 'Acumulado',
+                    data: acumData,
+                    color: '#f57c00',
+                    lineWidth: 2.5,
+                    marker: { enabled: false, states: { hover: { enabled: true, radius: 4 } } },
+                    dashStyle: 'Solid',
+                    yAxis: 1
+                }]
             });
         }
 
         function renderHistoryChart(containerId, data, variable) {
             const normalizedVar = variable.toLowerCase();
-            const isRain = normalizedVar.includes('precipitacion') || normalizedVar.includes('precipitación');
             const isWind = normalizedVar.includes('viento');
             
             const commonOptions = {
@@ -1431,17 +1782,6 @@
 
             if (isWind) {
                 renderWindRose(containerId, data);
-            } else if (isRain) {
-                Highcharts.chart(containerId, {
-                    ...commonOptions,
-                    chart: { ...commonOptions.chart, type: 'column' },
-                    series: [{
-                        name: 'Lluvia',
-                        data: data.map(d => [new Date(d.ts).getTime(), d.valor]),
-                        color: '#2185d0',
-                        borderRadius: 3
-                    }]
-                });
             } else {
                 Highcharts.chart(containerId, {
                     ...commonOptions,
@@ -1455,6 +1795,308 @@
                     }]
                 });
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ── WEATHER LAYERS ──────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════
+        let radarLayer = null;
+        let goesIrLayer = null;
+        let goesVisLayer = null;
+        let goesWvLayer = null;
+        let goesDayCloudLayer = null;
+        let satelliteLayer = null;
+        let owmTempLayer = null;
+        let owmWindLayer = null;
+        let owmCloudsLayer = null;
+        let owmPressureLayer = null;
+        let mrmsLayer = null;
+        let lightningMarkers = null;
+        let lightningInterval = null;
+
+        function loadWeatherLayers() {
+            // 1. RainViewer Radar
+            fetch('https://api.rainviewer.com/public/weather-maps.json')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.radar && data.radar.past && data.radar.past.length > 0) {
+                        var latest = data.radar.past[data.radar.past.length - 1];
+                        radarLayer = L.tileLayer(
+                            data.host + latest.path + '/256/{z}/{x}/{y}/2/1_1.png',
+                            { opacity: 0.65, zIndex: 5 }
+                        );
+                    }
+                }).catch(err => console.warn('RainViewer:', err));
+
+            // 2. GOES-16 Channel 13 (Infrared - Longwave)
+            goesIrLayer = L.tileLayer.wms(
+                'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi',
+                {
+                    layers: 'fulldisk_ch13',
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.5,
+                    zIndex: 4,
+                    attribution: 'GOES-16 NOAA'
+                }
+            );
+
+            // 3. GOES-16 Channel 02 (Visible)
+            goesVisLayer = L.tileLayer.wms(
+                'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi',
+                {
+                    layers: 'fulldisk_ch02',
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.45,
+                    zIndex: 4,
+                    attribution: 'GOES-16 NOAA'
+                }
+            );
+
+            // 4. GOES-16 Channel 09 (Water Vapor Mid-Level)
+            goesWvLayer = L.tileLayer.wms(
+                'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi',
+                {
+                    layers: 'fulldisk_ch09',
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.5,
+                    zIndex: 4,
+                    attribution: 'GOES-16 WV'
+                }
+            );
+
+            // 5. GOES-16 Day Cloud Phase RGB
+            goesDayCloudLayer = L.tileLayer.wms(
+                'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi',
+                {
+                    layers: 'fulldisk_ch13',  // Fallback — uses IR enhanced
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.45,
+                    zIndex: 4,
+                    attribution: 'GOES-16 IR Enhanced'
+                }
+            );
+
+            // 6. Google Satellite
+            satelliteLayer = L.tileLayer(
+                'http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
+                {
+                    maxZoom: 20,
+                    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                    attribution: '&copy; Google Satellite'
+                }
+            );
+
+            // 7. OpenWeatherMap — Temperature
+            owmTempLayer = L.tileLayer(
+                'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
+            );
+
+            // 8. OpenWeatherMap — Wind Speed
+            owmWindLayer = L.tileLayer(
+                'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
+            );
+
+            // 9. OpenWeatherMap — Clouds
+            owmCloudsLayer = L.tileLayer(
+                'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                { opacity: 0.45, zIndex: 3, attribution: 'OpenWeatherMap' }
+            );
+
+            // 10. OpenWeatherMap — Pressure
+            owmPressureLayer = L.tileLayer(
+                'https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
+            );
+
+            // 11. MRMS (NOAA Composite Radar - Alta resolución)
+            mrmsLayer = L.tileLayer.wms(
+                'https://mesonet.agron.iastate.edu/cgi-bin/wms/us/mrms.cgi',
+                {
+                    layers: 'mrms_a2m',
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.6,
+                    zIndex: 5,
+                    attribution: 'NOAA MRMS'
+                }
+            );
+
+            // 12. Lightning markers
+            lightningMarkers = L.layerGroup();
+        }
+
+        // Fetch recent lightning strikes from Blitzortung proxy
+        function loadLightningData() {
+            var bounds = map.getBounds();
+            var url = 'https://map.blitzortung.org/GEOjson/1/10/0/' + 
+                      Math.floor(bounds.getWest()) + '/' + Math.floor(bounds.getSouth()) + '/' + 
+                      Math.ceil(bounds.getEast()) + '/' + Math.ceil(bounds.getNorth()) + '/';
+            // Blitzortung direct API requires CORS — use fallback with RainViewer lightning
+            fetch('https://api.rainviewer.com/public/weather-maps.json')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.radar && data.radar.past) {
+                        // Use radar-inferred storm activity — display as animated overlay
+                        // For actual lightning we use the simple icon approach below
+                    }
+                }).catch(() => {});
+            
+            // Simulated lightning from storm cells — in production, integrate WWLLN or Blitzortung websocket
+            // For now, show the lightning layer toggling capability
+            lightningMarkers.clearLayers();
+        }
+
+        function initWeatherToggles() {
+            loadWeatherLayers();
+
+            // Helper to wire up a toggle + optional opacity slider
+            function wireToggle(toggleId, getLayer, opacityWrapId, opacityId) {
+                $(toggleId).checkbox({
+                    onChecked: function() { 
+                        var lyr = getLayer(); 
+                        if (lyr) { lyr.addTo(map); if (opacityWrapId) $(opacityWrapId).slideDown(150); }
+                    },
+                    onUnchecked: function() { 
+                        var lyr = getLayer(); 
+                        if (lyr && map.hasLayer(lyr)) { map.removeLayer(lyr); if (opacityWrapId) $(opacityWrapId).slideUp(150); }
+                    }
+                });
+                if (opacityId) {
+                    $(opacityId).on('input', function() { var lyr = getLayer(); if (lyr) lyr.setOpacity(this.value / 100); });
+                }
+            }
+
+            // GOES Satellite
+            wireToggle('#toggle-radar', () => radarLayer, '#radar-opacity-wrap', '#radar-opacity');
+            wireToggle('#toggle-goes-ir', () => goesIrLayer, '#goes-ir-opacity-wrap', '#goes-ir-opacity');
+            wireToggle('#toggle-goes-vis', () => goesVisLayer, '#goes-vis-opacity-wrap', '#goes-vis-opacity');
+            wireToggle('#toggle-goes-wv', () => goesWvLayer, '#goes-wv-opacity-wrap', '#goes-wv-opacity');
+            wireToggle('#toggle-goes-daycloud', () => goesDayCloudLayer, '#goes-daycloud-opacity-wrap', '#goes-daycloud-opacity');
+            wireToggle('#toggle-satellite', () => satelliteLayer, null, null);
+
+            // Surface Analysis
+            wireToggle('#toggle-owm-temp', () => owmTempLayer, '#owm-temp-opacity-wrap', '#owm-temp-opacity');
+            wireToggle('#toggle-owm-wind', () => owmWindLayer, '#owm-wind-opacity-wrap', '#owm-wind-opacity');
+            wireToggle('#toggle-owm-clouds', () => owmCloudsLayer, '#owm-clouds-opacity-wrap', '#owm-clouds-opacity');
+            wireToggle('#toggle-owm-pressure', () => owmPressureLayer, '#owm-pressure-opacity-wrap', '#owm-pressure-opacity');
+            wireToggle('#toggle-mrms', () => mrmsLayer, '#mrms-opacity-wrap', '#mrms-opacity');
+
+            // Lightning
+            $('#toggle-lightning').checkbox({
+                onChecked: function() { 
+                    if (lightningMarkers) { lightningMarkers.addTo(map); loadLightningData(); lightningInterval = setInterval(loadLightningData, 60000); }
+                },
+                onUnchecked: function() { 
+                    if (lightningMarkers && map.hasLayer(lightningMarkers)) map.removeLayer(lightningMarkers); 
+                    if (lightningInterval) { clearInterval(lightningInterval); lightningInterval = null; }
+                }
+            });
+
+            // Auto-refresh ALL active weather layers every 5 mins
+            setInterval(function() {
+                console.log('🔄 Auto-refresh capas meteorológicas...');
+
+                // 1. Radar (RainViewer) — regenerar tile URL con último frame
+                if (radarLayer && map.hasLayer(radarLayer)) {
+                    map.removeLayer(radarLayer);
+                    fetch('https://api.rainviewer.com/public/weather-maps.json')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data && data.radar && data.radar.past && data.radar.past.length > 0) {
+                                var latest = data.radar.past[data.radar.past.length - 1];
+                                radarLayer = L.tileLayer(
+                                    data.host + latest.path + '/256/{z}/{x}/{y}/2/1_1.png',
+                                    { opacity: parseFloat($('#radar-opacity').val()) / 100, zIndex: 5 }
+                                );
+                                radarLayer.addTo(map);
+                            }
+                        }).catch(() => {});
+                }
+
+                // 2. WMS layers (GOES, MRMS) — invalidate cache con timestamp
+                var ts = Date.now();
+                [goesIrLayer, goesVisLayer, goesWvLayer, goesDayCloudLayer, mrmsLayer].forEach(function(lyr) {
+                    if (lyr && map.hasLayer(lyr)) {
+                        lyr.setParams({ _t: ts });
+                    }
+                });
+
+                // 3. OWM tile layers — remove & re-add to force reload
+                [
+                    { layer: 'owmTempLayer', slider: '#owm-temp-opacity', zIdx: 3, type: 'temp_new' },
+                    { layer: 'owmWindLayer', slider: '#owm-wind-opacity', zIdx: 3, type: 'wind_new' },
+                    { layer: 'owmCloudsLayer', slider: '#owm-clouds-opacity', zIdx: 3, type: 'clouds_new' },
+                    { layer: 'owmPressureLayer', slider: '#owm-pressure-opacity', zIdx: 3, type: 'pressure_new' }
+                ].forEach(function(cfg) {
+                    var lyr = window[cfg.layer] || eval(cfg.layer);
+                    if (lyr && map.hasLayer(lyr)) {
+                        var op = lyr.options.opacity;
+                        map.removeLayer(lyr);
+                        var newLyr = L.tileLayer(
+                            'https://tile.openweathermap.org/map/' + cfg.type + '/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                            { opacity: op, zIndex: cfg.zIdx, attribution: 'OpenWeatherMap' }
+                        );
+                        newLyr.addTo(map);
+                        // Update reference
+                        if (cfg.layer === 'owmTempLayer') owmTempLayer = newLyr;
+                        else if (cfg.layer === 'owmWindLayer') owmWindLayer = newLyr;
+                        else if (cfg.layer === 'owmCloudsLayer') owmCloudsLayer = newLyr;
+                        else if (cfg.layer === 'owmPressureLayer') owmPressureLayer = newLyr;
+                    }
+                });
+
+            }, 300000);
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ── STATION WEATHER BANNER ──────────────────────────────────
+        // ══════════════════════════════════════════════════════════════
+        function showStationBanner(stationId) {
+            $.getJSON('/Map/GetStationBanner', { stationId: stationId }, function(resp) {
+                if (!resp || !resp.nombre) return;
+                $('#banner-station-name').html('<i class="map marker alternate icon" style="color:#42a5f5;margin-right:4px;"></i>' + resp.nombre);
+                if (resp.ultimaTx) {
+                    $('#banner-tx-time').text('🕐 ' + new Date(resp.ultimaTx).toLocaleTimeString());
+                } else {
+                    $('#banner-tx-time').text('');
+                }
+                var html = '';
+                if (resp.variables && resp.variables.length) {
+                    resp.variables.forEach(function(v) {
+                        var color = '#fff';
+                        if (v.variable.includes('precipitaci')) color = '#42a5f5';
+                        else if (v.variable.includes('temperat'))  color = '#ff7043';
+                        else if (v.variable.includes('humedad'))   color = '#66bb6a';
+                        else if (v.variable.includes('viento'))    color = '#fdd835';
+                        else if (v.variable.includes('presion') || v.variable.includes('presión')) color = '#ce93d8';
+                        else if (v.variable.includes('radiaci'))   color = '#ffab40';
+                        else if (v.variable.includes('nivel') || v.variable.includes('cota')) color = '#4dd0e1';
+                        else if (v.variable.includes('bater'))     color = '#a5d6a7';
+                        var icon = '📊';
+                        if (v.variable.includes('precipitaci')) icon = '🌧️';
+                        else if (v.variable.includes('temperat'))  icon = '🌡️';
+                        else if (v.variable.includes('humedad'))   icon = '💧';
+                        else if (v.variable.includes('velocidad') && v.variable.includes('viento')) icon = '💨';
+                        else if (v.variable.includes('direcci') && v.variable.includes('viento'))   icon = '🧭';
+                        else if (v.variable.includes('presion') || v.variable.includes('presión'))  icon = '🔵';
+                        else if (v.variable.includes('radiaci'))   icon = '☀️';
+                        else if (v.variable.includes('nivel') || v.variable.includes('cota')) icon = '🌊';
+                        else if (v.variable.includes('bater'))     icon = '🔋';
+                        html += '<div class="metric">';
+                        html += '<div class="metric-value" style="color:' + color + ';">' + icon + ' ' + (v.valor !== null ? v.valor.toFixed(2) : 'N/A') + '</div>';
+                        html += '<div class="metric-label">' + v.unidad + '</div>';
+                        html += '</div>';
+                    });
+                }
+                $('#banner-metrics').html(html);
+                $('#station-weather-banner').fadeIn(300);
+            }).fail(function() {});
         }
 
         function renderWindRose(containerId, data) {

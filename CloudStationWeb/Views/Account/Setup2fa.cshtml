@@ -1,0 +1,232 @@
+@{
+    ViewData["Title"] = "Configurar 2FA";
+    bool is2faEnabled = ViewBag.Is2faEnabled;
+}
+
+@section Styles {
+<style>
+    .setup-container {
+        padding: 30px;
+        max-width: 700px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+    }
+
+    .setup-header {
+        margin-bottom: 28px;
+    }
+
+    .setup-header h2 {
+        font-size: 22px; font-weight: 600; color: #fff;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .setup-header h2 i { color: #f59e0b; }
+    .setup-header p { color: rgba(255,255,255,0.5); font-size: 14px; margin-top: 6px; }
+
+    .glass-card {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 24px;
+    }
+
+    .step { display: flex; gap: 16px; margin-bottom: 24px; }
+    .step-number {
+        width: 36px; height: 36px; min-width: 36px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        border-radius: 10px; display: flex; align-items: center; justify-content: center;
+        color: #fff; font-weight: 700; font-size: 15px;
+    }
+    .step-content h4 { color: #fff; font-size: 15px; margin-bottom: 6px; }
+    .step-content p { color: rgba(255,255,255,0.6); font-size: 13px; line-height: 1.5; }
+
+    .qr-section {
+        text-align: center;
+        padding: 24px;
+        background: rgba(255,255,255,0.03);
+        border-radius: 14px;
+        margin: 20px 0;
+    }
+
+    #qrcode {
+        display: inline-block;
+        padding: 16px;
+        background: #fff;
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+
+    .secret-key {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-family: 'Courier New', monospace;
+        font-size: 16px; letter-spacing: 3px;
+        color: #60a5fa; text-align: center;
+        user-select: all; cursor: text;
+        margin-top: 12px;
+    }
+    .secret-label { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 8px; }
+
+    .verify-form { margin-top: 20px; }
+    .verify-input {
+        width: 100%; max-width: 280px; padding: 14px 16px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; color: #fff;
+        font-family: 'Inter', monospace; font-size: 22px;
+        text-align: center; letter-spacing: 6px; outline: none;
+        margin: 12px auto; display: block;
+    }
+    .verify-input:focus {
+        border-color: rgba(245,158,11,0.6);
+        box-shadow: 0 0 0 3px rgba(245,158,11,0.15);
+    }
+
+    .btn-action {
+        padding: 12px 28px;
+        border: none; border-radius: 12px;
+        font-family: 'Inter'; font-size: 15px; font-weight: 600;
+        cursor: pointer; transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-action:hover { transform: translateY(-1px); }
+    .btn-enable {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff; box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+    }
+    .btn-disable {
+        background: rgba(239,68,68,0.15);
+        border: 1px solid rgba(239,68,68,0.3);
+        color: #fca5a5;
+    }
+    .btn-back {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+    }
+
+    .enabled-badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 20px;
+        background: rgba(16,185,129,0.12);
+        border: 1px solid rgba(16,185,129,0.3);
+        border-radius: 12px;
+        color: #6ee7b7; font-weight: 600; font-size: 15px;
+        margin-bottom: 20px;
+    }
+
+    .alert-error {
+        padding: 12px 18px; border-radius: 10px; margin-bottom: 16px;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239,68,68,0.3);
+        color: #fca5a5; font-size: 14px;
+    }
+</style>
+}
+
+<div class="setup-container">
+    <div class="setup-header">
+        <h2><i class="shield alternate icon"></i> Autenticación de Dos Factores (2FA)</h2>
+        <p>Proteja su cuenta con una capa adicional de seguridad</p>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-error"><i class="exclamation circle icon"></i> @TempData["Error"]</div>
+    }
+
+    @if (is2faEnabled)
+    {
+        <div class="glass-card">
+            <div class="enabled-badge"><i class="check circle icon"></i> 2FA está ACTIVO en su cuenta</div>
+            <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 24px;">
+                Su cuenta está protegida con autenticación de dos factores. Si desea deshabilitar esta función,
+                haga clic en el botón de abajo. <strong style="color:#fca5a5;">Esto eliminará su clave actual.</strong>
+            </p>
+            <div style="display: flex; gap: 12px;">
+                <form method="post" asp-action="Disable2fa" asp-controller="Account"
+                      onsubmit="return confirm('¿Está seguro? Tendrá que volver a configurar 2FA si desea habilitarlo de nuevo.')">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-disable">
+                        <i class="times circle icon"></i> Deshabilitar 2FA
+                    </button>
+                </form>
+                <a href="@Url.Action("Profile", "Account")" class="btn-action btn-back">
+                    <i class="arrow left icon"></i> Volver al Perfil
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="glass-card">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Instale una aplicación autenticadora</h4>
+                    <p>Descargue <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong> o <strong>Authy</strong> en su teléfono.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Escanee el código QR</h4>
+                    <p>Abra la aplicación y escanee el siguiente código QR, o ingrese la clave manualmente.</p>
+                </div>
+            </div>
+
+            <div class="qr-section">
+                <div id="qrcode"></div>
+                <div class="secret-key">@ViewBag.SharedKey</div>
+                <div class="secret-label">Clave secreta (ingrese manualmente si no puede escanear)</div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Verifique con el código</h4>
+                    <p>Ingrese el código de 6 dígitos que muestra su aplicación para confirmar la configuración.</p>
+                </div>
+            </div>
+
+            <form method="post" asp-action="Enable2fa" asp-controller="Account" class="verify-form" style="text-align: center;">
+                @Html.AntiForgeryToken()
+                <input type="text" name="verificationCode" class="verify-input"
+                       placeholder="000000" autocomplete="one-time-code"
+                       inputmode="numeric" maxlength="7" pattern="[0-9 -]*" required autofocus />
+                <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
+                    <button type="submit" class="btn-action btn-enable">
+                        <i class="check icon"></i> Activar 2FA
+                    </button>
+                    <a href="@Url.Action("Profile", "Account")" class="btn-action btn-back">
+                        <i class="arrow left icon"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    @if (!is2faEnabled)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                new QRCode(document.getElementById("qrcode"), {
+                    text: "@Html.Raw(ViewBag.AuthenticatorUri)",
+                    width: 200,
+                    height: 200,
+                    colorDark: "#1a1f2e",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            });
+        </script>
+    }
+}

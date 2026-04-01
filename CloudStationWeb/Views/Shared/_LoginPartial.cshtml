@@ -1,11 +1,31 @@
 @using Microsoft.AspNetCore.Identity
+@using Dapper
+@using Microsoft.Data.SqlClient
 @inject SignInManager<CloudStationWeb.Models.ApplicationUser> SignInManager
 @inject UserManager<CloudStationWeb.Models.ApplicationUser> UserManager
+@inject IConfiguration Configuration
 
 @if (SignInManager.IsSignedIn(User))
 {
     var user = await UserManager.GetUserAsync(User);
-    var isAdmin = User.IsInRole("Administrador");
+    var isAdmin = User.IsInRole("SuperAdmin") || User.IsInRole("Administrador");
+
+    string orgIniciales = "";
+    if (user?.OrganismoId.HasValue == true)
+    {
+        var connStr = Configuration.GetConnectionString("SqlServer");
+        if (!string.IsNullOrEmpty(connStr))
+        {
+            try
+            {
+                using var db = new SqlConnection(connStr);
+                orgIniciales = await db.QueryFirstOrDefaultAsync<string>(
+                    "SELECT Iniciales FROM Organismo WHERE Id = @Id",
+                    new { Id = user.OrganismoId.Value }) ?? "";
+            }
+            catch { }
+        }
+    }
 
     if (isAdmin)
     {
@@ -14,18 +34,51 @@
         </a>
     }
 
-    <div class="ui simple dropdown item">
+    <div class="ui simple dropdown item" style="position: relative;">
         <i class="user circle icon"></i>
         @(user?.FullName ?? user?.UserName)
+        @if (!string.IsNullOrEmpty(orgIniciales))
+        {
+            <span style="
+                display: inline-block;
+                background: rgba(245,158,11,0.2);
+                border: 1px solid rgba(245,158,11,0.4);
+                color: #fbbf24;
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 7px;
+                border-radius: 6px;
+                margin-left: 8px;
+                letter-spacing: 0.5px;
+                vertical-align: middle;
+            ">@orgIniciales</span>
+        }
         <i class="dropdown icon"></i>
-        <div class="menu" style="background: rgba(14,18,26,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
-            <div class="item" style="color: rgba(255,255,255,0.5); pointer-events: none; font-size: 12px;">
-                <i class="shield icon"></i>@(User.IsInRole("Administrador") ? "Administrador" : User.IsInRole("Operador") ? "Operador" : "Visualizador")
+        <div class="menu" style="
+            background: #111827 !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 10px !important;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6) !important;
+            right: 0 !important;
+            left: auto !important;
+            min-width: 220px !important;
+            z-index: 10002 !important;
+            overflow: visible !important;
+        ">
+            <div class="item" style="color: rgba(255,255,255,0.5) !important; pointer-events: none; font-size: 12px;">
+                <i class="shield icon" style="color: #fbbf24;"></i>@(User.IsInRole("SuperAdmin") ? "Super Admin" : User.IsInRole("Administrador") ? "Administrador" : User.IsInRole("Operador") ? "Operador" : "Visualizador")
             </div>
-            <div class="divider" style="border-color: rgba(255,255,255,0.08);"></div>
+            <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+            <a class="item" href="@Url.Action("Profile", "Account")" style="color: #fff !important;">
+                <i class="user icon" style="color: #60a5fa;"></i> Mi Perfil
+            </a>
+            <a class="item" href="@Url.Action("Setup2fa", "Account")" style="color: #fff !important;">
+                <i class="shield alternate icon" style="color: #a78bfa;"></i> Seguridad 2FA
+            </a>
+            <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
             <form method="post" asp-action="Logout" asp-controller="Account" id="logoutForm">
                 @Html.AntiForgeryToken()
-                <a class="item" style="color: #fca5a5;" href="javascript:document.getElementById('logoutForm').submit();">
+                <a class="item" style="color: #fca5a5 !important;" href="javascript:document.getElementById('logoutForm').submit();">
                     <i class="sign out icon"></i> Cerrar Sesión
                 </a>
             </form>

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace CloudStationWeb.Controllers
 {
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = "SuperAdmin,Administrador")]
     public class WatershedAdminController : Controller
     {
         private readonly string? _sqlServerConn;

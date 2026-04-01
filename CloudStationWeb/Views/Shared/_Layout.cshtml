@@ -75,52 +75,139 @@
             z-index: 9999 !important; /* Ensure menu stays above all panels */
         }
 
-        /* Mobile Responsive Menu */
-        @@media only screen and (max-width: 991px) {
-            .ui.fixed.menu {
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
-                white-space: nowrap !important;
-                flex-wrap: nowrap !important;
-                -webkit-overflow-scrolling: touch !important;
-            }
-            .ui.fixed.menu::-webkit-scrollbar {
-                height: 4px;
-            }
-            .ui.fixed.menu::-webkit-scrollbar-track {
-                background: rgba(0,0,0,0.1);
-            }
-            .ui.fixed.menu::-webkit-scrollbar-thumb {
-                background: rgba(255,255,255,0.2);
-                border-radius: 4px;
-            }
-            .ui.fixed.menu .ui.container {
-                width: max-content !important;
+        /* Compact menu items to fit all on one row */
+        .ui.fixed.menu .item {
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+        }
+        .ui.fixed.menu .header.item {
+            padding: 8px 10px 8px 8px !important;
+        }
+        .ui.fixed.menu .item > i.icon {
+            margin-right: 4px !important;
+        }
+        .ui.fixed.menu .ui.dropdown .menu .item {
+            font-size: 13px !important;
+            padding: 10px 16px !important;
+        }
+        /* User dropdown menu overrides */
+        .ui.fixed.menu .right.menu .ui.dropdown .menu {
+            background: #111827 !important;
+        }
+        .ui.fixed.menu .right.menu .ui.dropdown .menu > .item:hover,
+        .ui.fixed.menu .right.menu .ui.dropdown .menu > a.item:hover {
+            background: rgba(255,255,255,0.08) !important;
+        }
+
+        /* ── Hamburger toggle button ── */
+        .hamburger-btn {
+            display: none !important;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        /* ── Mobile sidebar ── */
+        .pih-sidebar {
+            position: fixed;
+            top: 0; left: -280px;
+            width: 280px;
+            height: 100vh;
+            background: rgba(14, 18, 26, 0.98);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid rgba(255,255,255,0.08);
+            z-index: 10001;
+            overflow-y: auto;
+            transition: left 0.3s ease;
+            padding-top: 12px;
+        }
+        .pih-sidebar.visible {
+            left: 0;
+        }
+        .pih-sidebar .sidebar-close {
+            position: absolute;
+            top: 12px; right: 14px;
+            font-size: 20px;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+        }
+        .pih-sidebar .sidebar-close:hover { color: #fff; }
+        .pih-sidebar .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 18px 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .pih-sidebar .sidebar-header img { width: 28px; height: 28px; }
+        .pih-sidebar .sidebar-header span { font-weight: 700; font-size: 16px; color: #fff; }
+        .pih-sidebar a.sidebar-item,
+        .pih-sidebar .sidebar-section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 20px;
+            color: rgba(255,255,255,0.85);
+            font-size: 14px;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .pih-sidebar a.sidebar-item:hover {
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+        }
+        .pih-sidebar a.sidebar-item.active {
+            background: rgba(76,175,80,0.15);
+            color: #81c784;
+            border-left: 3px solid #4caf50;
+        }
+        .pih-sidebar .sidebar-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255,255,255,0.35);
+            padding-top: 16px;
+            pointer-events: none;
+        }
+        .pih-sidebar .sidebar-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.06);
+            margin: 6px 16px;
+        }
+        .pih-sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+        }
+        .pih-sidebar-overlay.visible { display: block; }
+
+        /* ── Mobile Responsive Menu ── */
+        @@media only screen and (max-width: 1400px) {
+            .hamburger-btn {
                 display: flex !important;
-                flex-direction: row !important;
-                margin-left: 0 !important;
-                margin-right: 0 !important;
+                font-size: 22px !important;
+                padding: 8px 12px !important;
             }
-            .ui.fixed.menu .right.menu {
-                display: flex !important;
+            /* Hide all nav items except logo and hamburger on narrow screens */
+            .ui.fixed.menu > a.item:not(.header):not(.hamburger-btn),
+            .ui.fixed.menu > .ui.dropdown.item,
+            .ui.fixed.menu > .right.menu {
+                display: none !important;
             }
-            .ui.fixed.menu .item {
-                display: flex !important;
-            }
-            
-            /* Give some breathing room for map underneath scrollbar */
             .main-content {
-                margin-top: 55px;
-                height: calc(100vh - 55px - 28px);
+                margin-top: 50px;
+                height: calc(100vh - 50px - 28px);
             }
             #map-container {
-                height: calc(100vh - 55px - 28px);
+                height: calc(100vh - 50px - 28px);
             }
             .pih-footer .pih-full { display: none; }
             .pih-footer .pih-short { display: inline; }
         }
 
-        @@media only screen and (min-width: 992px) {
+        @@media only screen and (min-width: 1401px) {
+            .pih-sidebar, .pih-sidebar-overlay { display: none !important; }
             .pih-footer .pih-short { display: none; }
         }
 
@@ -137,10 +224,57 @@
     @RenderSection("Styles", required: false)
 </head>
 <body>
+    <!-- ═══ Mobile Sidebar ═══ -->
+    <div class="pih-sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+    <nav class="pih-sidebar" id="pihSidebar">
+        <span class="sidebar-close" onclick="closeSidebar()"><i class="close icon"></i></span>
+        <div class="sidebar-header">
+            <img src="/img/logo-pih.svg" alt="PIH" />
+            <span>PIH</span>
+        </div>
+        <a class="sidebar-item" href="/Map"><i class="map icon"></i> Mapa</a>
+        <a class="sidebar-item" href="/HourlyReport"><i class="clock outline icon"></i> Cortes Horarios</a>
+        <a class="sidebar-item" href="/StationGroup"><i class="users icon"></i> Mis Grupos</a>
+        <a class="sidebar-item" href="/DataAnalysis"><i class="chart line icon"></i> Análisis</a>
+        <a class="sidebar-item" href="@Url.Action("Index", "GoesMonitoring")"><i class="satellite icon"></i> GOES</a>
+        @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
+        {
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-title"><i class="cogs icon"></i> Administración</div>
+            <a class="sidebar-item" href="@Url.Action("Index", "StationAdmin")"><i class="server icon" style="color:#81c784;"></i> Estaciones</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "Maintenance")"><i class="wrench icon" style="color:#fbbf24;"></i> Mantenimiento</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "WatershedAdmin")"><i class="tint icon" style="color:#64b5f6;"></i> Cuencas y Subcuencas</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "Admin")"><i class="users cog icon" style="color:#ffb74d;"></i> Usuarios</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "Notification")"><i class="bell icon" style="color:#ce93d8;"></i> Notificaciones</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "EarlyWarning")"><i class="exclamation triangle icon" style="color:#e74c3c;"></i> Alertas Tempranas</a>
+        }
+        <div class="sidebar-divider"></div>
+        <a class="sidebar-item" href="/Documents"><i class="folder open icon"></i> Repositorio</a>
+        <a class="sidebar-item" href="/FunVasos"><i class="water icon"></i> Fun. Vasos</a>
+        <a class="sidebar-item" href="@Url.Action("Index", "RainForecast")"><i class="cloud rain icon"></i> Pronóstico</a>
+        <a class="sidebar-item" href="@Url.Action("Index", "MisExport")"><i class="file export icon" style="color:#2185d0;"></i> Exportar .MIS</a>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <a class="sidebar-item" href="@Url.Action("Index", "Chat")"><i class="comments icon"></i> Chat</a>
+        }
+        <div class="sidebar-divider"></div>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <a class="sidebar-item" href="/Account/Logout"><i class="sign out alternate icon"></i> Cerrar sesión</a>
+        }
+        else
+        {
+            <a class="sidebar-item" href="/Account/Login"><i class="sign in alternate icon"></i> Iniciar sesión</a>
+        }
+    </nav>
+
     <div class="ui inverted borderless fixed menu" style="padding:0 8px;">
             <a href="/" class="header item" style="padding:8px 14px 8px 10px;gap:8px;">
                 <img src="/img/logo-pih.svg" alt="PIH" style="width:30px;height:30px;" />
                 <span style="font-weight:700;letter-spacing:0.5px;font-size:15px;">PIH</span>
+            </a>
+            <a class="hamburger-btn item" onclick="openSidebar()">
+                <i class="bars icon" style="margin:0;"></i>
             </a>
             <a href="/Map" class="item">
                 <i class="map icon"></i> Mapa
@@ -158,9 +292,9 @@
                 <i class="satellite icon"></i> GOES
             </a>
             
-            @if (User.IsInRole("Administrador"))
+            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
             {
-                <div class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
+                <div id="nav-admin-dropdown" class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance","Notification","EarlyWarning"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
                     <i class="cogs icon"></i> Administración <i class="dropdown icon"></i>
                     <div class="menu" style="background: rgba(14,18,26,0.97) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 8px !important; min-width: 220px;">
                         <a class="item" href="@Url.Action("Index", "StationAdmin")" style="color: #fff !important;">
@@ -176,6 +310,12 @@
                         <a class="item" href="@Url.Action("Index", "Admin")" style="color: #fff !important;">
                             <i class="users cog icon" style="color: #ffb74d;"></i> Usuarios
                         </a>
+                        <a class="item" href="@Url.Action("Index", "Notification")" style="color: #fff !important;">
+                            <i class="bell icon" style="color: #ce93d8;"></i> Notificaciones
+                        </a>
+                        <a class="item" href="@Url.Action("Index", "EarlyWarning")" style="color: #fff !important;">
+                            <i class="exclamation triangle icon" style="color: #e74c3c;"></i> Alertas Tempranas
+                        </a>
                     </div>
                 </div>
             }
@@ -190,6 +330,15 @@
             <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "RainForecast" ? "active" : "")" href="@Url.Action("Index", "RainForecast")">
                 <i class="cloud rain icon"></i> Pronóstico
             </a>
+            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "MisExport" ? "active" : "")" href="@Url.Action("Index", "MisExport")">
+                <i class="file export icon"></i> .MIS
+            </a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Chat" ? "active" : "")" href="@Url.Action("Index", "Chat")">
+                    <i class="comments icon"></i> Chat
+                </a>
+            }
             <div class="right menu">
                 @await Html.PartialAsync("_LoginPartial")
             </div>
@@ -285,6 +434,32 @@
 
         // Initialize Fomantic dropdowns (click-based, not hover)
         $('.ui.dropdown').dropdown({ on: 'click' });
+
+        // Re-initialize nav admin dropdown after page scripts may have overridden it
+        $(function() {
+            setTimeout(function() {
+                $('#nav-admin-dropdown').dropdown({ on: 'click' });
+            }, 100);
+        });
+
+        // ── Mobile sidebar toggle ──
+        function openSidebar() {
+            document.getElementById('pihSidebar').classList.add('visible');
+            document.getElementById('sidebarOverlay').classList.add('visible');
+        }
+        function closeSidebar() {
+            document.getElementById('pihSidebar').classList.remove('visible');
+            document.getElementById('sidebarOverlay').classList.remove('visible');
+        }
+        // Mark active sidebar item
+        (function() {
+            var path = window.location.pathname.toLowerCase();
+            document.querySelectorAll('.pih-sidebar a.sidebar-item').forEach(function(a) {
+                if (a.getAttribute('href') && path.indexOf(a.getAttribute('href').toLowerCase()) === 0 && a.getAttribute('href') !== '/') {
+                    a.classList.add('active');
+                }
+            });
+        })();
     </script>
 
 

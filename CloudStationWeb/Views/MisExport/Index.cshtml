@@ -1,0 +1,329 @@
+@{
+    ViewData["Title"] = "Exportar Archivos .MIS";
+}
+
+@section Styles {
+<style>
+    .mis-container {
+        padding: 10px 15px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .mis-header {
+        display: flex; align-items: center; gap: 12px;
+        margin-bottom: 18px;
+    }
+    .mis-header h2 {
+        margin: 0; font-weight: 700; font-size: 1.5em;
+    }
+    .mis-header .sub-text {
+        color: #999; font-size: 0.85em;
+    }
+    .controls-panel {
+        background: #1a1d24;
+        padding: 18px 20px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        margin-bottom: 16px;
+    }
+    .controls-panel label { color: #ccc !important; font-weight: 600; }
+    .preview-panel {
+        background: #1a1d24;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 18px 20px;
+        margin-bottom: 16px;
+        display: none;
+    }
+    .preview-panel h4 { margin-top: 0; color: #e0e0e0; }
+    #previewTable {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    #previewTable th {
+        background: rgba(33,133,208,0.15);
+        color: #7ec8f0;
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    #previewTable td {
+        padding: 7px 12px;
+        color: #ccc;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        font-size: 0.9em;
+    }
+    #previewTable tr:hover td { background: rgba(255,255,255,0.03); }
+    .stat-cards {
+        display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, rgba(33,133,208,0.12), rgba(33,133,208,0.04));
+        border: 1px solid rgba(33,133,208,0.2);
+        border-radius: 8px;
+        padding: 14px 18px;
+        min-width: 160px;
+        flex: 1;
+    }
+    .stat-card .label { color: #7ec8f0; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { color: #fff; font-size: 1.6em; font-weight: 700; margin-top: 4px; }
+
+    .info-box {
+        background: rgba(33,186,69,0.08);
+        border-left: 3px solid #21ba45;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        color: #b0b0b0;
+        font-size: 0.88em;
+    }
+    .info-box i { color: #21ba45; margin-right: 6px; }
+
+    .download-section {
+        text-align: center;
+        padding: 10px 0;
+    }
+    .download-section .ui.button {
+        font-size: 1.1em;
+        padding: 12px 30px;
+    }
+    
+    /* Loading overlay */
+    .mis-loading {
+        display: none;
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.65);
+        z-index: 9999;
+        align-items: center; justify-content: center;
+    }
+    .mis-loading.active { display: flex; }
+    .mis-loading-box {
+        background: #1a1d24;
+        border-radius: 12px;
+        padding: 30px 40px;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .mis-loading-box .ui.loader { margin-bottom: 12px; }
+    .mis-loading-box p { color: #ccc; margin: 0; }
+</style>
+}
+
+<div class="mis-container">
+    <div class="mis-header">
+        <i class="file export icon" style="font-size:1.8em; color:#2185d0;"></i>
+        <div>
+            <h2>Exportar Archivos .MIS</h2>
+            <span class="sub-text">Genera archivos .MIS desde la base TimescaleDB para recuperación en otros sistemas</span>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <i class="info circle icon"></i>
+        Los archivos se generan directamente desde los datos almacenados en TimescaleDB, organizados por <strong>año/mes/día</strong> dentro del ZIP.
+        Puede exportar una estación específica o todas las estaciones a la vez. Rango máximo: <strong>31 días</strong>.
+    </div>
+
+    <div class="controls-panel">
+        <div class="ui form inverted">
+            <div class="four fields">
+                <div class="field">
+                    <label><i class="broadcast tower icon"></i> Estación</label>
+                    <select class="ui search dropdown inverted" id="ddStation">
+                        <option value="">-- Todas las estaciones --</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label><i class="calendar icon"></i> Fecha Inicio</label>
+                    <input type="date" id="txtFechaInicio" class="ui input" />
+                </div>
+                <div class="field">
+                    <label><i class="calendar check icon"></i> Fecha Fin</label>
+                    <input type="date" id="txtFechaFin" class="ui input" />
+                </div>
+                <div class="field" style="display:flex; align-items:flex-end; gap:8px;">
+                    <button class="ui blue button" onclick="doPreview()" id="btnPreview">
+                        <i class="search icon"></i> Vista Previa
+                    </button>
+                    <button class="ui green button" onclick="doDownload()" id="btnDownload" disabled>
+                        <i class="download icon"></i> Descargar ZIP
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="preview-panel" id="previewPanel">
+        <h4><i class="eye icon" style="color:#7ec8f0;"></i> Vista Previa de Datos Disponibles</h4>
+
+        <div class="stat-cards" id="statCards"></div>
+
+        <table id="previewTable">
+            <thead>
+                <tr>
+                    <th>Id Asignado</th>
+                    <th>DCP ID</th>
+                    <th>Registros</th>
+                    <th>Primer Registro</th>
+                    <th>Último Registro</th>
+                    <th>Archivos .MIS est.</th>
+                </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="mis-loading" id="loadingOverlay">
+    <div class="mis-loading-box">
+        <div class="ui active inverted inline loader large"></div>
+        <p id="loadingText">Generando archivos .MIS...</p>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(function() {
+    // Set default dates: last 1 day
+    var today = new Date();
+    var yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    $('#txtFechaFin').val(formatDate(today));
+    $('#txtFechaInicio').val(formatDate(yesterday));
+
+    // Load stations
+    $.getJSON('@Url.Action("GetStations", "MisExport")', function(data) {
+        if (data.error) { alert(data.error); return; }
+        data.forEach(function(st) {
+            var label = st.nombre + ' (' + st.idAsignado + ')';
+            if (st.idSatelital) label += ' [' + st.idSatelital + ']';
+            $('#ddStation').append('<option value="' + st.idAsignado + '">' + label + '</option>');
+        });
+        $('#ddStation').parent('.ui.dropdown').dropdown();
+    });
+});
+
+function formatDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function formatDateTime(str) {
+    if (!str) return '-';
+    var d = new Date(str);
+    return d.toLocaleDateString('es-MX') + ' ' + d.toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+}
+
+function doPreview() {
+    var idAsignado = $('#ddStation').val() || '';
+    var fi = $('#txtFechaInicio').val();
+    var ff = $('#txtFechaFin').val();
+
+    if (!fi || !ff) { alert('Seleccione fecha inicio y fin.'); return; }
+    if (fi > ff) { alert('La fecha inicio debe ser anterior a la fecha fin.'); return; }
+
+    var diffDays = (new Date(ff) - new Date(fi)) / (1000*60*60*24);
+    if (diffDays > 31) { alert('El rango máximo es 31 días.'); return; }
+
+    $('#btnPreview').addClass('loading');
+
+    $.getJSON('@Url.Action("Preview", "MisExport")', {
+        idAsignado: idAsignado,
+        fechaInicio: fi,
+        fechaFin: ff
+    }, function(data) {
+        $('#btnPreview').removeClass('loading');
+
+        if (data.error) { alert(data.error); return; }
+        if (!data.length) {
+            alert('No hay datos para el rango seleccionado.');
+            $('#previewPanel').hide();
+            $('#btnDownload').prop('disabled', true);
+            return;
+        }
+
+        // Stats
+        var totalRegs = 0, totalStations = data.length, totalMis = 0;
+        var tbody = '';
+        data.forEach(function(row) {
+            totalRegs += row.registros;
+            // Estimate .mis files: roughly 1 per hour block per station
+            var hours = Math.max(1, Math.ceil((new Date(row.ultimoRegistro) - new Date(row.primerRegistro)) / (1000*60*60)));
+            totalMis += hours;
+            tbody += '<tr>' +
+                '<td><strong>' + (row.idAsignado || '-') + '</strong></td>' +
+                '<td style="color:#7ec8f0;">' + (row.dcpId || '-') + '</td>' +
+                '<td>' + row.registros.toLocaleString() + '</td>' +
+                '<td>' + formatDateTime(row.primerRegistro) + '</td>' +
+                '<td>' + formatDateTime(row.ultimoRegistro) + '</td>' +
+                '<td>' + hours + '</td>' +
+                '</tr>';
+        });
+
+        $('#statCards').html(
+            '<div class="stat-card"><div class="label">Estaciones</div><div class="value">' + totalStations + '</div></div>' +
+            '<div class="stat-card"><div class="label">Registros</div><div class="value">' + totalRegs.toLocaleString() + '</div></div>' +
+            '<div class="stat-card"><div class="label">Archivos .MIS Est.</div><div class="value">~' + totalMis + '</div></div>' +
+            '<div class="stat-card"><div class="label">Días</div><div class="value">' + (diffDays + 1) + '</div></div>'
+        );
+
+        $('#previewBody').html(tbody);
+        $('#previewPanel').slideDown(200);
+        $('#btnDownload').prop('disabled', false);
+    }).fail(function() {
+        $('#btnPreview').removeClass('loading');
+        alert('Error al consultar datos.');
+    });
+}
+
+function doDownload() {
+    var idAsignado = $('#ddStation').val() || '';
+    var fi = $('#txtFechaInicio').val();
+    var ff = $('#txtFechaFin').val();
+
+    if (!fi || !ff) { alert('Seleccione fecha inicio y fin.'); return; }
+
+    // Show loading
+    $('#loadingOverlay').addClass('active');
+    $('#loadingText').text(idAsignado
+        ? 'Generando .MIS para ' + idAsignado + '...'
+        : 'Generando .MIS para TODAS las estaciones...');
+
+    var url = '@Url.Action("Download", "MisExport")' +
+        '?idAsignado=' + encodeURIComponent(idAsignado) +
+        '&fechaInicio=' + fi +
+        '&fechaFin=' + ff;
+
+    // Use fetch to handle both success (blob) and error (text)
+    fetch(url)
+        .then(function(resp) {
+            if (!resp.ok) {
+                return resp.text().then(function(t) { throw new Error(t); });
+            }
+            return resp.blob().then(function(blob) {
+                // Get filename from header
+                var cd = resp.headers.get('Content-Disposition') || '';
+                var match = cd.match(/filename[^;=\n]*=([^\n;]*)/);
+                var fname = match ? match[1].replace(/['"]/g, '') : 'MIS_export.zip';
+
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fname;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            });
+        })
+        .catch(function(err) {
+            alert('Error: ' + err.message);
+        })
+        .finally(function() {
+            $('#loadingOverlay').removeClass('active');
+        });
+}
+</script>
+}

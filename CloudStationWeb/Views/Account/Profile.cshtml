@@ -1,0 +1,368 @@
+@{
+    ViewData["Title"] = "Mi Perfil";
+    var user = ViewBag.User as CloudStationWeb.Models.ApplicationUser;
+    string role = ViewBag.Role;
+    bool is2faEnabled = ViewBag.Is2faEnabled;
+    var externalLogins = ViewBag.ExternalLogins as IList<Microsoft.AspNetCore.Identity.UserLoginInfo>;
+    var recentLogins = ViewBag.RecentLogins as List<CloudStationWeb.Models.LoginAudit>;
+    string organismoNombre = ViewBag.OrganismoNombre ?? "No asignado";
+    string centroTrabajoNombre = ViewBag.CentroTrabajoNombre ?? "No asignado";
+}
+
+@section Styles {
+<style>
+    .profile-container {
+        padding: 30px;
+        max-width: 900px;
+        margin: 0 auto;
+        min-height: calc(100vh - 50px);
+        overflow: auto;
+    }
+
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 32px;
+    }
+
+    .avatar {
+        width: 72px; height: 72px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        border-radius: 20px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 28px; font-weight: 700; color: #fff;
+        box-shadow: 0 8px 24px rgba(59,130,246,0.3);
+    }
+
+    .profile-info h2 {
+        font-size: 22px; font-weight: 600; color: #fff;
+    }
+    .profile-info .role-badge {
+        display: inline-block;
+        padding: 3px 12px; border-radius: 20px;
+        font-size: 12px; font-weight: 600; margin-top: 4px;
+    }
+    .role-SuperAdmin { background: rgba(168,85,247,0.15); color: #c4b5fd; }
+    .role-Administrador { background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .role-Operador { background: rgba(59,130,246,0.15); color: #93c5fd; }
+    .role-Visualizador { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+
+    .profile-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+
+    .glass-card {
+        background: rgba(20, 24, 33, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 28px;
+    }
+
+    .glass-card h3 {
+        font-size: 16px; font-weight: 600; color: #fff;
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 20px;
+    }
+    .glass-card h3 i { color: #3b82f6; font-size: 16px; }
+
+    .field-group { margin-bottom: 16px; }
+    .field-group label {
+        display: block; font-size: 12px; font-weight: 500;
+        color: rgba(255,255,255,0.5); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .field-group .value {
+        font-size: 14px; color: rgba(255,255,255,0.85); font-weight: 500;
+    }
+
+    .form-input {
+        width: 100%; padding: 10px 14px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; color: #fff;
+        font-family: 'Inter'; font-size: 14px; outline: none;
+    }
+    .form-input:focus { border-color: rgba(59,130,246,0.5); }
+
+    .btn-sm {
+        padding: 9px 18px;
+        border: none; border-radius: 10px;
+        font-family: 'Inter'; font-size: 13px; font-weight: 600;
+        cursor: pointer; transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-sm:hover { transform: translateY(-1px); }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+    }
+    .btn-success {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+    }
+    .btn-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #fff;
+    }
+    .btn-outline {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: rgba(255,255,255,0.7);
+    }
+
+    .security-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .security-item:last-child { border-bottom: none; }
+    .security-item .label { font-size: 14px; color: rgba(255,255,255,0.8); }
+    .security-item .status {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; font-weight: 600;
+    }
+    .status-on { color: #10b981; }
+    .status-off { color: rgba(255,255,255,0.3); }
+
+    .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .audit-table th {
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        color: rgba(255,255,255,0.4);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .audit-table td {
+        padding: 8px 10px;
+        color: rgba(255,255,255,0.7);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .audit-success { color: #10b981; }
+    .audit-fail { color: #ef4444; }
+
+    .ext-login-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        font-size: 14px; color: rgba(255,255,255,0.7);
+    }
+    .ext-login-item i { font-size: 18px; }
+
+    .alert-success, .alert-error {
+        padding: 12px 18px; border-radius: 10px; margin-bottom: 16px;
+        font-size: 14px; animation: fadeIn 0.3s ease;
+    }
+    .alert-success { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .full-width { grid-column: 1 / -1; }
+
+    @@media (max-width: 768px) {
+        .profile-grid { grid-template-columns: 1fr; }
+    }
+</style>
+}
+
+<div class="profile-container">
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert-success"><i class="check circle icon"></i> @TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-error"><i class="exclamation circle icon"></i> @TempData["Error"]</div>
+    }
+
+    <!-- Header -->
+    <div class="profile-header">
+        <div class="avatar">@(user?.FullName?.Length > 0 ? user.FullName[0].ToString().ToUpper() : "U")</div>
+        <div class="profile-info">
+            <h2>@user?.FullName</h2>
+            <span class="role-badge role-@role">@role</span>
+            <div style="color: rgba(255,255,255,0.4); font-size: 13px; margin-top: 4px;">
+                Miembro desde @user?.CreatedAt.ToString("dd MMMM yyyy")
+            </div>
+            <div style="display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.6);">
+                    <i class="building icon" style="color: #f59e0b;"></i>
+                    <span style="color: rgba(255,255,255,0.4);">Organismo:</span>
+                    <span style="color: rgba(255,255,255,0.85); font-weight: 500;">@organismoNombre</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.6);">
+                    <i class="sitemap icon" style="color: #6366f1;"></i>
+                    <span style="color: rgba(255,255,255,0.4);">Centro de Trabajo:</span>
+                    <span style="color: rgba(255,255,255,0.85); font-weight: 500;">@centroTrabajoNombre</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-grid">
+        <!-- Datos Personales -->
+        <div class="glass-card">
+            <h3><i class="user icon"></i> Datos Personales</h3>
+            <form method="post" asp-action="UpdateProfile" asp-controller="Account">
+                @Html.AntiForgeryToken()
+                <div class="field-group">
+                    <label>Usuario</label>
+                    <div class="value" style="opacity:0.5;">@user?.UserName <span style="font-size:11px;">(no editable)</span></div>
+                </div>
+                <div class="field-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" name="fullName" value="@user?.FullName" class="form-input" />
+                </div>
+                <div class="field-group">
+                    <label>Correo Electrónico</label>
+                    <input type="email" name="email" value="@user?.Email" class="form-input" />
+                </div>
+                <button type="submit" class="btn-sm btn-primary" style="margin-top: 8px;">
+                    <i class="save icon"></i> Guardar Cambios
+                </button>
+            </form>
+        </div>
+
+        <!-- Seguridad -->
+        <div class="glass-card">
+            <h3><i class="shield alternate icon"></i> Seguridad</h3>
+
+            <div class="security-item">
+                <div>
+                    <div class="label">Autenticación de Dos Factores</div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px;">
+                        Protección adicional con app autenticadora
+                    </div>
+                </div>
+                <div>
+                    @if (is2faEnabled)
+                    {
+                        <span class="status status-on"><i class="check circle icon"></i> Activo</span>
+                    }
+                    else
+                    {
+                        <span class="status status-off"><i class="circle outline icon"></i> Inactivo</span>
+                    }
+                </div>
+            </div>
+
+            <div style="margin: 16px 0;">
+                <a href="@Url.Action("Setup2fa", "Account")" class="btn-sm @(is2faEnabled ? "btn-outline" : "btn-warning")">
+                    <i class="@(is2faEnabled ? "cog" : "shield alternate") icon"></i>
+                    @(is2faEnabled ? "Administrar 2FA" : "Habilitar 2FA")
+                </a>
+            </div>
+
+            <div class="security-item">
+                <div>
+                    <div class="label">Inicios de Sesión Externos</div>
+                </div>
+                <div>
+                    @if (externalLogins != null && externalLogins.Any())
+                    {
+                        <span class="status status-on">@externalLogins.Count vinculados</span>
+                    }
+                    else
+                    {
+                        <span class="status status-off">Ninguno</span>
+                    }
+                </div>
+            </div>
+
+            @if (externalLogins != null && externalLogins.Any())
+            {
+                <div style="margin-top: 8px;">
+                    @foreach (var login in externalLogins)
+                    {
+                        <div class="ext-login-item">
+                            <i class="@login.LoginProvider.ToLower() icon"></i>
+                            @login.LoginProvider
+                            <span style="font-size:11px; color:rgba(255,255,255,0.3); margin-left:auto;">@login.ProviderDisplayName</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Cambiar Contraseña -->
+        <div class="glass-card">
+            <h3><i class="key icon"></i> Cambiar Contraseña</h3>
+            <form method="post" asp-action="ChangePassword" asp-controller="Account">
+                @Html.AntiForgeryToken()
+                <div class="field-group">
+                    <label>Contraseña Actual</label>
+                    <input type="password" name="currentPassword" class="form-input" autocomplete="current-password" required />
+                </div>
+                <div class="field-group">
+                    <label>Nueva Contraseña</label>
+                    <input type="password" name="newPassword" class="form-input" autocomplete="new-password" required />
+                </div>
+                <div class="field-group">
+                    <label>Confirmar Nueva Contraseña</label>
+                    <input type="password" name="confirmNewPassword" class="form-input" autocomplete="new-password" required />
+                </div>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 12px;">
+                    Mínimo 8 caracteres, incluir mayúsculas, minúsculas, números y caracteres especiales.
+                </div>
+                <button type="submit" class="btn-sm btn-primary">
+                    <i class="key icon"></i> Cambiar Contraseña
+                </button>
+            </form>
+        </div>
+
+        <!-- Actividad Reciente -->
+        <div class="glass-card">
+            <h3><i class="history icon"></i> Actividad Reciente</h3>
+            @if (recentLogins != null && recentLogins.Any())
+            {
+                <table class="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Método</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in recentLogins)
+                        {
+                            <tr>
+                                <td>@log.Timestamp.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                                <td>
+                                    @if (log.Success)
+                                    {
+                                        <span class="audit-success"><i class="check icon"></i> OK</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="audit-fail"><i class="times icon"></i> @(log.FailureReason ?? "Fallido")</span>
+                                    }
+                                </td>
+                                <td>@log.Provider</td>
+                                <td style="font-family: monospace; font-size: 12px;">@log.IpAddress</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px;">
+                    <i class="inbox icon" style="font-size: 24px;"></i>
+                    <p style="margin-top: 8px;">Sin registros de actividad aún</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>

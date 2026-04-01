@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d47a1"/>
+      <stop offset="100%" stop-color="#01579b"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#fff176"/>
+      <stop offset="100%" stop-color="#fdd835"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="248" fill="url(#bg)" stroke="#1565c0" stroke-width="4"/>
+
+  <!-- Cloud shape -->
+  <g opacity="0.95">
+    <ellipse cx="230" cy="200" rx="75" ry="50" fill="#e3f2fd" opacity="0.9"/>
+    <ellipse cx="290" cy="195" rx="60" ry="45" fill="#e3f2fd" opacity="0.9"/>
+    <ellipse cx="260" cy="210" rx="85" ry="45" fill="#ffffff" opacity="0.95"/>
+    <ellipse cx="200" cy="210" rx="50" ry="35" fill="#e3f2fd" opacity="0.85"/>
+    <ellipse cx="320" cy="210" rx="45" ry="35" fill="#e3f2fd" opacity="0.85"/>
+  </g>
+
+  <!-- Water drop -->
+  <path d="M256 240 C256 240 210 310 210 350 C210 380 230 410 256 410 C282 410 302 380 302 350 C302 310 256 240 256 240Z"
+        fill="url(#drop)" filter="url(#glow)" opacity="0.9"/>
+
+  <!-- Drop highlight -->
+  <ellipse cx="240" cy="340" rx="14" ry="20" fill="white" opacity="0.3" transform="rotate(-15 240 340)"/>
+
+  <!-- Lightning bolt -->
+  <polygon points="268,160 248,230 270,225 250,290 295,200 272,205"
+           fill="url(#bolt)" filter="url(#glow)"/>
+
+  <!-- Wave lines at bottom (hydro) -->
+  <g stroke="#4fc3f7" stroke-width="3.5" fill="none" opacity="0.7" stroke-linecap="round">
+    <path d="M140 430 Q170 418 200 430 Q230 442 260 430 Q290 418 320 430 Q350 442 380 430"/>
+    <path d="M155 450 Q185 438 215 450 Q245 462 275 450 Q305 438 335 450 Q365 462 395 450"/>
+  </g>
+</svg>

@@ -413,8 +413,13 @@
         right: 14px;
         z-index: 10;
         display: flex;
-        gap: 6px;
+        gap: 10px;
         align-items: center;
+        background: rgba(4,12,20,0.75);
+        padding: 8px 16px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,230,118,0.25);
+        backdrop-filter: blur(8px);
     }
     .c3d-controls .button { transition: all 0.2s ease; min-width: auto; }
     .c3d-controls .button.disabled { pointer-events: none; }
@@ -508,12 +513,6 @@
                 <i class="search icon"></i> Consultar
             </button>
         </div>
-
-        <div style="margin-left:auto; display:flex; gap:8px;">
-            <button class="ui tiny inverted green button" onclick="exportTable()">
-                <i class="file excel icon"></i> Exportar
-            </button>
-        </div>
     </div>
 
     @if (Model.Presas.Count == 0)
@@ -532,6 +531,7 @@
             <div class="presa-tab" data-presa="cascada3d" style="background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(33,150,243,0.15)); border:1px solid rgba(0,230,118,0.3);"><i class="water icon"></i> Cascada 3D</div>
             <div class="presa-tab" data-presa="promapor" style="background:linear-gradient(135deg,rgba(255,171,64,0.15),rgba(233,30,99,0.15)); border:1px solid rgba(255,171,64,0.3);"><i class="chart line icon"></i> PromApor SHG</div>
             <div class="presa-tab" data-presa="niveleshorarios" style="background:linear-gradient(135deg,rgba(76,175,80,0.15),rgba(255,235,59,0.15)); border:1px solid rgba(76,175,80,0.3);"><i class="table icon"></i> Niveles Horarios</div>
+            <div class="presa-tab" data-presa="hydrosim" style="background:linear-gradient(135deg,rgba(244,67,54,0.18),rgba(255,152,0,0.18)); border:1px solid rgba(244,67,54,0.4);"><i class="lightning icon"></i> Simulación Hidro</div>
             @foreach (var p in Model.Presas)
             {
                 <div class="presa-tab" data-presa="@SafeId(p.Presa)">@p.Presa</div>
@@ -594,19 +594,11 @@
         <!-- Tab: CASCADA 3D -->
         <div id="tab-cascada3d" class="tab-content" style="display:none;">
             <div id="cascade3d-wrapper">
-                <div class="c3d-overlay-info">
-                    <span><i class="water icon"></i> Sistema Hidroeléctrico Grijalva — Cascada en Tiempo Real</span>
-                    <span id="c3dTimestamp" style="margin-left:16px; color:#4fc3f7; font-size:12px; letter-spacing:0.5px;"></span>
-                </div>
                 <div class="c3d-controls">
-                    <button class="ui tiny inverted green button" id="c3d-btn-play" onclick="playCascade3D()" style="opacity:0.5;">
-                        <i class="play icon"></i> Iniciar
-                    </button>
-                    <button class="ui tiny inverted yellow button" id="c3d-btn-pause" onclick="pauseCascade3D()">
-                        <i class="pause icon"></i> Pausar
-                    </button>
-                    <button class="ui tiny inverted red button" id="c3d-btn-stop" onclick="stopCascade3D()">
-                        <i class="stop icon"></i> Detener
+                    <span style="color:#00e676; font-size:13px; font-weight:600;"><i class="water icon"></i> Sistema Hidroeléctrico Grijalva — Cascada en Tiempo Real</span>
+                    <span id="c3dTimestamp" style="color:#4fc3f7; font-size:12px; letter-spacing:0.5px;"></span>
+                    <button class="ui tiny inverted blue button" onclick="exportCascade3DImage()">
+                        <i class="camera icon"></i> Exportar Imagen
                     </button>
                     <button class="ui tiny inverted teal button" onclick="toggle3DFullscreen()">
                         <i class="expand icon"></i> Pantalla Completa
@@ -744,6 +736,197 @@
                                 </button>
                             </div>
                             <div id="chart-nivel-penitas" style="height:250px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: SIMULACIÓN HIDROLÓGICA -->
+        <div id="tab-hydrosim" class="tab-content" style="display:none;">
+            <div style="padding:10px 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="color:#ff7043; margin:0; font-size:18px; font-weight:600; letter-spacing:0.5px;">
+                        <i class="lightning icon" style="color:#ff5722;"></i> SIMULACIÓN HIDROLÓGICA — Pronóstico de Niveles
+                    </h3>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <select id="hydroHorizon" style="background:rgba(0,0,0,0.4); border:1px solid rgba(244,67,54,0.3); color:#e8f5e9; padding:6px 12px; border-radius:6px; font-size:13px;">
+                            <option value="24">24 horas (1 día)</option>
+                            <option value="48">48 horas (2 días)</option>
+                            <option value="72" selected>72 horas (3 días)</option>
+                            <option value="120">120 horas (5 días)</option>
+                            <option value="168">168 horas (7 días)</option>
+                            <option value="240">240 horas (10 días)</option>
+                            <option value="360">360 horas (15 días)</option>
+                        </select>
+                        <button class="ui tiny inverted orange button" id="btnRunHydroSim">
+                            <i class="play icon"></i> Ejecutar Simulación
+                        </button>
+                        <span id="hydroSimStatus" style="color:#78909c; font-size:12px;"></span>
+                    </div>
+                </div>
+
+                <!-- Tabla de Datos de Entrada -->
+                <div id="hydroInputData" style="margin-bottom:16px;">
+                    <div class="chart-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="color:#42a5f5; margin:0; font-size:14px; font-weight:600;">
+                                <i class="database icon"></i> Datos de Entrada del Modelo
+                            </h4>
+                            <button class="ui tiny inverted blue basic button" id="btnRefreshInputData" style="font-size:11px;">
+                                <i class="sync icon"></i> Actualizar
+                            </button>
+                        </div>
+                        <div id="hydroInputLoading" style="text-align:center; padding:20px; color:#78909c;">
+                            <i class="spinner loading icon"></i> Cargando datos de entrada...
+                        </div>
+                        <div id="hydroInputContent" style="display:none;">
+                            <!-- Info del pronóstico -->
+                            <div id="hydroForecastInfo" style="margin-bottom:10px; font-size:12px; color:#78909c;"></div>
+                            <!-- Tabla condiciones iniciales -->
+                            <div style="overflow-x:auto;">
+                                <table class="ui very basic inverted compact table" style="font-size:12px; width:100%;">
+                                    <thead>
+                                        <tr style="background:rgba(33,150,243,0.08);">
+                                            <th style="color:#42a5f5;">Presa</th>
+                                            <th style="color:#42a5f5;">Cuenca</th>
+                                            <th style="color:#42a5f5;">Fecha Dato</th>
+                                            <th style="color:#42a5f5;">Hora</th>
+                                            <th style="color:#42a5f5;">Elevación (msnm)</th>
+                                            <th style="color:#42a5f5;">Almac. (Mm³)</th>
+                                            <th style="color:#42a5f5;">Aport. (m³/s)</th>
+                                            <th style="color:#ff7043;">Extrac. (m³/s) <i class="edit icon" style="font-size:10px; opacity:0.7;" title="Editable"></i></th>
+                                            <th style="color:#42a5f5;">CN</th>
+                                            <th style="color:#42a5f5;">Lluvia Acum. (mm)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hydroInputTableBody"></tbody>
+                                </table>
+                            </div>
+                            <!-- Gráfica mini de lluvia por cuenca -->
+                            <div id="hydroInputRainChart" style="height:180px; margin-top:12px;"></div>
+                        </div>
+                        <div id="hydroInputError" style="display:none; color:#ff5252; font-size:12px; padding:10px;"></div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Extracciones Programadas (por día) -->
+                <div id="hydroExtractionSchedule" style="margin-bottom:16px;">
+                    <div class="chart-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="color:#ff7043; margin:0; font-size:14px; font-weight:600;">
+                                <i class="calendar alternate icon"></i> Programa de Extracciones (m³/s por día)
+                            </h4>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <button class="ui tiny inverted orange basic button" id="btnFillExtraction" style="font-size:11px;" title="Copiar valor del día 1 a todos los días">
+                                    <i class="clone icon"></i> Rellenar
+                                </button>
+                                <button class="ui tiny inverted basic button" id="btnResetExtraction" style="font-size:11px;" title="Restaurar valores iniciales">
+                                    <i class="undo icon"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="ui very basic inverted compact table" id="extractionScheduleTable" style="font-size:12px; width:100%;">
+                                <thead id="extractionScheduleHead"></thead>
+                                <tbody id="extractionScheduleBody"></tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:8px; font-size:11px; color:#546e7a;">
+                            <i class="info circle icon"></i> Ingrese el gasto de extracción (m³/s) para cada presa y día. El simulador aplicará estos valores al balance hídrico horario.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Aportaciones Programadas (por día) -->
+                <div id="hydroAportationSchedule" style="margin-bottom:16px;">
+                    <div class="chart-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="color:#4fc3f7; margin:0; font-size:14px; font-weight:600;">
+                                <i class="tint icon"></i> Programa de Aportaciones (m³/s por día)
+                            </h4>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <button class="ui tiny inverted blue basic button" id="btnFillAportation" style="font-size:11px;" title="Copiar valor del día 1 a todos los días">
+                                    <i class="clone icon"></i> Rellenar
+                                </button>
+                                <button class="ui tiny inverted basic button" id="btnResetAportation" style="font-size:11px;" title="Restaurar valores iniciales">
+                                    <i class="undo icon"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="ui very basic inverted compact table" id="aportationScheduleTable" style="font-size:12px; width:100%;">
+                                <thead id="aportationScheduleHead"></thead>
+                                <tbody id="aportationScheduleBody"></tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:8px; font-size:11px; color:#546e7a;">
+                            <i class="info circle icon"></i> Ingrese aportaciones manuales (m³/s). Si se deja un valor, reemplaza la aportación calculada por lluvia para esa presa. Deje en 0 para usar el cálculo automático.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parámetros del Modelo (CN y Coeficiente de Escurrimiento) -->
+                <div id="hydroModelParams" style="margin-bottom:16px;">
+                    <div class="chart-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="color:#ab47bc; margin:0; font-size:14px; font-weight:600;">
+                                <i class="sliders horizontal icon"></i> Parámetros del Modelo
+                            </h4>
+                            <button class="ui tiny inverted purple basic button" id="btnResetParams" style="font-size:11px;" title="Restaurar valores por defecto de la BD">
+                                <i class="undo icon"></i> Reset
+                            </button>
+                        </div>
+                        <table class="ui very basic inverted compact table" id="modelParamsTable" style="font-size:12px; width:auto;">
+                            <thead>
+                                <tr style="background:rgba(171,71,188,0.08);">
+                                    <th style="color:#ab47bc; min-width:100px;">Presa</th>
+                                    <th style="color:#ab47bc; text-align:center;" title="Número de Curva SCS-NRCS (30-100)">CN (Curva)</th>
+                                    <th style="color:#ab47bc; text-align:center;" title="Coeficiente de escurrimiento / drenaje">Coef. Escurr.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modelParamsBody"></tbody>
+                        </table>
+                        <div style="margin-top:8px; font-size:11px; color:#546e7a;">
+                            <i class="info circle icon"></i> <b>CN</b>: Número de Curva SCS (controla la abstracción de lluvia; mayor CN = más escurrimiento). <b>Coef. Escurrimiento</b>: multiplica el volumen escurrido por cuenca (por presa).
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary cards de simulación -->
+                <div id="hydroSimSummary" style="display:none;">
+                    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;" id="hydroSummaryCards"></div>
+                </div>
+
+                <!-- Gráficas de simulación -->
+                <div id="hydroSimCharts" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;"></div>
+
+                <!-- Tabla resumen estilo Funcionamiento de Vasos -->
+                <div id="hydroSimTable" style="display:none; margin-top:16px;">
+                    <div class="chart-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="color:#e8f5e9; margin:0; font-size:14px; font-weight:600;">
+                                <i class="table icon"></i> Funcionamiento de Vasos Simulado
+                            </h4>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <label style="font-size:11px; color:#78909c;">Intervalo:</label>
+                                <select id="hydroTableInterval" style="background:#1a2530; border:1px solid #37474f; color:#b0bec5; border-radius:4px; padding:2px 6px; font-size:11px;">
+                                    <option value="1">Cada hora</option>
+                                    <option value="3" selected>Cada 3h</option>
+                                    <option value="6">Cada 6h</option>
+                                    <option value="12">Cada 12h</option>
+                                    <option value="24">Cada 24h</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Tabs por presa -->
+                        <div id="hydroTableTabs" style="display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap;"></div>
+                        <!-- Tabla -->
+                        <div style="overflow-x:auto; max-height:500px; overflow-y:auto;">
+                            <table class="ui very basic inverted compact table" style="font-size:11px; width:100%; border-collapse:collapse;">
+                                <thead id="hydroTableHead" style="position:sticky; top:0; z-index:2;"></thead>
+                                <tbody id="hydroTableBody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -982,6 +1165,9 @@ $(function() {
         } else if (presa === 'niveleshorarios') {
             $('#tab-niveleshorarios').show();
             renderNivelesHorarios();
+        } else if (presa === 'hydrosim') {
+            $('#tab-hydrosim').show();
+            loadHydroInputData();
         } else {
             $('#tab-' + sanitizeId(presa)).show();
             renderCharts(presa);
@@ -2025,6 +2211,569 @@ $(function() {
         var fecha = '@Model.FechaFin.ToString("yyyy-MM-dd")';
         window.location.href = '@Url.Action("ExportNivelesHorarios", "FunVasos")?fecha=' + fecha;
     };
+
+    // ══════════════════════════════════════════════════════
+    // SIMULACIÓN HIDROLÓGICA
+    // ══════════════════════════════════════════════════════
+    var hydroSimData = null;
+    var damColors = {
+        'Angostura': '#1565C0',
+        'Chicoasen': '#7B1FA2',
+        'Malpaso': '#00838F',
+        'JGrijalva': '#FF6F00',
+        'Penitas': '#AD1457'
+    };
+    var damLabels = {
+        'Angostura': 'Angostura',
+        'Chicoasen': 'Chicoasén',
+        'Malpaso': 'Malpaso',
+        'JGrijalva': 'Tapón J. Grijalva',
+        'Penitas': 'Peñitas'
+    };
+
+    // ── DATOS DE ENTRADA ──
+    function loadHydroInputData() {
+        var horizon = parseInt($('#hydroHorizon').val());
+        $('#hydroInputLoading').show();
+        $('#hydroInputContent').hide();
+        $('#hydroInputError').hide();
+
+        $.getJSON('@Url.Action("GetInputData", "HydroForecast")', { horizonHours: horizon }, function(res) {
+            $('#hydroInputLoading').hide();
+            if (!res.success) {
+                $('#hydroInputError').text('Error: ' + res.message).show();
+                return;
+            }
+            renderHydroInputData(res);
+            $('#hydroInputContent').show();
+        }).fail(function() {
+            $('#hydroInputLoading').hide();
+            $('#hydroInputError').text('Error de conexión al obtener datos de entrada').show();
+        });
+    }
+
+    function renderHydroInputData(data) {
+        // Info pronóstico
+        var infoHtml = '<i class="cloud icon" style="color:#42a5f5;"></i> ';
+        infoHtml += 'Pronóstico disponible: <strong style="color:#e8f5e9;">' + (data.forecastDate || 'Sin datos') + '</strong>';
+        infoHtml += ' &nbsp;|&nbsp; Horizonte: <strong style="color:#e8f5e9;">' + data.horizonHours + 'h</strong>';
+        $('#hydroForecastInfo').html(infoHtml);
+
+        // Tabla de condiciones iniciales
+        var tbody = '';
+        data.dams.forEach(function(d) {
+            var color = damColors[d.damName] || '#ccc';
+            var label = damLabels[d.damName] || d.damName;
+            var noData = d.elevacion === null;
+            var rainClass = d.totalRainMm > 50 ? 'color:#ff5252; font-weight:700;' :
+                            d.totalRainMm > 20 ? 'color:#ffab40; font-weight:600;' :
+                            d.totalRainMm > 5  ? 'color:#42a5f5;' : 'color:#78909c;';
+
+            tbody += '<tr>';
+            tbody += '<td style="color:' + color + '; font-weight:600;">' + label + '</td>';
+            tbody += '<td style="color:#78909c; text-transform:uppercase;">' + (d.cuencaCode || '—') + '</td>';
+            tbody += '<td style="color:#a5d6a7;">' + (d.fechaBase || '—') + '</td>';
+            tbody += '<td style="color:#a5d6a7;">' + (d.ultimaHora != null ? d.ultimaHora + ':00' : '—') + '</td>';
+            tbody += '<td style="color:#e8f5e9; font-weight:600;">' + (noData ? '<span style="color:#ff5252;">Sin dato</span>' : d.elevacion.toFixed(2)) + '</td>';
+            tbody += '<td>' + (noData ? '—' : d.almacenamiento.toFixed(2)) + '</td>';
+            tbody += '<td style="color:#66bb6a;">' + (noData ? '—' : d.aportacionQ.toFixed(2)) + '</td>';
+            tbody += '<td><input type="number" step="0.01" min="0" class="hydro-extraction-input" data-dam="' + d.damName + '" value="' + (noData ? 0 : d.extraccionQ.toFixed(2)) + '" style="background:rgba(255,112,67,0.12); border:1px solid rgba(255,112,67,0.4); color:#ff7043; font-weight:600; width:80px; padding:3px 6px; border-radius:4px; font-size:12px; text-align:right;" title="Editar extracción (m³/s)"></td>';
+            tbody += '<td style="color:#78909c;">' + (d.curveNumber || '—') + '</td>';
+            tbody += '<td style="' + rainClass + '">' + d.totalRainMm.toFixed(1) + '</td>';
+            tbody += '</tr>';
+        });
+        $('#hydroInputTableBody').html(tbody);
+
+        // Mini gráfica de lluvia por cuenca
+        renderInputRainChart(data.rainByCuenca);
+    }
+
+    function renderInputRainChart(rainByCuenca) {
+        if (!rainByCuenca || !rainByCuenca.length) {
+            $('#hydroInputRainChart').html('<div style="text-align:center; color:#546e7a; padding:20px; font-size:12px;">Sin datos de pronóstico de lluvia</div>');
+            return;
+        }
+
+        var cuencaColors = { 'ang': '#1565C0', 'mmt': '#7B1FA2', 'mps': '#00838F', 'pea': '#AD1457' };
+        var cuencaNames = { 'ang': 'Angostura', 'mmt': 'Chicoasén', 'mps': 'Malpaso', 'pea': 'Peñitas' };
+        var series = [];
+
+        rainByCuenca.forEach(function(c) {
+            var data = c.hours.map(function(h) {
+                return [new Date(h.time).getTime(), h.rainMm];
+            });
+            series.push({
+                name: cuencaNames[c.cuencaCode] || c.cuencaCode,
+                type: 'column',
+                data: data,
+                color: Highcharts.color(cuencaColors[c.cuencaCode] || '#42a5f5').setOpacity(0.7).get(),
+                borderWidth: 0
+            });
+        });
+
+        Highcharts.chart('hydroInputRainChart', {
+            chart: { backgroundColor: 'transparent', height: 180 },
+            title: { text: 'Lluvia Pronosticada por Cuenca (mm/h)', style: { color: '#78909c', fontSize: '12px' } },
+            xAxis: { type: 'datetime', labels: { style: { color: '#546e7a', fontSize: '10px' }, format: '{value:%d/%m %H}h' },
+                gridLineColor: 'rgba(255,255,255,0.03)' },
+            yAxis: { title: { text: null }, labels: { style: { color: '#546e7a' } }, gridLineColor: 'rgba(255,255,255,0.05)', min: 0 },
+            legend: { itemStyle: { color: '#78909c', fontSize: '10px' }, backgroundColor: 'transparent' },
+            plotOptions: { column: { pointPadding: 0, groupPadding: 0.1, borderWidth: 0 } },
+            series: series,
+            exporting: { enabled: false },
+            credits: { enabled: false },
+            tooltip: { shared: true, backgroundColor: 'rgba(15,25,30,0.95)', style: { color: '#e8f5e9' },
+                xDateFormat: '%Y-%m-%d %H:%M', valueSuffix: ' mm' }
+        });
+    }
+
+    // Cargar datos de entrada al abrir el tab o al cambiar horizonte
+    $('#hydroHorizon').on('change', function() { loadHydroInputData(); });
+    $('#btnRefreshInputData').on('click', function() { loadHydroInputData(); });
+
+    // ── TABLA DE EXTRACCIONES PROGRAMADAS (por día) ──
+    var _hydroInitialExtractions = {}; // { damName: m³/s }
+    var _hydroInitialAportations = {}; // { damName: m³/s }
+    var _hydroInitialParams = {};      // { damName: { cn, drainCoeff } }
+    var _damOrder = ['Angostura', 'Chicoasen', 'Malpaso', 'JGrijalva', 'Penitas'];
+
+    function _getDays() {
+        var horizon = parseInt($('#hydroHorizon').val());
+        var days = Math.ceil(horizon / 24);
+        return Math.max(1, Math.min(days, 15));
+    }
+
+    function _dayHeaders(color) {
+        var days = _getDays();
+        var today = new Date();
+        var html = '<tr style="background:rgba(' + color + ',0.08);">';
+        html += '<th style="min-width:100px; position:sticky; left:0; background:#131c24; z-index:1;">Presa</th>';
+        for (var d = 0; d < days; d++) {
+            var dt = new Date(today); dt.setDate(today.getDate() + d);
+            var dateStr = dt.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+            html += '<th style="text-align:center; min-width:75px;">D' + (d + 1) + '<br><span style="font-size:10px; color:#78909c; font-weight:400;">' + dateStr + '</span></th>';
+        }
+        return html + '</tr>';
+    }
+
+    function _scheduleRows(className, initValues, inputColor, borderColor) {
+        var days = _getDays();
+        var html = '';
+        _damOrder.forEach(function(dam) {
+            var color = damColors[dam] || '#ccc';
+            var label = damLabels[dam] || dam;
+            var initQ = initValues[dam] || 0;
+            html += '<tr>';
+            html += '<td style="color:' + color + '; font-weight:600; position:sticky; left:0; background:#131c24; z-index:1;">' + label + '</td>';
+            for (var d = 0; d < days; d++) {
+                html += '<td style="text-align:center;">';
+                html += '<input type="number" step="0.1" min="0" class="' + className + '" data-dam="' + dam + '" data-day="' + d + '" ';
+                html += 'value="' + initQ.toFixed(1) + '" ';
+                html += 'style="background:' + inputColor + '; border:1px solid ' + borderColor + '; color:' + borderColor.replace('0.3', '1') + '; font-weight:600; width:70px; padding:3px 4px; border-radius:4px; font-size:12px; text-align:right;">';
+                html += '</td>';
+            }
+            html += '</tr>';
+        });
+        return html;
+    }
+
+    function buildExtractionScheduleTable() {
+        $('#extractionScheduleHead').html(_dayHeaders('255,112,67').replace(/>Presa</g, ' style="color:#ff7043;">Presa<').replace(/>D/g, ' style="color:#ff7043;">D'));
+        // Re-color headers
+        var headHtml = _dayHeaders('255,112,67');
+        headHtml = headHtml.replace(/<th /g, '<th style="color:#ff7043;" ');
+        $('#extractionScheduleHead').html(headHtml);
+        $('#extractionScheduleBody').html(_scheduleRows('hydro-sched-input', _hydroInitialExtractions, 'rgba(255,112,67,0.08)', 'rgba(255,112,67,0.3)'));
+    }
+
+    function buildAportationScheduleTable() {
+        var headHtml = _dayHeaders('79,195,247');
+        headHtml = headHtml.replace(/<th /g, '<th style="color:#4fc3f7;" ');
+        $('#aportationScheduleHead').html(headHtml);
+        $('#aportationScheduleBody').html(_scheduleRows('hydro-aport-input', _hydroInitialAportations, 'rgba(79,195,247,0.08)', 'rgba(79,195,247,0.3)'));
+    }
+
+    function buildModelParamsTable() {
+        var html = '';
+        _damOrder.forEach(function(dam) {
+            var color = damColors[dam] || '#ccc';
+            var label = damLabels[dam] || dam;
+            var p = _hydroInitialParams[dam] || { cn: 75, drainCoeff: 0.15 };
+            html += '<tr>';
+            html += '<td style="color:' + color + '; font-weight:600;">' + label + '</td>';
+            html += '<td style="text-align:center;"><input type="number" step="1" min="30" max="100" class="hydro-cn-input" data-dam="' + dam + '" value="' + p.cn.toFixed(0) + '" style="background:rgba(171,71,188,0.08); border:1px solid rgba(171,71,188,0.3); color:#ce93d8; font-weight:600; width:60px; padding:3px 4px; border-radius:4px; font-size:12px; text-align:right;"></td>';
+            html += '<td style="text-align:center;"><input type="number" step="0.01" min="0" max="1" class="hydro-dc-input" data-dam="' + dam + '" value="' + p.drainCoeff.toFixed(2) + '" style="background:rgba(171,71,188,0.08); border:1px solid rgba(171,71,188,0.3); color:#ce93d8; font-weight:600; width:60px; padding:3px 4px; border-radius:4px; font-size:12px; text-align:right;"></td>';
+            html += '</tr>';
+        });
+        $('#modelParamsBody').html(html);
+    }
+
+    // Al cargar datos de entrada, guardar valores iniciales y reconstruir tablas
+    var _origRenderHydroInput = renderHydroInputData;
+    renderHydroInputData = function(data) {
+        _origRenderHydroInput(data);
+        data.dams.forEach(function(d) {
+            _hydroInitialExtractions[d.damName] = d.extraccionQ || 0;
+            _hydroInitialAportations[d.damName] = d.aportacionQ || 0;
+            _hydroInitialParams[d.damName] = {
+                cn: d.curveNumber || 75,
+                drainCoeff: d.drainCoeff || 0.15
+            };
+        });
+        buildExtractionScheduleTable();
+        buildAportationScheduleTable();
+        buildModelParamsTable();
+    };
+
+    // ── Botones Fill/Reset para Extracciones ──
+    $('#btnFillExtraction').on('click', function() {
+        _damOrder.forEach(function(dam) {
+            var d0 = $('.hydro-sched-input[data-dam="' + dam + '"][data-day="0"]').val();
+            if (d0 !== undefined) $('.hydro-sched-input[data-dam="' + dam + '"]').val(d0);
+        });
+    });
+    $('#btnResetExtraction').on('click', function() {
+        $('.hydro-sched-input').each(function() {
+            $(this).val((_hydroInitialExtractions[$(this).data('dam')] || 0).toFixed(1));
+        });
+    });
+
+    // ── Botones Fill/Reset para Aportaciones ──
+    $('#btnFillAportation').on('click', function() {
+        _damOrder.forEach(function(dam) {
+            var d0 = $('.hydro-aport-input[data-dam="' + dam + '"][data-day="0"]').val();
+            if (d0 !== undefined) $('.hydro-aport-input[data-dam="' + dam + '"]').val(d0);
+        });
+    });
+    $('#btnResetAportation').on('click', function() {
+        $('.hydro-aport-input').each(function() {
+            $(this).val((_hydroInitialAportations[$(this).data('dam')] || 0).toFixed(1));
+        });
+    });
+
+    // ── Reset Parámetros del Modelo ──
+    $('#btnResetParams').on('click', function() {
+        $('.hydro-cn-input').each(function() {
+            var p = _hydroInitialParams[$(this).data('dam')] || { cn: 75 };
+            $(this).val(p.cn.toFixed(0));
+        });
+        $('.hydro-dc-input').each(function() {
+            var p = _hydroInitialParams[$(this).data('dam')] || { drainCoeff: 0.15 };
+            $(this).val(p.drainCoeff.toFixed(2));
+        });
+    });
+
+    // ── Recoger schedules y parámetros ──
+    function getExtractionSchedule() {
+        var schedule = {};
+        $('.hydro-sched-input').each(function() {
+            var dam = $(this).data('dam'), day = parseInt($(this).data('day'));
+            var val = parseFloat($(this).val());
+            if (isNaN(val) || val < 0) val = 0;
+            if (!schedule[dam]) schedule[dam] = [];
+            schedule[dam][day] = val;
+        });
+        return schedule;
+    }
+
+    function getAportationSchedule() {
+        var schedule = {};
+        var hasAny = false;
+        $('.hydro-aport-input').each(function() {
+            var dam = $(this).data('dam'), day = parseInt($(this).data('day'));
+            var val = parseFloat($(this).val());
+            if (isNaN(val) || val < 0) val = 0;
+            if (!schedule[dam]) schedule[dam] = [];
+            schedule[dam][day] = val;
+            if (val > 0) hasAny = true;
+        });
+        return hasAny ? schedule : null;
+    }
+
+    function getModelParams() {
+        var drainCoefficients = {}, curveNumbers = {}, hasChanges = false;
+        $('.hydro-cn-input').each(function() {
+            var dam = $(this).data('dam'), val = parseFloat($(this).val());
+            var orig = (_hydroInitialParams[dam] || {}).cn || 75;
+            if (!isNaN(val) && Math.abs(val - orig) > 0.01) { curveNumbers[dam] = val; hasChanges = true; }
+        });
+        $('.hydro-dc-input').each(function() {
+            var dam = $(this).data('dam'), val = parseFloat($(this).val());
+            var orig = (_hydroInitialParams[dam] || {}).drainCoeff || 0.15;
+            if (!isNaN(val) && Math.abs(val - orig) > 0.001) { drainCoefficients[dam] = val; hasChanges = true; }
+        });
+        return hasChanges ? { drainCoefficients: drainCoefficients, curveNumbers: curveNumbers } : null;
+    }
+
+    $('#btnRunHydroSim').on('click', function() {
+        var horizon = parseInt($('#hydroHorizon').val());
+        var $btn = $(this);
+        $btn.addClass('loading disabled');
+        $('#hydroSimStatus').text('Ejecutando simulación...').css('color', '#ffab40');
+        $('#hydroSimSummary').hide();
+        $('#hydroSimCharts').empty();
+        $('#hydroSimTable').hide();
+
+        // Recoger extracciones editadas por el usuario
+        var extractions = {};
+        $('.hydro-extraction-input').each(function() {
+            var dam = $(this).data('dam');
+            var val = parseFloat($(this).val());
+            if (!isNaN(val) && val >= 0) {
+                extractions[dam] = val;
+            }
+        });
+
+        // Recoger programa de extracciones por día
+        var extractionSchedule = getExtractionSchedule();
+
+        // Recoger programa de aportaciones por día
+        var aportationSchedule = getAportationSchedule();
+
+        // Recoger parámetros del modelo editados
+        var modelParams = getModelParams();
+
+        var postData = {
+            horizonHours: horizon,
+            extractions: extractions,
+            extractionSchedule: extractionSchedule,
+            aportationSchedule: aportationSchedule,
+            drainCoefficients: modelParams ? modelParams.drainCoefficients : null,
+            curveNumbers: modelParams ? modelParams.curveNumbers : null
+        };
+
+        $.ajax({
+            url: '@Url.Action("RunSimulation", "HydroForecast")',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(postData),
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+            success: function(res) {
+                $btn.removeClass('loading disabled');
+                if (!res.success) {
+                    $('#hydroSimStatus').text('Error: ' + res.message).css('color', '#ff5252');
+                    return;
+                }
+                hydroSimData = res;
+                var dateStr = res.forecastDate ? 'Pronóstico: ' + res.forecastDate : '';
+                $('#hydroSimStatus').html('<i class="check circle icon" style="color:#00e676;"></i> Simulación completada — ' + dateStr).css('color', '#a5d6a7');
+
+                renderHydroSummary(res);
+                renderHydroCharts(res);
+                renderHydroTable(res);
+            },
+            error: function() {
+                $btn.removeClass('loading disabled');
+                $('#hydroSimStatus').text('Error de conexión').css('color', '#ff5252');
+            }
+        });
+    });
+
+    function renderHydroSummary(res) {
+        var html = '';
+        res.dams.forEach(function(d) {
+            var color = damColors[d.damName] || '#00e676';
+            var label = damLabels[d.damName] || d.damName;
+            var arrow = d.deltaElev >= 0 ? '▲' : '▼';
+            var arrowColor = d.deltaElev >= 0 ? '#ff5252' : '#4caf50';
+            html += '<div class="summary-card" style="min-width:160px; border-left:3px solid ' + color + ';">';
+            html += '  <div class="label" style="color:' + color + ';">' + label + '</div>';
+            html += '  <div class="value" style="color:#e8f5e9; font-size:18px;">' + d.initialElev.toFixed(2) + '</div>';
+            html += '  <div class="unit">msnm actual</div>';
+            html += '  <div style="margin-top:6px; font-size:13px;">';
+            html += '    <span style="color:' + arrowColor + '; font-weight:700;">' + arrow + ' ' + (d.deltaElev >= 0 ? '+' : '') + d.deltaElev.toFixed(2) + ' m</span>';
+            html += '    <span style="color:#78909c;"> → ' + d.finalElev.toFixed(2) + '</span>';
+            html += '  </div>';
+            html += '  <div style="font-size:11px; color:#546e7a; margin-top:4px;">Máx: ' + d.maxElev.toFixed(2) + ' | Mín: ' + d.minElev.toFixed(2) + '</div>';
+            html += '</div>';
+        });
+        $('#hydroSummaryCards').html(html);
+        $('#hydroSimSummary').show();
+    }
+
+    function renderHydroCharts(res) {
+        var container = $('#hydroSimCharts');
+        container.empty();
+
+        res.dams.forEach(function(d) {
+            var color = damColors[d.damName] || '#00e676';
+            var label = damLabels[d.damName] || d.damName;
+            var chartId = 'hydro-chart-' + d.damName;
+
+            container.append('<div class="chart-card" style="position:relative;"><div id="' + chartId + '" style="height:320px;"></div></div>');
+
+            var categories = d.hourly.map(function(h) { return h.time.split(' ')[1]; });
+            var elevData = d.hourly.map(function(h) { return h.elev; });
+            var rainData = d.hourly.map(function(h) { return h.rain; });
+            var inputData = d.hourly.map(function(h) { return Math.round((h.basinInput + h.upstreamInput) * 10000) / 10000; });
+
+            // Mostrar cada 6 horas en eje X
+            var step = Math.max(1, Math.floor(categories.length / 12));
+
+            Highcharts.chart(chartId, {
+                chart: { backgroundColor: '#0f1923', height: 320 },
+                title: { text: label + ' — Pronóstico de Nivel', style: { color: color, fontSize: '15px', fontWeight: '600' } },
+                subtitle: { text: 'Δ Nivel: ' + (d.deltaElev >= 0 ? '+' : '') + d.deltaElev.toFixed(2) + ' m en ' + res.horizonHours + 'h',
+                    style: { color: d.deltaElev >= 0 ? '#ff7043' : '#66bb6a', fontSize: '12px' } },
+                exporting: { enabled: false },
+                xAxis: {
+                    categories: categories,
+                    labels: { step: step, style: { color: '#78909c', fontSize: '10px' }, rotation: -45 },
+                    gridLineColor: 'rgba(255,255,255,0.03)'
+                },
+                yAxis: [{
+                    title: { text: 'Nivel (msnm)', style: { color: '#78909c' } },
+                    labels: { style: { color: '#78909c' } },
+                    gridLineColor: 'rgba(255,255,255,0.05)',
+                    plotLines: [{
+                        value: d.initialElev, color: 'rgba(255,255,255,0.3)', width: 1, dashStyle: 'Dot',
+                        label: { text: 'Actual: ' + d.initialElev.toFixed(2), style: { color: 'rgba(255,255,255,0.5)', fontSize: '10px' } }
+                    }]
+                }, {
+                    title: { text: 'Lluvia (mm)', style: { color: '#42a5f5' } },
+                    labels: { style: { color: '#42a5f5' } },
+                    opposite: true, reversed: true, min: 0
+                }],
+                series: [{
+                    name: 'Nivel (msnm)', type: 'areaspline', data: elevData, color: color,
+                    fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                        stops: [[0, Highcharts.color(color).setOpacity(0.3).get()], [1, Highcharts.color(color).setOpacity(0.02).get()]] },
+                    lineWidth: 2.5, marker: { enabled: false }, yAxis: 0
+                }, {
+                    name: 'Lluvia (mm)', type: 'column', data: rainData, color: 'rgba(66,165,245,0.5)',
+                    borderWidth: 0, pointPadding: 0, groupPadding: 0, yAxis: 1
+                }, {
+                    name: 'Aportación (Mm³)', type: 'spline', data: inputData, color: '#ffab40',
+                    lineWidth: 1.5, dashStyle: 'ShortDot', marker: { enabled: false }, yAxis: 0, visible: false
+                }],
+                legend: { itemStyle: { color: '#b0bec5', fontSize: '11px' }, backgroundColor: 'transparent' },
+                credits: { enabled: false },
+                tooltip: { shared: true, backgroundColor: 'rgba(15,25,30,0.95)', borderColor: color,
+                    style: { color: '#e8f5e9' } }
+            });
+        });
+    }
+
+    // ══════════════════════════════════════════════════
+    // TABLA FUNCIONAMIENTO DE VASOS SIMULADO
+    // ══════════════════════════════════════════════════
+    var _hydroTableData = null;
+    var _hydroTableActiveDam = null;
+
+    function renderHydroTable(res) {
+        if (!res.dams || !res.dams.length) return;
+        _hydroTableData = res;
+
+        // Generar tabs por presa
+        var tabsHtml = '';
+        res.dams.forEach(function(d, i) {
+            var c = damColors[d.damName] || '#ccc';
+            var l = damLabels[d.damName] || d.damName;
+            var active = (_hydroTableActiveDam === d.damName || (!_hydroTableActiveDam && i === 0));
+            if (active) _hydroTableActiveDam = d.damName;
+            tabsHtml += '<button class="hydro-table-tab" data-dam="' + d.damName + '" style="';
+            tabsHtml += 'padding:5px 14px; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid ' + c + ';';
+            tabsHtml += active
+                ? 'background:' + c + '; color:#fff;'
+                : 'background:transparent; color:' + c + ';';
+            tabsHtml += '">' + l + '</button>';
+        });
+        $('#hydroTableTabs').html(tabsHtml);
+
+        // Click en tabs
+        $('.hydro-table-tab').off('click').on('click', function() {
+            _hydroTableActiveDam = $(this).data('dam');
+            renderHydroTable(_hydroTableData);
+        });
+
+        // Intervalo change
+        $('#hydroTableInterval').off('change').on('change', function() {
+            renderHydroTableBody();
+        });
+
+        renderHydroTableBody();
+        $('#hydroSimTable').show();
+    }
+
+    function renderHydroTableBody() {
+        var res = _hydroTableData;
+        if (!res) return;
+        var dam = res.dams.find(function(d) { return d.damName === _hydroTableActiveDam; });
+        if (!dam) dam = res.dams[0];
+
+        var color = damColors[dam.damName] || '#ccc';
+        var interval = parseInt($('#hydroTableInterval').val()) || 3;
+
+        // Header estilo FunVasos
+        var thead = '<tr style="background:rgba(33,150,243,0.08);">';
+        thead += '<th rowspan="2" style="color:#42a5f5; position:sticky; left:0; background:#131c24; z-index:3; min-width:110px;">Fecha / Hora</th>';
+        thead += '<th rowspan="2" style="color:#42a5f5; text-align:right;">Elevación<br><span style="font-size:9px; font-weight:400; color:#78909c;">m.s.n.m</span></th>';
+        thead += '<th rowspan="2" style="color:#42a5f5; text-align:right;">Almac.<br><span style="font-size:9px; font-weight:400; color:#78909c;">Mill. m³</span></th>';
+        thead += '<th rowspan="2" style="color:#42a5f5; text-align:right;">Dif.<br><span style="font-size:9px; font-weight:400; color:#78909c;">Mill. m³</span></th>';
+        thead += '<th colspan="2" style="color:#66bb6a; text-align:center; border-bottom:1px solid #37474f;">Aportaciones</th>';
+        thead += '<th colspan="2" style="color:#ff7043; text-align:center; border-bottom:1px solid #37474f;">Extracciones</th>';
+        thead += '<th rowspan="2" style="color:#42a5f5; text-align:right;">Lluvia<br><span style="font-size:9px; font-weight:400; color:#78909c;">mm</span></th>';
+        thead += '</tr>';
+        thead += '<tr style="background:rgba(33,150,243,0.05);">';
+        thead += '<th style="color:#66bb6a; text-align:right; font-size:10px;">Cuenca<br><span style="font-weight:400; color:#78909c;">Mm³</span></th>';
+        thead += '<th style="color:#66bb6a; text-align:right; font-size:10px;">Aguas↑<br><span style="font-weight:400; color:#78909c;">Mm³</span></th>';
+        thead += '<th style="color:#ff7043; text-align:right; font-size:10px;">m³/s</th>';
+        thead += '<th style="color:#ff7043; text-align:right; font-size:10px;">Mm³</th>';
+        thead += '</tr>';
+        $('#hydroTableHead').html(thead);
+
+        // Body
+        var hourly = dam.hourly;
+        var tbody = '';
+        var prevStorage = dam.initialStorage;
+        var accumRain = 0, accumBasin = 0, accumUpstream = 0, accumExtraction = 0;
+
+        for (var h = 0; h < hourly.length; h++) {
+            var pt = hourly[h];
+            var diff = pt.storage - prevStorage;
+            var extractionQms = pt.extraction * 1e6 / 3600; // Mm³/h → m³/s
+            accumRain += pt.rain;
+            accumBasin += pt.basinInput;
+            accumUpstream += pt.upstreamInput;
+            accumExtraction += pt.extraction;
+
+            if (h % interval === (interval - 1) || h === hourly.length - 1 || h === 0) {
+                var elevDelta = pt.elev - dam.initialElev;
+                var elevColor = elevDelta >= 0 ? '#ff7043' : '#66bb6a';
+
+                tbody += '<tr style="border-bottom:1px solid rgba(55,71,79,0.3);' + (h === hourly.length - 1 ? ' background:rgba(33,150,243,0.06); font-weight:600;' : '') + '">';
+                tbody += '<td style="color:#b0bec5; position:sticky; left:0; background:#131c24; z-index:1; white-space:nowrap; font-size:11px;">' + pt.time.substring(5, 16).replace('T', ' ') + ' <span style="color:#546e7a; font-size:9px;">+' + pt.hour + 'h</span></td>';
+                tbody += '<td style="text-align:right; color:#e8f5e9;">' + pt.elev.toFixed(2) + ' <small style="color:' + elevColor + ';">(' + (elevDelta >= 0 ? '+' : '') + elevDelta.toFixed(2) + ')</small></td>';
+                tbody += '<td style="text-align:right; color:#b0bec5;">' + pt.storage.toFixed(2) + '</td>';
+                tbody += '<td style="text-align:right; color:' + (diff >= 0 ? '#66bb6a' : '#ff7043') + ';">' + (diff >= 0 ? '+' : '') + diff.toFixed(3) + '</td>';
+                tbody += '<td style="text-align:right; color:#a5d6a7;">' + pt.basinInput.toFixed(4) + '</td>';
+                tbody += '<td style="text-align:right; color:#81c784;">' + pt.upstreamInput.toFixed(4) + '</td>';
+                tbody += '<td style="text-align:right; color:#ffab91;">' + extractionQms.toFixed(1) + '</td>';
+                tbody += '<td style="text-align:right; color:#ff8a65;">' + pt.extraction.toFixed(4) + '</td>';
+                tbody += '<td style="text-align:right; color:#90caf9;">' + pt.rain.toFixed(1) + '</td>';
+                tbody += '</tr>';
+            }
+            prevStorage = pt.storage;
+        }
+
+        // Fila de totales/resumen
+        var totalExtQms = accumExtraction > 0 ? (accumExtraction / hourly.length) * 1e6 / 3600 : 0;
+        tbody += '<tr style="background:rgba(255,152,0,0.08); font-weight:700; border-top:2px solid #ff7043;">';
+        tbody += '<td style="color:#ffab40; position:sticky; left:0; background:#131c24; z-index:1;"><i class="chart line icon"></i> RESUMEN</td>';
+        tbody += '<td style="text-align:right; color:#e8f5e9;">' + dam.finalElev.toFixed(2) + '</td>';
+        tbody += '<td style="text-align:right; color:#b0bec5;">' + dam.finalStorage.toFixed(2) + '</td>';
+        var totalDiff = dam.finalStorage - dam.initialStorage;
+        tbody += '<td style="text-align:right; color:' + (totalDiff >= 0 ? '#66bb6a' : '#ff7043') + ';">' + (totalDiff >= 0 ? '+' : '') + totalDiff.toFixed(2) + '</td>';
+        tbody += '<td style="text-align:right; color:#a5d6a7;">' + accumBasin.toFixed(2) + '</td>';
+        tbody += '<td style="text-align:right; color:#81c784;">' + accumUpstream.toFixed(2) + '</td>';
+        tbody += '<td style="text-align:right; color:#ffab91;">' + totalExtQms.toFixed(1) + '</td>';
+        tbody += '<td style="text-align:right; color:#ff8a65;">' + accumExtraction.toFixed(2) + '</td>';
+        tbody += '<td style="text-align:right; color:#90caf9;">' + accumRain.toFixed(1) + '</td>';
+        tbody += '</tr>';
+
+        $('#hydroTableBody').html(tbody);
+    }
+
 });
 </script>
 }

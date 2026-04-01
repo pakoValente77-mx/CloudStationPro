@@ -27,13 +27,24 @@ namespace CloudStationWeb.Data
             await context.Database.ExecuteSqlRawAsync(createTableSql);
 
             // Create roles
-            string[] roles = { "Administrador", "Operador", "Visualizador" };
+            string[] roles = { "SuperAdmin", "Administrador", "Operador", "Visualizador" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
                 {
                     await roleManager.CreateAsync(new IdentityRole(role));
                 }
+            }
+
+            // Seed default CentroTrabajo
+            if (!await context.CentrosTrabajo.AnyAsync())
+            {
+                context.CentrosTrabajo.Add(new CentroTrabajo
+                {
+                    Nombre = "SUBGERENCIA HIDROGRIJALVA E HIDROMETRÍA",
+                    Activo = true
+                });
+                await context.SaveChangesAsync();
             }
 
             // Create super user
@@ -57,12 +68,20 @@ namespace CloudStationWeb.Data
                 var result = await userManager.CreateAsync(adminUser, adminPassword);
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(adminUser, "Administrador");
+                    await userManager.AddToRoleAsync(adminUser, "SuperAdmin");
                 }
                 else
                 {
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
                     throw new Exception($"Error creating admin user: {errors}");
+                }
+            }
+            else
+            {
+                // Ensure existing admin has SuperAdmin role
+                if (!await userManager.IsInRoleAsync(adminUser, "SuperAdmin"))
+                {
+                    await userManager.AddToRoleAsync(adminUser, "SuperAdmin");
                 }
             }
 
