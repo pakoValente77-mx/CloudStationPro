@@ -5,6 +5,7 @@ using Dapper;
 using CloudStationWeb.Services;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace CloudStationWeb.Controllers
 {
@@ -18,7 +19,7 @@ namespace CloudStationWeb.Controllers
         public bool Visible { get; set; } = true;
     }
 
-    [Authorize]
+    [Authorize(AuthenticationSchemes = "Identity.Application," + JwtBearerDefaults.AuthenticationScheme)]
     public class FunVasosController : Controller
     {
         private readonly FunVasosService _service;

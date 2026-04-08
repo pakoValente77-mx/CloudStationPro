@@ -87,6 +87,13 @@ namespace CloudStationWeb.Controllers
 
             if (result.Succeeded)
             {
+                // Initialize PasswordLastChanged for existing users that don't have it
+                if (user != null && user.PasswordLastChanged == null)
+                {
+                    user.PasswordLastChanged = DateTime.UtcNow;
+                    await _userManager.UpdateAsync(user);
+                }
+
                 await LogAudit(user?.Id, username, true, null, "Local");
                 return LocalRedirect(returnUrl ?? "/");
             }
@@ -232,7 +239,8 @@ namespace CloudStationWeb.Controllers
                 CentroTrabajoId = esTrabajadorCFE ? centroTrabajoId : null,
                 EmpresaExterna = !esTrabajadorCFE ? empresaExterna?.Trim() : null,
                 DepartamentoExterno = !esTrabajadorCFE ? departamentoExterno?.Trim() : null,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                PasswordLastChanged = DateTime.UtcNow
             };
 
             var result = await _userManager.CreateAsync(user, password);
@@ -451,7 +459,8 @@ namespace CloudStationWeb.Controllers
                     IsActive = true,
                     IsApproved = false,
                     RegistrationNote = $"Registro vía {info.LoginProvider}",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    PasswordLastChanged = DateTime.UtcNow
                 };
 
                 var createResult = await _userManager.CreateAsync(user);
@@ -549,6 +558,8 @@ namespace CloudStationWeb.Controllers
             var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
             if (result.Succeeded)
             {
+                user.PasswordLastChanged = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
                 await _signInManager.RefreshSignInAsync(user);
                 TempData["Success"] = "Contraseña actualizada correctamente.";
             }
@@ -558,6 +569,56 @@ namespace CloudStationWeb.Controllers
             }
 
             return RedirectToAction("Profile");
+        }
+
+        // ═══════════════════════════════════════════════════════
+        //  FORCE CHANGE PASSWORD (expired)
+        // ═══════════════════════════════════════════════════════
+
+        [Authorize]
+        public async Task<IActionResult> ForceChangePassword()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return RedirectToAction("Login");
+
+            var lastChanged = user.PasswordLastChanged ?? user.CreatedAt;
+            var age = (DateTime.UtcNow - lastChanged).TotalDays;
+            ViewBag.DaysExpired = Math.Max(0, (int)age - 30);
+            return View();
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ForceChangePassword(string currentPassword, string newPassword, string confirmNewPassword)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return RedirectToAction("Login");
+
+            if (string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))
+            {
+                TempData["Error"] = "Todos los campos son requeridos.";
+                return RedirectToAction("ForceChangePassword");
+            }
+
+            if (newPassword != confirmNewPassword)
+            {
+                TempData["Error"] = "Las contraseñas nuevas no coinciden.";
+                return RedirectToAction("ForceChangePassword");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            if (result.Succeeded)
+            {
+                user.PasswordLastChanged = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+                await _signInManager.RefreshSignInAsync(user);
+                TempData["Success"] = "Contraseña actualizada. Ya puede usar el sistema.";
+                return RedirectToAction("Index", "Map");
+            }
+
+            TempData["Error"] = string.Join(" ", result.Errors.Select(e => e.Description));
+            return RedirectToAction("ForceChangePassword");
         }
 
         [HttpPost]

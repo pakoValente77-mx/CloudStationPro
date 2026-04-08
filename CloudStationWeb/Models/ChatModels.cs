@@ -10,6 +10,11 @@ namespace CloudStationWeb.Models
         public string FullName { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
+        // File attachment fields
+        public string? FileName { get; set; }
+        public string? FileUrl { get; set; }
+        public long? FileSize { get; set; }
+        public string? FileType { get; set; }
     }
 
     public class ChatRoom

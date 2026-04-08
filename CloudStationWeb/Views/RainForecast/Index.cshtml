@@ -354,7 +354,7 @@
     var radarLayer = null;
 
     function initMap() {
-        // Base layers
+        // Base layers con fallback a OpenStreetMap
         var terrainLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
             maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
             attribution: '&copy; Google Maps'
@@ -362,6 +362,21 @@
         var satelliteLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
             maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
             attribution: '&copy; Google Satellite'
+        });
+        var osmFallback = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        var _rfBaseFallback = false;
+        var _rfBaseErrors = 0;
+        terrainLayer.on('tileerror', function() {
+            _rfBaseErrors++;
+            if (_rfBaseErrors >= 3 && !_rfBaseFallback) {
+                _rfBaseFallback = true;
+                console.warn('⚠️ Google Maps no disponible en pronóstico, cambiando a OpenStreetMap...');
+                forecastMap.removeLayer(terrainLayer);
+                osmFallback.addTo(forecastMap);
+            }
         });
 
         forecastMap = L.map('forecast-map', {
@@ -390,6 +405,17 @@
     }
 
     function loadWeatherRadar() {
+        // Helper para manejar errores de capas en pronóstico
+        var _rfLayerErrors = {};
+        function handleRFLayerError(layer, layerName) {
+            if (_rfLayerErrors[layerName]) return;
+            _rfLayerErrors[layerName] = true;
+            console.warn('⚠️ Capa no disponible en pronóstico: ' + layerName);
+            if (layer && forecastMap.hasLayer(layer)) {
+                forecastMap.removeLayer(layer);
+            }
+        }
+
         // ── RainViewer: Radar de precipitación en tiempo real ──
         fetch('https://api.rainviewer.com/public/weather-maps.json')
             .then(function(r) { return r.json(); })
@@ -399,6 +425,11 @@
                     radarLayer = L.tileLayer(data.host + latestRadar.path + '/256/{z}/{x}/{y}/2/1_1.png', {
                         opacity: 0.65,
                         zIndex: 5
+                    });
+                    var radarErrors = 0;
+                    radarLayer.on('tileerror', function() {
+                        radarErrors++;
+                        if (radarErrors >= 3) handleRFLayerError(radarLayer, 'Radar precipitación');
                     });
                     if (layerControl) {
                         layerControl.addOverlay(radarLayer, '<i class="broadcast tower icon"></i> Radar precipitación');
@@ -416,6 +447,11 @@
             zIndex: 4,
             attribution: 'GOES-16 NOAA/Iowa Mesonet'
         });
+        var goesIrErrors = 0;
+        goes16Layer.on('tileerror', function() {
+            goesIrErrors++;
+            if (goesIrErrors >= 3) handleRFLayerError(goes16Layer, 'GOES-16 Infrarrojo');
+        });
         if (layerControl) {
             layerControl.addOverlay(goes16Layer, '<i class="satellite icon"></i> GOES-16 Infrarrojo');
         }
@@ -428,6 +464,11 @@
             opacity: 0.45,
             zIndex: 4,
             attribution: 'GOES-16 NOAA/Iowa Mesonet'
+        });
+        var goesVisErrors = 0;
+        goes16VisLayer.on('tileerror', function() {
+            goesVisErrors++;
+            if (goesVisErrors >= 3) handleRFLayerError(goes16VisLayer, 'GOES-16 Visible');
         });
         if (layerControl) {
             layerControl.addOverlay(goes16VisLayer, '<i class="sun icon"></i> GOES-16 Visible');

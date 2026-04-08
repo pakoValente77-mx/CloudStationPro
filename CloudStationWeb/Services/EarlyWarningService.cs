@@ -20,7 +20,7 @@ namespace CloudStationWeb.Services
         private int _intervalSeconds = 300;
         // Don't re-alert same threshold within cooldown period (default 60 min)
         private int _cooldownMinutes = 60;
-        private bool _enabled = true;
+        private bool _enabled = false;
 
         // Track last alert time per threshold to avoid spam
         private readonly Dictionary<long, DateTime> _lastAlertTime = new();
@@ -36,7 +36,7 @@ namespace CloudStationWeb.Services
 
             _intervalSeconds = config.GetValue("EarlyWarning:IntervalSeconds", 300);
             _cooldownMinutes = config.GetValue("EarlyWarning:CooldownMinutes", 60);
-            _enabled = config.GetValue("EarlyWarning:Enabled", true);
+            _enabled = config.GetValue("EarlyWarning:Enabled", false);
         }
 
         public EarlyWarningConfigDto GetConfig() => new()
@@ -88,17 +88,33 @@ namespace CloudStationWeb.Services
 
             // 1. Get all active thresholds with their station/sensor context from SQL Server
             List<UmbralConContexto> thresholds;
-            using (var db = new SqlConnection(sqlConn))
+            const int maxRetries = 2;
+            for (int attempt = 0; ; attempt++)
             {
-                thresholds = (await db.QueryAsync<UmbralConContexto>(@"
+                try
+                {
+                    using (var db = new SqlConnection(sqlConn))
+                    {
+                        thresholds = (await db.QueryAsync<UmbralConContexto>(@"
                     SELECT u.Id, u.IdSensor, u.Umbral, u.Operador, u.Nombre, u.Activo, u.Periodo,
-                           s.Id AS IdEstacion, s.Nombre AS NombreSensor, s.Variable,
-                           e.Id AS IdEstacion, e.Nombre AS NombreEstacion, e.IdSatelital AS DcpId
+                           e.Id AS IdEstacion, e.Nombre AS NombreEstacion,
+                           ts.Nombre AS NombreSensor, ts.Nombre AS Variable,
+                           ISNULL(g.IdSatelital, '') AS DcpId
                     FROM UmbralAlertas u
                     INNER JOIN Sensor s ON u.IdSensor = s.Id
+                    INNER JOIN TipoSensor ts ON s.IdTipoSensor = ts.Id
                     INNER JOIN Estacion e ON s.IdEstacion = e.Id
+                    LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
                     WHERE u.Activo = 1 AND e.Activo = 1
                 ")).ToList();
+                    }
+                    break; // success
+                }
+                catch (SqlException ex) when (ex.Number == -2 && attempt < maxRetries)
+                {
+                    _logger.LogWarning("SQL Server timeout on attempt {Attempt}, retrying in 10s...", attempt + 1);
+                    await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                }
             }
 
             if (thresholds.Count == 0) return;
@@ -129,8 +145,11 @@ namespace CloudStationWeb.Services
             {
                 if (t.Umbral == null || string.IsNullOrEmpty(t.DcpId)) continue;
 
+                // Map SQL Server variable name to PostgreSQL convention (lowercase, spaces→underscores)
+                var pgVariable = (t.Variable ?? "").ToLower().Replace(" ", "_");
+
                 // Find matching reading
-                var key = $"{t.DcpId}|{t.Variable ?? ""}";
+                var key = $"{t.DcpId}|{pgVariable}";
                 if (!latestReadings.TryGetValue(key, out var reading)) continue;
 
                 // Evaluate operator

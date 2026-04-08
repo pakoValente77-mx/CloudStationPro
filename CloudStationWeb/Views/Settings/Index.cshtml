@@ -1,0 +1,363 @@
+@model CloudStationWeb.Controllers.SettingsViewModel
+@{
+    ViewData["Title"] = "Configuración del Sistema";
+    Layout = "_Layout";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="ui container" style="margin-top:80px; padding-bottom:40px;">
+    <h2 class="ui inverted header">
+        <i class="sliders horizontal icon"></i>
+        <div class="content">
+            Configuración del Sistema
+            <div class="sub header">Bases de datos, correo electrónico, Firebase, proveedores de IA y más</div>
+        </div>
+    </h2>
+
+    <div class="ui warning message" style="background:rgba(251,191,36,0.12); border:1px solid #fbbf24; color:#fbbf24;">
+        <i class="exclamation triangle icon"></i>
+        Los cambios se guardan en <code>appsettings.json</code>. Algunos cambios requieren <strong>reiniciar la aplicación</strong> para tomar efecto.
+    </div>
+
+    <!-- Tabs -->
+    <div class="ui top attached inverted tabular menu" style="margin-top:20px;">
+        <a class="item active" data-tab="databases"><i class="database icon"></i> Bases de Datos</a>
+        <a class="item" data-tab="email"><i class="mail icon"></i> Correo SMTP</a>
+        <a class="item" data-tab="firebase"><i class="mobile alternate icon"></i> Firebase</a>
+        <a class="item" data-tab="ai"><i class="robot icon"></i> IA</a>
+        <a class="item" data-tab="security"><i class="shield alternate icon"></i> Seguridad</a>
+        <a class="item" data-tab="azure"><i class="cloud icon"></i> Azure</a>
+    </div>
+
+    <!-- ====== TAB: BASES DE DATOS ====== -->
+    <div class="ui bottom attached inverted tab segment active" data-tab="databases">
+        <div class="ui inverted form">
+            <h4 class="ui inverted dividing header"><i class="server icon" style="color:#64b5f6;"></i> SQL Server</h4>
+            <div class="field">
+                <label>Cadena de conexión SQL Server</label>
+                <input type="text" id="cfgSqlServer" value="@Model.SqlServer" placeholder="Server=...;Database=...;User Id=...;Password=...;">
+            </div>
+
+            <h4 class="ui inverted dividing header" style="margin-top:30px;"><i class="elephant icon" style="color:#81c784;"></i> PostgreSQL / TimescaleDB</h4>
+            <div class="field">
+                <label>Cadena de conexión PostgreSQL</label>
+                <input type="text" id="cfgPostgreSQL" value="@Model.PostgreSQL" placeholder="Host=...;Username=...;Password=...;Database=...">
+            </div>
+
+            <div style="margin-top:20px;">
+                <button class="ui green button" onclick="testConnection('sqlserver')">
+                    <i class="plug icon"></i> Probar SQL Server
+                </button>
+                <button class="ui teal button" onclick="testConnection('postgresql')">
+                    <i class="plug icon"></i> Probar PostgreSQL
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== TAB: CORREO SMTP ====== -->
+    <div class="ui bottom attached inverted tab segment" data-tab="email">
+        <div class="ui inverted form">
+            <h4 class="ui inverted dividing header"><i class="mail icon" style="color:#ce93d8;"></i> Servidor SMTP</h4>
+            <div class="three fields">
+                <div class="field">
+                    <label>Host SMTP</label>
+                    <input type="text" id="cfgSmtpHost" value="@Model.SmtpHost" placeholder="smtp.ejemplo.com">
+                </div>
+                <div class="four wide field">
+                    <label>Puerto</label>
+                    <input type="number" id="cfgSmtpPort" value="@Model.SmtpPort" placeholder="25">
+                </div>
+                <div class="four wide field">
+                    <label>SSL/TLS</label>
+                    <div class="ui toggle checkbox">
+                        <input type="checkbox" id="cfgSmtpSsl" @(Model.SmtpEnableSsl ? "checked" : "")>
+                        <label style="color:#fff;">Habilitar</label>
+                    </div>
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Usuario / Email</label>
+                    <input type="text" id="cfgSmtpUser" value="@Model.SmtpUsername" placeholder="usuario@ejemplo.com">
+                </div>
+                <div class="field">
+                    <label>Contraseña</label>
+                    <div class="ui inverted input" style="width:100%;">
+                        <input type="password" id="cfgSmtpPass" value="@Model.SmtpPassword" autocomplete="new-password">
+                    </div>
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Dirección de remitente (From)</label>
+                    <input type="text" id="cfgSmtpFrom" value="@Model.SmtpFrom" placeholder="noreply@ejemplo.com">
+                </div>
+                <div class="field">
+                    <label>Nombre del remitente</label>
+                    <input type="text" id="cfgSmtpFromName" value="@Model.SmtpFromName" placeholder="Plataforma PIH">
+                </div>
+            </div>
+
+            <div style="margin-top:20px;">
+                <button class="ui purple button" onclick="testSmtp()">
+                    <i class="paper plane icon"></i> Enviar correo de prueba
+                </button>
+                <span id="smtpTestResult" style="margin-left:10px;"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== TAB: FIREBASE ====== -->
+    <div class="ui bottom attached inverted tab segment" data-tab="firebase">
+        <div class="ui inverted form">
+            <h4 class="ui inverted dividing header"><i class="fire icon" style="color:#fbbf24;"></i> Firebase Cloud Messaging</h4>
+            <div class="field">
+                <label>Ruta del archivo de credenciales JSON</label>
+                <input type="text" id="cfgFirebasePath" value="@Model.FirebaseCredentialsPath" placeholder="C:\ruta\al\firebase-credentials.json">
+            </div>
+            <div class="ui info message" style="background:rgba(100,181,246,0.12); border:1px solid #64b5f6; color:#64b5f6;">
+                <i class="info circle icon"></i>
+                Descarga el archivo JSON de servicio desde la <strong>Consola de Firebase</strong> → Configuración del Proyecto → Cuentas de Servicio → Generar nueva clave privada.
+                Coloca el archivo en el servidor y especifica la ruta completa aquí.
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== TAB: IA ====== -->
+    <div class="ui bottom attached inverted tab segment" data-tab="ai">
+        <div class="ui inverted form">
+
+            <!-- Gemini -->
+            <h4 class="ui inverted dividing header"><i class="google icon" style="color:#4285f4;"></i> Google Gemini (Proveedor primario)</h4>
+            <div class="two fields">
+                <div class="field">
+                    <label>API Key</label>
+                    <input type="password" id="cfgGeminiKey" value="@Model.GeminiApiKey" autocomplete="new-password">
+                </div>
+                <div class="field">
+                    <label>Modelo</label>
+                    <input type="text" id="cfgGeminiModel" value="@Model.GeminiModel" placeholder="gemini-2.0-flash">
+                </div>
+            </div>
+
+            <!-- Azure OpenAI / GitHub Models -->
+            <h4 class="ui inverted dividing header" style="margin-top:30px;"><i class="microsoft icon" style="color:#00a4ef;"></i> Azure OpenAI / GitHub Models (Proveedor secundario)</h4>
+            <div class="two fields">
+                <div class="field">
+                    <label>Endpoint</label>
+                    <input type="text" id="cfgAzureOAIEndpoint" value="@Model.AzureOpenAIEndpoint" placeholder="https://models.inference.ai.azure.com">
+                </div>
+                <div class="field">
+                    <label>API Key / Token</label>
+                    <input type="password" id="cfgAzureOAIKey" value="@Model.AzureOpenAIApiKey" autocomplete="new-password">
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Modelo / Deployment</label>
+                    <input type="text" id="cfgAzureOAIDeploy" value="@Model.AzureOpenAIDeployment" placeholder="gpt-4o">
+                </div>
+                <div class="field">
+                    <label>API Version</label>
+                    <input type="text" id="cfgAzureOAIVersion" value="@Model.AzureOpenAIApiVersion" placeholder="2024-10-21">
+                </div>
+            </div>
+
+            <!-- DeepSeek -->
+            <h4 class="ui inverted dividing header" style="margin-top:30px;"><i class="bolt icon" style="color:#a78bfa;"></i> DeepSeek (Proveedor terciario)</h4>
+            <div class="three fields">
+                <div class="field">
+                    <label>API Key</label>
+                    <input type="password" id="cfgDeepSeekKey" value="@Model.DeepSeekApiKey" autocomplete="new-password">
+                </div>
+                <div class="field">
+                    <label>Modelo</label>
+                    <input type="text" id="cfgDeepSeekModel" value="@Model.DeepSeekModel" placeholder="deepseek-chat">
+                </div>
+                <div class="field">
+                    <label>Endpoint</label>
+                    <input type="text" id="cfgDeepSeekEndpoint" value="@Model.DeepSeekEndpoint" placeholder="https://api.deepseek.com/v1">
+                </div>
+            </div>
+
+            <div class="ui info message" style="background:rgba(100,181,246,0.12); border:1px solid #64b5f6; color:#64b5f6;">
+                <i class="info circle icon"></i>
+                <strong>Cadena de respaldo:</strong> Gemini → Azure OpenAI → DeepSeek. Si un proveedor falla o no tiene API Key, se usa el siguiente automáticamente.
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== TAB: SEGURIDAD ====== -->
+    <div class="ui bottom attached inverted tab segment" data-tab="security">
+        <div class="ui inverted form">
+            <h4 class="ui inverted dividing header"><i class="key icon" style="color:#fbbf24;"></i> JWT (Autenticación API)</h4>
+            <div class="two fields">
+                <div class="field">
+                    <label>Clave secreta (Key)</label>
+                    <input type="password" id="cfgJwtKey" value="@Model.JwtKey" autocomplete="new-password">
+                </div>
+                <div class="four wide field">
+                    <label>Expiración (horas)</label>
+                    <input type="number" id="cfgJwtExpire" value="@Model.JwtExpireHours">
+                </div>
+            </div>
+            <div class="two fields">
+                <div class="field">
+                    <label>Issuer</label>
+                    <input type="text" id="cfgJwtIssuer" value="@Model.JwtIssuer">
+                </div>
+                <div class="field">
+                    <label>Audience</label>
+                    <input type="text" id="cfgJwtAudience" value="@Model.JwtAudience">
+                </div>
+            </div>
+
+            <h4 class="ui inverted dividing header" style="margin-top:30px;"><i class="exclamation triangle icon" style="color:#e74c3c;"></i> Alertas Tempranas</h4>
+            <div class="three fields">
+                <div class="field">
+                    <label>Habilitado</label>
+                    <div class="ui toggle checkbox">
+                        <input type="checkbox" id="cfgEWEnabled" @(Model.EarlyWarningEnabled ? "checked" : "")>
+                        <label style="color:#fff;">Activo</label>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Intervalo de evaluación (segundos)</label>
+                    <input type="number" id="cfgEWInterval" value="@Model.EarlyWarningIntervalSeconds">
+                </div>
+                <div class="field">
+                    <label>Cooldown entre alertas (minutos)</label>
+                    <input type="number" id="cfgEWCooldown" value="@Model.EarlyWarningCooldownMinutes">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== TAB: AZURE ====== -->
+    <div class="ui bottom attached inverted tab segment" data-tab="azure">
+        <div class="ui inverted form">
+            <h4 class="ui inverted dividing header"><i class="cloud upload icon" style="color:#00a4ef;"></i> Azure Blob Storage</h4>
+            <div class="field">
+                <label>Cadena de conexión</label>
+                <input type="text" id="cfgBlobConn" value="@Model.AzureBlobConnectionString" placeholder="DefaultEndpointsProtocol=https;AccountName=...">
+            </div>
+            <div class="field">
+                <label>Contenedor</label>
+                <input type="text" id="cfgBlobContainer" value="@Model.AzureBlobContainer" placeholder="nombre-contenedor">
+            </div>
+        </div>
+    </div>
+
+    <!-- Save button -->
+    <div style="margin-top:25px; text-align:right;">
+        <button class="ui large green button" onclick="saveSettings()" id="btnSave">
+            <i class="save icon"></i> Guardar Configuración
+        </button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(function() {
+    $('.tabular.menu .item').tab();
+    $('.ui.toggle.checkbox').checkbox();
+});
+
+function gatherSettings() {
+    return {
+        sqlServer: $('#cfgSqlServer').val(),
+        postgreSQL: $('#cfgPostgreSQL').val(),
+        smtpHost: $('#cfgSmtpHost').val(),
+        smtpPort: parseInt($('#cfgSmtpPort').val()) || 587,
+        smtpUsername: $('#cfgSmtpUser').val(),
+        smtpPassword: $('#cfgSmtpPass').val(),
+        smtpFrom: $('#cfgSmtpFrom').val(),
+        smtpFromName: $('#cfgSmtpFromName').val(),
+        smtpEnableSsl: $('#cfgSmtpSsl').is(':checked'),
+        firebaseCredentialsPath: $('#cfgFirebasePath').val(),
+        geminiApiKey: $('#cfgGeminiKey').val(),
+        geminiModel: $('#cfgGeminiModel').val(),
+        deepSeekApiKey: $('#cfgDeepSeekKey').val(),
+        deepSeekModel: $('#cfgDeepSeekModel').val(),
+        deepSeekEndpoint: $('#cfgDeepSeekEndpoint').val(),
+        azureOpenAIEndpoint: $('#cfgAzureOAIEndpoint').val(),
+        azureOpenAIApiKey: $('#cfgAzureOAIKey').val(),
+        azureOpenAIDeployment: $('#cfgAzureOAIDeploy').val(),
+        azureOpenAIApiVersion: $('#cfgAzureOAIVersion').val(),
+        azureBlobConnectionString: $('#cfgBlobConn').val(),
+        azureBlobContainer: $('#cfgBlobContainer').val(),
+        earlyWarningEnabled: $('#cfgEWEnabled').is(':checked'),
+        earlyWarningIntervalSeconds: parseInt($('#cfgEWInterval').val()) || 300,
+        earlyWarningCooldownMinutes: parseInt($('#cfgEWCooldown').val()) || 60,
+        jwtKey: $('#cfgJwtKey').val(),
+        jwtIssuer: $('#cfgJwtIssuer').val(),
+        jwtAudience: $('#cfgJwtAudience').val(),
+        jwtExpireHours: parseInt($('#cfgJwtExpire').val()) || 24
+    };
+}
+
+function saveSettings() {
+    var btn = $('#btnSave');
+    btn.addClass('loading disabled');
+
+    $.ajax({
+        url: '@Url.Action("Save", "Settings")',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(gatherSettings()),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(r) {
+            btn.removeClass('loading disabled');
+            if (r.success) {
+                $('body').toast({ class: 'success', message: r.message, position: 'top center', displayTime: 5000 });
+            } else {
+                $('body').toast({ class: 'error', message: 'Error: ' + r.message, position: 'top center' });
+            }
+        },
+        error: function() {
+            btn.removeClass('loading disabled');
+            $('body').toast({ class: 'error', message: 'Error de conexión', position: 'top center' });
+        }
+    });
+}
+
+function testSmtp() {
+    var result = $('#smtpTestResult');
+    result.html('<i class="spinner loading icon"></i> Enviando...');
+
+    var data = {
+        host: $('#cfgSmtpHost').val(),
+        port: parseInt($('#cfgSmtpPort').val()) || 25,
+        username: $('#cfgSmtpUser').val(),
+        password: $('#cfgSmtpPass').val(),
+        from: $('#cfgSmtpFrom').val(),
+        fromName: $('#cfgSmtpFromName').val(),
+        enableSsl: $('#cfgSmtpSsl').is(':checked')
+    };
+
+    $.ajax({
+        url: '@Url.Action("TestSmtp", "Settings")',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+        success: function(r) {
+            if (r.success) {
+                result.html('<span style="color:#81c784;"><i class="check circle icon"></i> ' + r.message + '</span>');
+            } else {
+                result.html('<span style="color:#e74c3c;"><i class="times circle icon"></i> ' + r.message + '</span>');
+            }
+        },
+        error: function() {
+            result.html('<span style="color:#e74c3c;"><i class="times circle icon"></i> Error de conexión</span>');
+        }
+    });
+}
+
+function testConnection(type) {
+    $('body').toast({ class: 'info', message: 'Para probar conexiones de BD, guarde primero y reinicie la aplicación.', position: 'top center', displayTime: 4000 });
+}
+</script>
+}

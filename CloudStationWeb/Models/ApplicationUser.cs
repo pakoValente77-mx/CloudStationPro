@@ -17,6 +17,7 @@ namespace CloudStationWeb.Models
         public bool EsTrabajadorCFE { get; set; } = true;
         public string? EmpresaExterna { get; set; }
         public string? DepartamentoExterno { get; set; }
+        public DateTime? PasswordLastChanged { get; set; }
     }
 
     public class CentroTrabajo

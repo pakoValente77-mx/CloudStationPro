@@ -20,8 +20,25 @@
     .msg.mine { text-align: right; }
     .msg.system { text-align: center; }
     .msg.system .bubble { background: transparent; color: #666; font-style: italic; font-size: 0.85em; }
-    #chatInput { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; }
-    #chatInput input { flex: 1; }
+    #chatInput { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; align-items: center; }
+    #chatInput input[type="text"] { flex: 1; }
+    #fileInput { display: none; }
+    .file-attachment { background: rgba(128,90,213,0.15); border: 1px solid rgba(128,90,213,0.3); border-radius: 8px; padding: 10px 14px; margin-top: 4px; display: inline-flex; align-items: center; gap: 10px; max-width: 80%; }
+    .file-attachment a { color: #ce93d8; text-decoration: none; font-weight: 600; }
+    .file-attachment a:hover { text-decoration: underline; }
+    .file-attachment .file-size { color: #888; font-size: 0.8em; }
+    .file-attachment .file-icon { font-size: 1.5em; }
+    .file-preview-img { max-width: 100%; border-radius: 8px; cursor: pointer; display: block; }
+    .img-caption { margin-top: 6px; font-size: 0.95em; }
+    .image-bubble { padding: 4px !important; overflow: hidden; max-width: 320px; }
+    .image-bubble .img-caption { padding: 4px 8px 4px 8px; }
+    #imageLightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.88); z-index: 10000; align-items: center; justify-content: center; cursor: zoom-out; }
+    #imageLightbox img { max-width: 92vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 30px rgba(0,0,0,0.6); }
+    #imageLightbox .close-btn { position: absolute; top: 16px; right: 24px; color: #fff; font-size: 2em; cursor: pointer; z-index: 10001; }
+    #dropOverlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(128,90,213,0.3); border: 3px dashed #ce93d8; z-index: 999; align-items: center; justify-content: center; font-size: 1.5em; color: #fff; border-radius: 8px; }
+    #chatMain { flex: 1; display: flex; flex-direction: column; background: rgba(14,18,26,0.85); position: relative; }
+    #uploadProgress { display: none; padding: 6px 20px; }
+    #uploadProgress .ui.progress { margin: 0; }
     #onlinePanel { width: 200px; background: rgba(14,18,26,0.95); border-left: 1px solid rgba(255,255,255,0.08); padding: 12px; overflow-y: auto; }
     #onlinePanel h4 { color: #81c784; margin-bottom: 10px; }
     .online-user { padding: 4px 0; color: #ccc; font-size: 0.9em; }
@@ -29,13 +46,20 @@
     .conn-status { font-size: 0.8em; padding: 3px 8px; border-radius: 10px; }
     .conn-status.connected { background: rgba(129,199,132,0.2); color: #81c784; }
     .conn-status.disconnected { background: rgba(231,76,60,0.2); color: #e74c3c; }
+    .online-user { cursor: pointer; transition: background 0.15s; padding: 6px 8px; border-radius: 6px; }
+    .online-user:hover { background: rgba(128,90,213,0.2); }
+    .dm-item { padding: 10px 16px; cursor: pointer; color: #ccc; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 8px; }
+    .dm-item:hover, .dm-item.active { background: rgba(128,90,213,0.2); color: #fff; }
+    .dm-badge { background: #e74c3c; color: #fff; border-radius: 50%; font-size: 0.7em; min-width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
+    .dm-divider { padding: 8px 16px; font-size: 0.75em; color: #666; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 </style>
 
 <div id="chatContainer">
     <!-- Room List -->
     <div id="roomList">
-        <div style="padding:12px 16px; font-weight:bold; color:#fff; border-bottom:1px solid rgba(255,255,255,0.1);">
-            <i class="comments icon"></i> Salas
+        <div style="padding:12px 16px; font-weight:bold; color:#fff; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
+            <span><i class="comments icon"></i> Salas</span>
+            <a href="/Chat/DesktopApp" title="Descargar app de escritorio" style="color:#ce93d8; font-size:0.8em;"><i class="download icon"></i></a>
         </div>
         <div class="room-item active" data-room="general" onclick="switchRoom('general')">
             <i class="hashtag icon" style="color:#64b5f6;"></i> General
@@ -49,16 +73,32 @@
         <div class="room-item" data-room="hidrologia" onclick="switchRoom('hidrologia')">
             <i class="hashtag icon" style="color:#81c784;"></i> Hidrología
         </div>
+        <div class="room-item" data-room="centinela" onclick="switchRoom('centinela')" style="background:rgba(128,90,213,0.08);">
+            <i class="robot icon" style="color:#ce93d8;"></i> Centinela <span style="font-size:0.7em;color:#888;margin-left:4px;">IA</span>
+        </div>
+        <div class="dm-divider"><i class="envelope icon"></i> Mensajes Directos</div>
+        <div id="dmList"></div>
     </div>
 
     <!-- Main Chat -->
     <div id="chatMain">
+        <div id="dropOverlay"><i class="cloud upload icon"></i> Suelta el archivo aquí</div>
         <div id="chatHeader">
             <h3><i class="hashtag icon" style="color:#64b5f6;"></i> <span id="currentRoomName">general</span></h3>
             <span class="conn-status disconnected" id="connStatus">Desconectado</span>
         </div>
         <div id="messageArea"></div>
+        <div id="uploadProgress">
+            <div class="ui tiny purple progress" id="progressBar">
+                <div class="bar"><div class="progress"></div></div>
+                <div class="label" style="color:#ccc; font-size:0.8em;">Subiendo archivo...</div>
+            </div>
+        </div>
         <div id="chatInput">
+            <input type="file" id="fileInput" multiple>
+            <button class="ui purple icon button" onclick="$('#fileInput').click();" title="Adjuntar archivo">
+                <i class="paperclip icon"></i>
+            </button>
             <div class="ui inverted input" style="flex:1;">
                 <input type="text" id="msgInput" placeholder="Escribe un mensaje..." autocomplete="off">
             </div>
@@ -81,14 +121,112 @@
     var connection = null;
     var currentRoom = 'general';
     var currentUser = '@User.Identity.Name';
+    var dmUnread = {};  // room → count of unread DMs
 
     $(document).ready(function () {
         initSignalR();
+        loadDmHistory();
 
         $('#msgInput').keypress(function (e) {
             if (e.which === 13) { sendMessage(); }
         });
+
+        // File input change handler
+        $('#fileInput').on('change', function () {
+            var files = this.files;
+            if (files.length > 0) {
+                for (var i = 0; i < files.length; i++) {
+                    uploadFile(files[i]);
+                }
+                this.value = '';
+            }
+        });
+
+        // Drag & drop on chatMain
+        var chatMain = document.getElementById('chatMain');
+        var dropOverlay = document.getElementById('dropOverlay');
+        var dragCounter = 0;
+
+        chatMain.addEventListener('dragenter', function (e) {
+            e.preventDefault();
+            dragCounter++;
+            dropOverlay.style.display = 'flex';
+        });
+        chatMain.addEventListener('dragleave', function (e) {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) { dropOverlay.style.display = 'none'; dragCounter = 0; }
+        });
+        chatMain.addEventListener('dragover', function (e) { e.preventDefault(); });
+        chatMain.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dragCounter = 0;
+            dropOverlay.style.display = 'none';
+            var files = e.dataTransfer.files;
+            for (var i = 0; i < files.length; i++) {
+                uploadFile(files[i]);
+            }
+        });
+
+        // Paste files from clipboard
+        document.addEventListener('paste', function (e) {
+            var items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file') {
+                    var file = items[i].getAsFile();
+                    if (file) uploadFile(file);
+                }
+            }
+        });
     });
+
+    // Build canonical DM room name (sorted alphabetically)
+    function getDmRoom(otherUser) {
+        var users = [currentUser, otherUser].sort(function(a,b){ return a.toLowerCase().localeCompare(b.toLowerCase()); });
+        return 'dm:' + users[0] + ':' + users[1];
+    }
+
+    // Open a DM conversation with a user
+    function openDm(userName, fullName) {
+        if (userName === currentUser) return;
+        var room = getDmRoom(userName);
+        var displayName = fullName || userName;
+
+        // Add to DM list if not already there
+        if ($('#dmList [data-room="' + room + '"]').length === 0) {
+            $('#dmList').append(
+                '<div class="dm-item" data-room="' + room + '" data-user="' + escHtml(userName) + '" onclick="switchRoom(\'' + room + '\')">' +
+                '<i class="user icon" style="color:#ce93d8;"></i> ' + escHtml(displayName) +
+                '</div>'
+            );
+        }
+
+        // Clear unread
+        dmUnread[room] = 0;
+        $('#dmList [data-room="' + room + '"] .dm-badge').remove();
+
+        switchRoom(room);
+    }
+
+    // Load existing DM conversations from server
+    function loadDmHistory() {
+        $.get('@Url.Action("Rooms", "Chat")', function(rooms) {
+            rooms.forEach(function(r) {
+                if (r.room && r.room.startsWith('dm:')) {
+                    var parts = r.room.split(':');
+                    var otherUser = (parts[1] === currentUser) ? parts[2] : parts[1];
+                    if ($('#dmList [data-room="' + r.room + '"]').length === 0) {
+                        $('#dmList').append(
+                            '<div class="dm-item" data-room="' + r.room + '" data-user="' + escHtml(otherUser) + '" onclick="switchRoom(\'' + r.room + '\')">' +
+                            '<i class="user icon" style="color:#ce93d8;"></i> ' + escHtml(otherUser) +
+                            '</div>'
+                        );
+                    }
+                }
+            });
+        });
+    }
 
     function initSignalR() {
         connection = new signalR.HubConnectionBuilder()
@@ -99,6 +237,27 @@
         connection.on("ReceiveMessage", function (msg) {
             if (msg.room === currentRoom) {
                 appendMessage(msg);
+            } else if (msg.room && msg.room.startsWith('dm:')) {
+                // DM notification for a room we're not viewing
+                dmUnread[msg.room] = (dmUnread[msg.room] || 0) + 1;
+                var parts = msg.room.split(':');
+                var otherUser = (parts[1] === currentUser) ? parts[2] : parts[1];
+                var senderName = msg.fullName || msg.userName;
+
+                // Ensure DM item exists in sidebar
+                if ($('#dmList [data-room="' + msg.room + '"]').length === 0) {
+                    $('#dmList').append(
+                        '<div class="dm-item" data-room="' + msg.room + '" data-user="' + escHtml(otherUser) + '" onclick="switchRoom(\'' + msg.room + '\')">' +
+                        '<i class="user icon" style="color:#ce93d8;"></i> ' + escHtml(otherUser) +
+                        '<span class="dm-badge">' + dmUnread[msg.room] + '</span>' +
+                        '</div>'
+                    );
+                } else {
+                    // Update badge
+                    var item = $('#dmList [data-room="' + msg.room + '"]');
+                    item.find('.dm-badge').remove();
+                    item.append('<span class="dm-badge">' + dmUnread[msg.room] + '</span>');
+                }
             }
         });
 
@@ -146,18 +305,40 @@
     function switchRoom(room) {
         if (room === currentRoom) return;
 
-        // Leave old room
-        if (connection.state === signalR.HubConnectionState.Connected) {
+        // Leave old room (only for group rooms)
+        if (!currentRoom.startsWith('dm:') && connection.state === signalR.HubConnectionState.Connected) {
             connection.invoke("LeaveRoom", currentRoom);
         }
 
         currentRoom = room;
-        $('#currentRoomName').text(room);
-        $('.room-item').removeClass('active');
+
+        // Update header
+        if (room.startsWith('dm:')) {
+            var parts = room.split(':');
+            var otherUser = (parts[1] === currentUser) ? parts[2] : parts[1];
+            $('#currentRoomName').html('<i class="user icon" style="color:#ce93d8;"></i> ' + escHtml(otherUser));
+            // Clear DM unread
+            dmUnread[room] = 0;
+            $('#dmList [data-room="' + room + '"] .dm-badge').remove();
+        } else if (room === 'centinela') {
+            $('#currentRoomName').html('<i class="robot icon" style="color:#ce93d8;"></i> Centinela <span style="font-size:0.6em;color:#888;">IA</span>');
+        } else {
+            $('#currentRoomName').text(room);
+        }
+
+        // Update active states
+        $('.room-item, .dm-item').removeClass('active');
         $('[data-room="' + room + '"]').addClass('active');
         $('#messageArea').empty();
 
-        if (connection.state === signalR.HubConnectionState.Connected) {
+        // Update placeholder
+        if (room === 'centinela') {
+            $('#msgInput').attr('placeholder', 'Pregunta a Centinela o escribe /ayuda...');
+        } else {
+            $('#msgInput').attr('placeholder', 'Escribe un mensaje...');
+        }
+
+        if (!room.startsWith('dm:') && connection.state === signalR.HubConnectionState.Connected) {
             connection.invoke("JoinRoom", room);
         }
         loadHistory(room);
@@ -183,13 +364,102 @@
 
     function appendMessage(msg) {
         var isMine = msg.userName === currentUser;
+        var isBot = msg.userName === 'Centinela';
         var time = new Date(msg.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        var authorColor = isBot ? '#ce93d8' : '';
+        var authorPrefix = isBot ? '🤖 ' : '';
         var html = '<div class="msg ' + (isMine ? 'mine' : '') + '">' +
-            '<div class="meta"><span class="author">' + escHtml(msg.fullName || msg.userName) + '</span> · ' + time + '</div>' +
-            '<div class="bubble">' + escHtml(msg.message) + '</div>' +
-            '</div>';
+            '<div class="meta"><span class="author"' + (authorColor ? ' style="color:' + authorColor + '"' : '') + '>' + authorPrefix + escHtml(msg.fullName || msg.userName) + '</span> · ' + time + '</div>';
+
+        if (msg.fileUrl && msg.fileName) {
+            // File message — check if fileUrl is absolute or relative
+            var isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(msg.fileName) || (msg.fileType && msg.fileType.startsWith('image/'));
+            if (isImage) {
+                // WhatsApp-style: image inside bubble with caption below
+                var imgBubbleStyle = isBot ? ' style="background:rgba(128,90,213,0.15); border-left:3px solid #ce93d8;"' : '';
+                html += '<div class="bubble image-bubble"' + imgBubbleStyle + '>';
+                html += '<img src="' + escHtml(msg.fileUrl) + '" alt="' + escHtml(msg.fileName) + '" class="file-preview-img" onclick="openImageLightbox(this.src)">';
+                if (msg.message) {
+                    html += '<div class="img-caption">' + (isBot ? formatBotMessage(msg.message) : escHtml(msg.message)) + '</div>';
+                }
+                html += '</div>';
+            } else {
+                html += '<div class="file-attachment">' +
+                    '<span class="file-icon">' + getFileIcon(msg.fileName) + '</span>' +
+                    '<div><a href="' + escHtml(msg.fileUrl) + '" target="_blank" download>' + escHtml(msg.fileName) + '</a>' +
+                    '<div class="file-size">' + formatFileSize(msg.fileSize) + '</div></div>' +
+                    '</div>';
+                if (msg.message) {
+                    var bubbleStyle = isBot ? ' style="background:rgba(128,90,213,0.15); border-left:3px solid #ce93d8;"' : '';
+                    html += '<div class="bubble"' + bubbleStyle + '>' + (isBot ? formatBotMessage(msg.message) : escHtml(msg.message)) + '</div>';
+                }
+            }
+        } else {
+            var bubbleStyle = isBot ? ' style="background:rgba(128,90,213,0.15); border-left:3px solid #ce93d8;"' : '';
+            html += '<div class="bubble"' + bubbleStyle + '>' + (isBot ? formatBotMessage(msg.message) : escHtml(msg.message)) + '</div>';
+        }
+
+        html += '</div>';
         $('#messageArea').append(html);
         scrollToBottom();
+    }
+
+    function uploadFile(file) {
+        var formData = new FormData();
+        formData.append('file', file);
+        formData.append('room', currentRoom);
+
+        $('#uploadProgress').show();
+        $('#progressBar').progress({ percent: 0 });
+
+        $.ajax({
+            url: '@Url.Action("UploadFile", "Chat")',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            xhr: function () {
+                var xhr = new XMLHttpRequest();
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        $('#progressBar').progress({ percent: pct });
+                    }
+                });
+                return xhr;
+            },
+            success: function (result) {
+                $('#uploadProgress').hide();
+                if (!result.success) {
+                    alert('Error: ' + (result.message || 'Error al subir archivo'));
+                }
+                // Message is broadcast via SignalR from controller
+            },
+            error: function (xhr) {
+                $('#uploadProgress').hide();
+                alert('Error al subir archivo: ' + (xhr.responseJSON?.message || xhr.statusText));
+            }
+        });
+    }
+
+    function getFileIcon(fileName) {
+        var ext = (fileName || '').split('.').pop().toLowerCase();
+        var icons = {
+            'pdf': '📄', 'doc': '📝', 'docx': '📝', 'xls': '📊', 'xlsx': '📊',
+            'ppt': '📊', 'pptx': '📊', 'zip': '📦', 'rar': '📦', '7z': '📦',
+            'mp4': '🎬', 'avi': '🎬', 'mov': '🎬', 'mp3': '🎵', 'wav': '🎵',
+            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'webp': '🖼️',
+            'txt': '📃', 'csv': '📃', 'json': '📃', 'xml': '📃'
+        };
+        return icons[ext] || '📎';
+    }
+
+    function formatFileSize(bytes) {
+        if (!bytes) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+        return (bytes / 1073741824).toFixed(1) + ' GB';
     }
 
     function appendSystemMessage(text) {
@@ -207,17 +477,54 @@
         connection.invoke("GetOnlineUsers").then(function (users) {
             var html = '';
             users.forEach(function (u) {
-                html += '<div class="online-user">' + escHtml(u.fullName || u.userName) + '</div>';
+                var name = escHtml(u.fullName || u.userName);
+                var uname = escHtml(u.userName);
+                var platIcons = '';
+                if (u.platforms && u.platforms.length > 0) {
+                    u.platforms.forEach(function(p) {
+                        if (p === 'desktop') platIcons += '<i class="desktop icon" style="color:#64b5f6; font-size:0.8em;" title="Escritorio"></i>';
+                        else platIcons += '<i class="globe icon" style="color:#81c784; font-size:0.8em;" title="Navegador"></i>';
+                    });
+                } else {
+                    platIcons = '<i class="globe icon" style="color:#81c784; font-size:0.8em;"></i>';
+                }
+                if (u.userName === currentUser) {
+                    html += '<div class="online-user">' + platIcons + ' <strong>' + name + '</strong> (tú)</div>';
+                } else {
+                    html += '<div class="online-user" onclick="openDm(\'' + uname + '\', \'' + name + '\')" title="Chat privado con ' + name + '">' + platIcons + ' ' + name + '</div>';
+                }
             });
             $('#onlineList').html(html);
             $('#onlineCount').text(users.length);
         });
     }
 
+    function openImageLightbox(src) {
+        var lb = document.getElementById('imageLightbox');
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.id = 'imageLightbox';
+            lb.innerHTML = '<span class="close-btn">&times;</span><img>';
+            lb.addEventListener('click', function () { lb.style.display = 'none'; });
+            document.body.appendChild(lb);
+        }
+        lb.querySelector('img').src = src;
+        lb.style.display = 'flex';
+    }
+
     function escHtml(text) {
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(text || ''));
         return div.innerHTML;
+    }
+
+    function formatBotMessage(text) {
+        // Simple markdown rendering for bot messages (XSS-safe: escHtml first, then apply formatting)
+        var s = escHtml(text || '');
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/`(.+?)`/g, '<code style="background:rgba(255,255,255,0.1);padding:1px 4px;border-radius:3px;">$1</code>');
+        s = s.replace(/\n/g, '<br>');
+        return s;
     }
 </script>
 }

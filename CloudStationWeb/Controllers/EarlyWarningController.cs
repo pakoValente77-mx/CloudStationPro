@@ -12,14 +12,17 @@ namespace CloudStationWeb.Controllers
     {
         private readonly IConfiguration _config;
         private readonly EarlyWarningService _earlyWarning;
+        private readonly PrecipitationAlertService _precipAlert;
         private readonly string _sqlConn;
 
         public EarlyWarningController(
             IConfiguration config,
-            EarlyWarningService earlyWarning)
+            EarlyWarningService earlyWarning,
+            PrecipitationAlertService precipAlert)
         {
             _config = config;
             _earlyWarning = earlyWarning;
+            _precipAlert = precipAlert;
             _sqlConn = config.GetConnectionString("SqlServer")!;
         }
 
@@ -30,6 +33,9 @@ namespace CloudStationWeb.Controllers
             ViewBag.Enabled = cfg.Enabled;
             ViewBag.IntervalSeconds = cfg.IntervalSeconds;
             ViewBag.CooldownMinutes = cfg.CooldownMinutes;
+            ViewBag.PrecipEnabled = _precipAlert.IsEnabled;
+            ViewBag.PrecipIntervalMinutes = _precipAlert.IntervalMinutes;
+            ViewBag.PrecipThresholdMm = _precipAlert.ThresholdMm;
             return View();
         }
 
@@ -88,5 +94,31 @@ namespace CloudStationWeb.Controllers
             ") ?? new { Last24h = 0, Last7d = 0, CriticasLast7d = 0, UmbralesActivos = 0 };
             return Json(stats);
         }
+
+        // GET: /EarlyWarning/GetServicesStatus
+        [HttpGet]
+        public IActionResult GetServicesStatus()
+        {
+            var ewCfg = _earlyWarning.GetConfig();
+            return Json(new
+            {
+                earlyWarning = new { enabled = ewCfg.Enabled, intervalSeconds = ewCfg.IntervalSeconds, cooldownMinutes = ewCfg.CooldownMinutes },
+                precipitationAlert = new { enabled = _precipAlert.IsEnabled, intervalMinutes = _precipAlert.IntervalMinutes, thresholdMm = _precipAlert.ThresholdMm }
+            });
+        }
+
+        // POST: /EarlyWarning/TogglePrecipAlert
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult TogglePrecipAlert([FromBody] ToggleDto dto)
+        {
+            _precipAlert.SetEnabled(dto.Enabled);
+            return Json(new { success = true, enabled = _precipAlert.IsEnabled });
+        }
+    }
+
+    public class ToggleDto
+    {
+        public bool Enabled { get; set; }
     }
 }
