@@ -211,6 +211,7 @@ namespace CloudStationWeb.Controllers
                 ApprovedBy = User.Identity?.Name,
                 ApprovedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
+                PasswordLastChanged = DateTime.UtcNow,
                 OrganismoId = organismoId,
                 CentroTrabajoId = centroTrabajoId
             };
@@ -337,7 +338,9 @@ namespace CloudStationWeb.Controllers
 
             if (result.Succeeded)
             {
-                TempData["Success"] = $"Contraseña de '{user.UserName}' restablecida.";
+                user.PasswordLastChanged = null; // Force change on next login
+                await _userManager.UpdateAsync(user);
+                TempData["Success"] = $"Contraseña de '{user.UserName}' restablecida. El usuario deberá cambiarla en su próximo inicio de sesión.";
             }
             else
             {

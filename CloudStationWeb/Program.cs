@@ -10,6 +10,12 @@ using CloudStationWeb.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Allow large file uploads (200 MB)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 200_000_000; // 200 MB
+});
+
 // Set EPPlus 8 license
 ExcelPackage.License.SetNonCommercialPersonal("CloudStation User");
 
@@ -78,6 +84,21 @@ builder.Services.AddAuthentication()
             ValidAudience = jwtSection["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         };
+
+        // Allow SignalR to receive JWT from query string (WebSocket can't send headers)
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Configure external authentication (Google & Microsoft)
@@ -112,8 +133,12 @@ builder.Services.AddScoped<CloudStationWeb.Services.FunVasosService>();
 builder.Services.AddScoped<CloudStationWeb.Services.HydroForecastService>();
 builder.Services.AddScoped<CloudStationWeb.Services.IEmailSender, CloudStationWeb.Services.SmtpEmailSender>();
 builder.Services.AddSingleton<CloudStationWeb.Services.PushNotificationService>();
+builder.Services.AddSingleton<CloudStationWeb.Services.ChartService>();
+builder.Services.AddSingleton<CloudStationWeb.Services.CentinelaBotService>();
 builder.Services.AddSingleton<CloudStationWeb.Services.EarlyWarningService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudStationWeb.Services.EarlyWarningService>());
+builder.Services.AddSingleton<CloudStationWeb.Services.PrecipitationAlertService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudStationWeb.Services.PrecipitationAlertService>());
 
 // CORS for API consumers (mobile, desktop apps)
 builder.Services.AddCors(options =>
@@ -161,6 +186,25 @@ app.UseRouting();
 app.UseCors("ApiCors");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Force password change every 30 days
+app.UseMiddleware<CloudStationWeb.Services.PasswordExpiryMiddleware>();
+
+// SoloVasos: only allow FunVasos, Account and ApiAuth routes
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true && context.User.IsInRole("SoloVasos"))
+    {
+        var path = context.Request.Path.Value ?? "";
+        var allowed = new[] { "/FunVasos", "/Account", "/ApiAuth" };
+        if (!allowed.Any(a => path.StartsWith(a, StringComparison.OrdinalIgnoreCase)))
+        {
+            context.Response.Redirect("/FunVasos");
+            return;
+        }
+    }
+    await next();
+});
 
 app.MapControllerRoute(
     name: "default",

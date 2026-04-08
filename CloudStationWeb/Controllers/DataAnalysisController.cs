@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using CloudStationWeb.Services;
 using CloudStationWeb.Models;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CloudStationWeb.Controllers
 {
-    [Authorize]
+    [Authorize(AuthenticationSchemes = "Identity.Application," + JwtBearerDefaults.AuthenticationScheme)]
     public class DataAnalysisController : Controller
     {
         private readonly DataService _dataService;

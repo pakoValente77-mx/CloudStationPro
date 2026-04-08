@@ -40,6 +40,13 @@ namespace CloudStationWeb.Controllers
         public DateTime TimestampMsg { get; set; }
         public short? SignalStrength { get; set; }
         public short? Channel { get; set; }
+        public string? RawMessage { get; set; }
+        public string? FailureCode { get; set; }
+        public string? FrequencyOffset { get; set; }
+        public string? ModIndex { get; set; }
+        public string? DataQuality { get; set; }
+        public string? Spacecraft { get; set; }
+        public string? DataSource { get; set; }
     }
 
     [Authorize]
@@ -177,7 +184,14 @@ namespace CloudStationWeb.Controllers
 
                 var headersSql = $@"
                     SELECT h.dcp_id AS ""DcpId"", h.timestamp_msg AS ""TimestampMsg"",
-                           h.signal_strength AS ""SignalStrength"", h.channel AS ""Channel""
+                           h.signal_strength AS ""SignalStrength"", h.channel AS ""Channel"",
+                           h.raw_message AS ""RawMessage"",
+                           h.failure_code AS ""FailureCode"",
+                           h.frequency_offset AS ""FrequencyOffset"",
+                           h.mod_index AS ""ModIndex"",
+                           h.data_quality AS ""DataQuality"",
+                           h.spacecraft AS ""Spacecraft"",
+                           h.data_source AS ""DataSource""
                     FROM dcp_headers h
                     WHERE h.timestamp_msg >= @FechaInicio AND h.timestamp_msg < @FechaFin
                       {whereDcp}
@@ -247,7 +261,11 @@ namespace CloudStationWeb.Controllers
                             dcpId, idAsig, txTime,
                             hdr.SignalStrength, hdr.Channel,
                             txData,
-                            sensorMap.GetValueOrDefault(idAsig, new List<MisSensorDto>()));
+                            sensorMap.GetValueOrDefault(idAsig, new List<MisSensorDto>()),
+                            hdr.RawMessage,
+                            hdr.FailureCode, hdr.FrequencyOffset,
+                            hdr.ModIndex, hdr.DataQuality,
+                            hdr.Spacecraft, hdr.DataSource);
 
                         // Path: YYYY/MM/DD/DCPID_YYYYMMDDHHMMEX.mis  (using Tx time)
                         string entryName = $"{txTime:yyyy}/{txTime:MM}/{txTime:dd}/{dcpId}_{txTime:yyyyMMddHHmm}EX.mis";
@@ -273,14 +291,18 @@ namespace CloudStationWeb.Controllers
 
         private string GenerateMisContent(string dcpId, string idAsignado, DateTime txTime,
             short? signalStrength, short? channel,
-            List<MisDatoDto> datos, List<MisSensorDto> sensores)
+            List<MisDatoDto> datos, List<MisSensorDto> sensores,
+            string? rawMessage = null,
+            string? failureCode = null, string? frequencyOffset = null,
+            string? modIndex = null, string? dataQuality = null,
+            string? spacecraft = null, string? dataSource = null)
         {
             var sb = new StringBuilder();
 
-            // Header: DCP_ID,DD/MM/YYYY HH:MM:SS,+XXdBm,Recovered,CCC
+            // Header: DCP_ID,DD/MM/YYYY HH:MM:SS,+XXdBm,Good Msg!,CCC
             string sigStr = signalStrength.HasValue ? $"+{signalStrength.Value}dBm" : "+00dBm";
             string chStr = channel.HasValue ? channel.Value.ToString().PadLeft(3, '0') : "000";
-            sb.AppendLine($"{dcpId},{txTime:dd/MM/yyyy HH:mm:ss},{sigStr},Recovered,{chStr}");
+            sb.AppendLine($"{dcpId},{txTime:dd/MM/yyyy HH:mm:ss},{sigStr},Good Msg!,{chStr}");
 
             // Group data by sensor
             var bySensor = datos
@@ -306,10 +328,62 @@ namespace CloudStationWeb.Controllers
                 }
             }
 
-            // Footer: recovered data has no raw DOMSAT
-            sb.AppendLine("{RECOVERED_FROM_TIMESCALEDB}");
+            // Footer: raw DOMSAT header
+            if (!string.IsNullOrEmpty(rawMessage))
+                sb.AppendLine($"{{{rawMessage}}}");
+            else
+                sb.AppendLine($"{{{BuildGoesHeader(dcpId, txTime, signalStrength, channel, failureCode, frequencyOffset, modIndex, dataQuality, spacecraft, dataSource, datos.Count)}}}");
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Reconstructs a GOES DCP header string from individual fields.
+        /// Format: PPPPPPPPYYDDDHHMMSSFSSO MQQQCCCSSSDDDDD
+        /// Example: 1563D3FA23206064001G48+0NN055EXE00116
+        /// </summary>
+        private string BuildGoesHeader(string dcpId, DateTime txTime,
+            short? signalStrength, short? channel,
+            string? failureCode, string? frequencyOffset,
+            string? modIndex, string? dataQuality,
+            string? spacecraft, string? dataSource,
+            int dataCount)
+        {
+            // DCP Address (8 chars, uppercase hex)
+            string addr = (dcpId ?? "").PadRight(8).Substring(0, 8).ToUpper();
+
+            // Date: YYDDDHHMMSS (year 2-digit, julian day 3-digit, HHMMSS)
+            int julianDay = txTime.DayOfYear;
+            string dateStr = $"{txTime:yy}{julianDay:D3}{txTime:HHmmss}";
+
+            // Failure code (1 char: G=Good, ?=Questionable, etc.)
+            string fail = !string.IsNullOrEmpty(failureCode) ? failureCode.Substring(0, 1) : "G";
+
+            // Signal strength (2 digits)
+            string sig = signalStrength.HasValue ? signalStrength.Value.ToString("D2") : "00";
+
+            // Frequency offset (e.g. "+0", "-1")
+            string freq = !string.IsNullOrEmpty(frequencyOffset) ? frequencyOffset : "+0";
+
+            // Modulation index (1 char: N=Normal)
+            string mod = !string.IsNullOrEmpty(modIndex) ? modIndex.Substring(0, 1) : "N";
+
+            // Data quality (1 char: N=Normal)
+            string qual = !string.IsNullOrEmpty(dataQuality) ? dataQuality.Substring(0, 1) : "N";
+
+            // Channel (3 digits)
+            string ch = channel.HasValue ? channel.Value.ToString("D3") : "000";
+
+            // Spacecraft + Data Source (e.g. "EXE")
+            string src = "";
+            if (!string.IsNullOrEmpty(spacecraft)) src += spacecraft;
+            if (!string.IsNullOrEmpty(dataSource)) src += dataSource;
+            if (string.IsNullOrEmpty(src)) src = "EXE";
+
+            // Data length (5 digits, approximate from record count)
+            string dataLen = (dataCount * 10).ToString("D5");
+
+            return $"{addr}{dateStr}{fail}{sig}{freq}{mod}{qual}{ch}{src}{dataLen}";
         }
 
         private async Task<Dictionary<string, List<MisSensorDto>>> LoadSensorMetadata(string? idAsignado)

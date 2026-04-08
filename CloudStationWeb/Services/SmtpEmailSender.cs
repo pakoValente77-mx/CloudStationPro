@@ -16,24 +16,23 @@ namespace CloudStationWeb.Services
 
         public async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
         {
-            var smtpSection = _config.GetSection("Email:Smtp");
-            var host = smtpSection["Host"];
-            var port = int.Parse(smtpSection["Port"] ?? "587");
-            var username = smtpSection["Username"];
-            var password = smtpSection["Password"];
-            var fromEmail = smtpSection["From"] ?? username;
-            var fromName = smtpSection["FromName"] ?? "Plataforma Integral Hidrometeorológica";
-            var enableSsl = bool.Parse(smtpSection["EnableSsl"] ?? "true");
-
-            if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(username))
-            {
-                _logger.LogWarning("SMTP not configured. Email not sent to {Email}. Subject: {Subject}", toEmail, subject);
-                _logger.LogInformation("Email body (for debugging): {Body}", htmlBody);
-                return;
-            }
-
             try
             {
+                var smtpSection = _config.GetSection("Email:Smtp");
+                var host = smtpSection["Host"];
+                if (!int.TryParse(smtpSection["Port"], out var port)) port = 587;
+                var username = smtpSection["Username"];
+                var password = smtpSection["Password"];
+                var fromEmail = smtpSection["From"] ?? username;
+                var fromName = smtpSection["FromName"] ?? "Plataforma Integral Hidrometeorológica";
+                if (!bool.TryParse(smtpSection["EnableSsl"], out var enableSsl)) enableSsl = false;
+
+                if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(username))
+                {
+                    _logger.LogWarning("SMTP not configured. Email not sent to {Email}. Subject: {Subject}", toEmail, subject);
+                    return;
+                }
+
                 using var client = new SmtpClient(host, port)
                 {
                     Credentials = new NetworkCredential(username, password),
@@ -56,7 +55,6 @@ namespace CloudStationWeb.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send email to {Email}", toEmail);
-                throw;
             }
         }
     }

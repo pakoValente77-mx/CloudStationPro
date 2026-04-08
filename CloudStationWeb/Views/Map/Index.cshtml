@@ -884,13 +884,37 @@
             currentMapTheme = 'topo';
             
             // Mapa Base: Google Maps Terrain (Relieve muy visual e intuitivo)
+            // Con fallback a OpenStreetMap si Google no está disponible
             const tileLayerUrl = 'http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}';
 
-            L.tileLayer(tileLayerUrl, {
+            var baseLayer = L.tileLayer(tileLayerUrl, {
                 maxZoom: 20,
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
                 attribution: '&copy; Google Maps'
             }).addTo(map);
+
+            var _baseFallbackApplied = false;
+            var _baseErrorCount = 0;
+            baseLayer.on('tileerror', function() {
+                _baseErrorCount++;
+                if (_baseErrorCount >= 3 && !_baseFallbackApplied) {
+                    _baseFallbackApplied = true;
+                    console.warn('⚠️ Google Maps no disponible, cambiando a OpenStreetMap...');
+                    map.removeLayer(baseLayer);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(map);
+                    var $toast = $('<div class="ui info message" style="position:fixed;top:60px;right:20px;z-index:10000;max-width:350px;opacity:0.95;">' +
+                        '<i class="close icon"></i>' +
+                        '<div class="header">Mapa base alternativo</div>' +
+                        '<p>Google Maps no disponible. Se usa OpenStreetMap como respaldo.</p>' +
+                        '</div>');
+                    $toast.find('.close').on('click', function() { $toast.remove(); });
+                    $('body').append($toast);
+                    setTimeout(function() { $toast.fadeOut(400, function() { $toast.remove(); }); }, 6000);
+                }
+            });
 
             markersLayer.addTo(map);
 
@@ -1814,6 +1838,41 @@
         let lightningMarkers = null;
         let lightningInterval = null;
 
+        // Manejo de errores de capas: remueve la capa del mapa y desactiva el toggle
+        var _layerErrorShown = {};
+        function handleLayerError(layer, layerName, toggleId) {
+            if (_layerErrorShown[layerName]) return; // solo notificar una vez por capa
+            _layerErrorShown[layerName] = true;
+            console.warn('⚠️ Capa no disponible: ' + layerName);
+            if (layer && map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+            if (toggleId) {
+                $(toggleId).checkbox('uncheck');
+            }
+            // Mostrar notificación al usuario (desaparece en 5s)
+            var $toast = $('<div class="ui warning message" style="position:fixed;top:60px;right:20px;z-index:10000;max-width:350px;opacity:0.95;">' +
+                '<i class="close icon"></i>' +
+                '<div class="header">Capa no disponible</div>' +
+                '<p><strong>' + layerName + '</strong> no se pudo cargar. El mapa base continúa funcionando normalmente.</p>' +
+                '</div>');
+            $toast.find('.close').on('click', function() { $toast.remove(); });
+            $('body').append($toast);
+            setTimeout(function() { $toast.fadeOut(400, function() { $toast.remove(); }); }, 5000);
+        }
+
+        function attachLayerErrorHandler(layer, layerName, toggleId) {
+            if (!layer) return;
+            var errorCount = 0;
+            layer.on('tileerror', function() {
+                errorCount++;
+                // Tolerar algunos errores de tiles individuales, actuar después de 3
+                if (errorCount >= 3) {
+                    handleLayerError(layer, layerName, toggleId);
+                }
+            });
+        }
+
         function loadWeatherLayers() {
             // 1. RainViewer Radar
             fetch('https://api.rainviewer.com/public/weather-maps.json')
@@ -1825,8 +1884,12 @@
                             data.host + latest.path + '/256/{z}/{x}/{y}/2/1_1.png',
                             { opacity: 0.65, zIndex: 5 }
                         );
+                        attachLayerErrorHandler(radarLayer, 'Radar Precipitación (RainViewer)', '#toggle-radar');
                     }
-                }).catch(err => console.warn('RainViewer:', err));
+                }).catch(err => {
+                    console.warn('RainViewer:', err);
+                    handleLayerError(null, 'Radar Precipitación (RainViewer)', '#toggle-radar');
+                });
 
             // 2. GOES-16 Channel 13 (Infrared - Longwave)
             goesIrLayer = L.tileLayer.wms(
@@ -1840,6 +1903,7 @@
                     attribution: 'GOES-16 NOAA'
                 }
             );
+            attachLayerErrorHandler(goesIrLayer, 'GOES-16 Infrarrojo', '#toggle-goes-ir');
 
             // 3. GOES-16 Channel 02 (Visible)
             goesVisLayer = L.tileLayer.wms(
@@ -1853,6 +1917,7 @@
                     attribution: 'GOES-16 NOAA'
                 }
             );
+            attachLayerErrorHandler(goesVisLayer, 'GOES-16 Visible', '#toggle-goes-vis');
 
             // 4. GOES-16 Channel 09 (Water Vapor Mid-Level)
             goesWvLayer = L.tileLayer.wms(
@@ -1866,6 +1931,7 @@
                     attribution: 'GOES-16 WV'
                 }
             );
+            attachLayerErrorHandler(goesWvLayer, 'GOES-16 Vapor de Agua', '#toggle-goes-wv');
 
             // 5. GOES-16 Day Cloud Phase RGB
             goesDayCloudLayer = L.tileLayer.wms(
@@ -1879,6 +1945,7 @@
                     attribution: 'GOES-16 IR Enhanced'
                 }
             );
+            attachLayerErrorHandler(goesDayCloudLayer, 'GOES-16 Nubes (IR Enhanced)', '#toggle-goes-daycloud');
 
             // 6. Google Satellite
             satelliteLayer = L.tileLayer(
@@ -1889,30 +1956,35 @@
                     attribution: '&copy; Google Satellite'
                 }
             );
+            attachLayerErrorHandler(satelliteLayer, 'Google Satellite', '#toggle-satellite');
 
             // 7. OpenWeatherMap — Temperature
             owmTempLayer = L.tileLayer(
                 'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
                 { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
             );
+            attachLayerErrorHandler(owmTempLayer, 'Temperatura (OWM)', '#toggle-owm-temp');
 
             // 8. OpenWeatherMap — Wind Speed
             owmWindLayer = L.tileLayer(
                 'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
                 { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
             );
+            attachLayerErrorHandler(owmWindLayer, 'Viento (OWM)', '#toggle-owm-wind');
 
             // 9. OpenWeatherMap — Clouds
             owmCloudsLayer = L.tileLayer(
                 'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
                 { opacity: 0.45, zIndex: 3, attribution: 'OpenWeatherMap' }
             );
+            attachLayerErrorHandler(owmCloudsLayer, 'Nubes (OWM)', '#toggle-owm-clouds');
 
             // 10. OpenWeatherMap — Pressure
             owmPressureLayer = L.tileLayer(
                 'https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
                 { opacity: 0.5, zIndex: 3, attribution: 'OpenWeatherMap' }
             );
+            attachLayerErrorHandler(owmPressureLayer, 'Presión (OWM)', '#toggle-owm-pressure');
 
             // 11. MRMS (NOAA Composite Radar - Alta resolución)
             mrmsLayer = L.tileLayer.wms(
@@ -1926,6 +1998,7 @@
                     attribution: 'NOAA MRMS'
                 }
             );
+            attachLayerErrorHandler(mrmsLayer, 'MRMS Radar (NOAA)', '#toggle-mrms');
 
             // 12. Lightning markers
             lightningMarkers = L.layerGroup();

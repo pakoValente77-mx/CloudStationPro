@@ -232,11 +232,15 @@
             <img src="/img/logo-pih.svg" alt="PIH" />
             <span>PIH</span>
         </div>
+        @if (!User.IsInRole("SoloVasos"))
+        {
         <a class="sidebar-item" href="/Map"><i class="map icon"></i> Mapa</a>
         <a class="sidebar-item" href="/HourlyReport"><i class="clock outline icon"></i> Cortes Horarios</a>
+        <a class="sidebar-item" href="/RainfallReport"><i class="tint icon"></i> Corte de Lluvia</a>
         <a class="sidebar-item" href="/StationGroup"><i class="users icon"></i> Mis Grupos</a>
         <a class="sidebar-item" href="/DataAnalysis"><i class="chart line icon"></i> Análisis</a>
         <a class="sidebar-item" href="@Url.Action("Index", "GoesMonitoring")"><i class="satellite icon"></i> GOES</a>
+        }
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
         {
             <div class="sidebar-divider"></div>
@@ -247,15 +251,25 @@
             <a class="sidebar-item" href="@Url.Action("Index", "Admin")"><i class="users cog icon" style="color:#ffb74d;"></i> Usuarios</a>
             <a class="sidebar-item" href="@Url.Action("Index", "Notification")"><i class="bell icon" style="color:#ce93d8;"></i> Notificaciones</a>
             <a class="sidebar-item" href="@Url.Action("Index", "EarlyWarning")"><i class="exclamation triangle icon" style="color:#e74c3c;"></i> Alertas Tempranas</a>
+            @if (User.IsInRole("SuperAdmin"))
+            {
+            <a class="sidebar-item" href="@Url.Action("Index", "Settings")"><i class="sliders horizontal icon" style="color:#4fc3f7;"></i> Configuración</a>
+            }
         }
         <div class="sidebar-divider"></div>
+        @if (!User.IsInRole("SoloVasos"))
+        {
         <a class="sidebar-item" href="/Documents"><i class="folder open icon"></i> Repositorio</a>
+        }
         <a class="sidebar-item" href="/FunVasos"><i class="water icon"></i> Fun. Vasos</a>
+        @if (!User.IsInRole("SoloVasos"))
+        {
         <a class="sidebar-item" href="@Url.Action("Index", "RainForecast")"><i class="cloud rain icon"></i> Pronóstico</a>
         <a class="sidebar-item" href="@Url.Action("Index", "MisExport")"><i class="file export icon" style="color:#2185d0;"></i> Exportar .MIS</a>
         @if (User.Identity?.IsAuthenticated == true)
         {
-            <a class="sidebar-item" href="@Url.Action("Index", "Chat")"><i class="comments icon"></i> Chat</a>
+            <a class="sidebar-item" href="@Url.Action("Index", "Chat")" id="sidebarChatLink"><i class="comments icon"></i> Chat <span class="dm-global-badge" id="sidebarDmBadge" style="display:none;"></span></a>
+        }
         }
         <div class="sidebar-divider"></div>
         @if (User.Identity?.IsAuthenticated == true)
@@ -276,11 +290,16 @@
             <a class="hamburger-btn item" onclick="openSidebar()">
                 <i class="bars icon" style="margin:0;"></i>
             </a>
+            @if (!User.IsInRole("SoloVasos"))
+            {
             <a href="/Map" class="item">
                 <i class="map icon"></i> Mapa
             </a>
             <a href="/HourlyReport" class="item">
                 <i class="clock outline icon"></i> Cortes Horarios
+            </a>
+            <a href="/RainfallReport" class="item">
+                <i class="tint icon"></i> Corte Lluvia
             </a>
             <a href="/StationGroup" class="item">
                 <i class="users icon"></i> Mis Grupos
@@ -291,10 +310,11 @@
             <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GoesMonitoring" ? "active" : "")" href="@Url.Action("Index", "GoesMonitoring")">
                 <i class="satellite icon"></i> GOES
             </a>
+            }
             
             @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
             {
-                <div id="nav-admin-dropdown" class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance","Notification","EarlyWarning"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
+                <div id="nav-admin-dropdown" class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance","Notification","EarlyWarning","Settings"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
                     <i class="cogs icon"></i> Administración <i class="dropdown icon"></i>
                     <div class="menu" style="background: rgba(14,18,26,0.97) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 8px !important; min-width: 220px;">
                         <a class="item" href="@Url.Action("Index", "StationAdmin")" style="color: #fff !important;">
@@ -316,27 +336,40 @@
                         <a class="item" href="@Url.Action("Index", "EarlyWarning")" style="color: #fff !important;">
                             <i class="exclamation triangle icon" style="color: #e74c3c;"></i> Alertas Tempranas
                         </a>
+                        @if (User.IsInRole("SuperAdmin"))
+                        {
+                        <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                        <a class="item" href="@Url.Action("Index", "Settings")" style="color: #fff !important;">
+                            <i class="sliders horizontal icon" style="color: #4fc3f7;"></i> Configuración
+                        </a>
+                        }
                     </div>
                 </div>
             }
 
+            @if (!User.IsInRole("SoloVasos"))
+            {
             <a href="/Documents" class="item" id="nav-documents">
                 <i class="folder open icon"></i> Repositorio
                 <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
             </a>
+            }
             <a href="/FunVasos" class="item">
                 <i class="water icon"></i> Fun. Vasos
             </a>
+            @if (!User.IsInRole("SoloVasos"))
+            {
             <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "RainForecast" ? "active" : "")" href="@Url.Action("Index", "RainForecast")">
                 <i class="cloud rain icon"></i> Pronóstico
             </a>
             <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "MisExport" ? "active" : "")" href="@Url.Action("Index", "MisExport")">
                 <i class="file export icon"></i> .MIS
             </a>
-            @if (User.Identity?.IsAuthenticated == true)
+            }
+            @if (User.Identity?.IsAuthenticated == true && !User.IsInRole("SoloVasos"))
             {
-                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Chat" ? "active" : "")" href="@Url.Action("Index", "Chat")">
-                    <i class="comments icon"></i> Chat
+                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Chat" ? "active" : "")" href="@Url.Action("Index", "Chat")" id="navChatLink">
+                    <i class="comments icon"></i> Chat <span class="dm-global-badge" id="navDmBadge" style="display:none;"></span>
                 </a>
             }
             <div class="right menu">
@@ -466,6 +499,79 @@
     
     <!-- Particle Background Component -->
     <script src="~/js/particle-background.js"></script>
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+    <style>
+        .dm-global-badge {
+            background: #e74c3c; color: #fff; border-radius: 50%; font-size: 0.65em;
+            min-width: 18px; height: 18px; display: inline-flex; align-items: center;
+            justify-content: center; margin-left: 4px; font-weight: 700;
+            animation: dmPulse 1s ease-in-out 3;
+        }
+        @@keyframes dmPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.3);} }
+    </style>
+    <script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+    <script>
+    (function() {
+        // Skip if we're already on the Chat page (it has its own connection)
+        if (window.location.pathname.toLowerCase().indexOf('/chat') === 0) return;
+
+        var currentUser = '@User.Identity.Name';
+        var dmCount = 0;
+
+        var conn = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/chat')
+            .withAutomaticReconnect([0, 2000, 10000, 30000])
+            .build();
+
+        conn.on('ReceiveMessage', function(msg) {
+            if (msg.room && msg.room.startsWith('dm:') && msg.userName !== currentUser) {
+                dmCount++;
+                updateDmBadges();
+                // Browser notification if tab is hidden
+                if (document.hidden && Notification.permission === 'granted') {
+                    new Notification('Mensaje de ' + (msg.fullName || msg.userName), {
+                        body: msg.message.substring(0, 80),
+                        icon: '/images/icon-chat.png',
+                        tag: 'dm-' + msg.room
+                    });
+                }
+            }
+        });
+
+        function updateDmBadges() {
+            var badges = document.querySelectorAll('.dm-global-badge');
+            badges.forEach(function(b) {
+                if (dmCount > 0) {
+                    b.textContent = dmCount > 99 ? '99+' : dmCount;
+                    b.style.display = 'inline-flex';
+                } else {
+                    b.style.display = 'none';
+                }
+            });
+            // Update page title
+            document.title = dmCount > 0
+                ? '(' + dmCount + ') ' + document.title.replace(/^\(\d+\)\s*/, '')
+                : document.title.replace(/^\(\d+\)\s*/, '');
+        }
+
+        conn.start().catch(function(err) {
+            console.log('Global chat notification: connection failed', err);
+        });
+
+        // Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Reset count when user clicks Chat link
+        document.querySelectorAll('#navChatLink, #sidebarChatLink').forEach(function(el) {
+            el.addEventListener('click', function() { dmCount = 0; updateDmBadges(); });
+        });
+    })();
+    </script>
+    }
 
 </body>
 </html>

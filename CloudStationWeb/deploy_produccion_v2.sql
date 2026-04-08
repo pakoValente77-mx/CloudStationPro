@@ -1,7 +1,7 @@
 -- =====================================================================
 -- CLOUDSTATION PIH - Script COMPLETO de Despliegue a Producción
 -- Base de datos: IGSCLOUD (SQL Server)
--- Fecha: 2026-03-31
+-- Fecha: 2026-04-08
 -- Descripción: Script completo desde cero - Identity, Documentos,
 --              Usuarios, Roles, Tablas nuevas, Seeds
 -- INSTRUCCIONES: 
@@ -14,7 +14,7 @@ USE IGSCLOUD;
 GO
 
 PRINT '================================================================'
-PRINT ' CLOUDSTATION PIH - DEPLOY PRODUCCIÓN v2 (COMPLETO)'
+PRINT ' CLOUDSTATION PIH - DEPLOY PRODUCCIÓN v2.1 (COMPLETO)'
 PRINT ' Fecha: ' + CONVERT(VARCHAR, GETDATE(), 120)
 PRINT '================================================================'
 PRINT ''
@@ -415,6 +415,21 @@ END
 ELSE PRINT '   = DepartamentoExterno ya existe'
 GO
 
+-- =====================================================================
+-- C4. Expiración de contraseña (Migración 9: AddPasswordLastChanged)
+-- =====================================================================
+PRINT '>> C4. Campo PasswordLastChanged en AspNetUsers...'
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('AspNetUsers') AND name = 'PasswordLastChanged')
+BEGIN
+    ALTER TABLE AspNetUsers ADD PasswordLastChanged DATETIME2 NULL;
+    -- Inicializar para usuarios existentes (les da 30 días desde ahora)
+    UPDATE AspNetUsers SET PasswordLastChanged = GETUTCDATE() WHERE PasswordLastChanged IS NULL;
+    PRINT '   + PasswordLastChanged agregada e inicializada'
+END
+ELSE PRINT '   = PasswordLastChanged ya existe'
+GO
+
 -- =============================================================================
 -- PARTE D: AUDITORÍA DE LOGIN (Migración 5: AddLoginAudit)
 -- =============================================================================
@@ -593,13 +608,29 @@ BEGIN
         UserName    NVARCHAR(256) NOT NULL,
         FullName    NVARCHAR(200),
         [Message]   NVARCHAR(MAX) NOT NULL,
-        [Timestamp] DATETIME2 NOT NULL
+        [Timestamp] DATETIME2 NOT NULL,
+        FileName    NVARCHAR(500) NULL,
+        FileUrl     NVARCHAR(1000) NULL,
+        FileSize    BIGINT NULL,
+        FileType    NVARCHAR(200) NULL
     );
     CREATE INDEX IX_ChatMessages_Room ON ChatMessages(Room, [Timestamp] DESC);
     CREATE INDEX IX_ChatMessages_User ON ChatMessages(UserId);
     PRINT '   + ChatMessages creada'
 END
-ELSE PRINT '   = ChatMessages ya existe'
+ELSE
+BEGIN
+    PRINT '   = ChatMessages ya existe'
+    -- Add file columns if missing
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'ChatMessages' AND COLUMN_NAME = 'FileName')
+    BEGIN
+        ALTER TABLE ChatMessages ADD FileName NVARCHAR(500) NULL;
+        ALTER TABLE ChatMessages ADD FileUrl NVARCHAR(1000) NULL;
+        ALTER TABLE ChatMessages ADD FileSize BIGINT NULL;
+        ALTER TABLE ChatMessages ADD FileType NVARCHAR(200) NULL;
+        PRINT '   + Columnas de archivos agregadas a ChatMessages'
+    END
+END
 GO
 
 -- =====================================================================
@@ -680,6 +711,30 @@ END
 ELSE PRINT '   ! Tabla Subcuenca no existe (legacy)'
 GO
 
+-- =====================================================================
+-- F2. Estacion - Etiqueta y EsPresa
+-- =====================================================================
+PRINT '>> F2. Columnas Etiqueta y EsPresa en Estacion...'
+
+IF OBJECT_ID('Estacion', 'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Estacion') AND name = 'Etiqueta')
+    BEGIN
+        ALTER TABLE Estacion ADD Etiqueta NVARCHAR(200) NULL;
+        PRINT '   + Etiqueta agregada'
+    END
+    ELSE PRINT '   = Etiqueta ya existe'
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Estacion') AND name = 'EsPresa')
+    BEGIN
+        ALTER TABLE Estacion ADD EsPresa BIT NOT NULL DEFAULT 0;
+        PRINT '   + EsPresa agregada'
+    END
+    ELSE PRINT '   = EsPresa ya existe'
+END
+ELSE PRINT '   ! Tabla Estacion no existe (legacy)'
+GO
+
 -- =============================================================================
 -- PARTE G: SEED DATA (Roles, Admin, Productos)
 -- =============================================================================
@@ -724,6 +779,15 @@ BEGIN
     PRINT '   + Rol Visualizador creado'
 END
 ELSE PRINT '   = Visualizador ya existe'
+
+-- SoloVasos (solo acceso a Funcionamiento de Vasos)
+IF NOT EXISTS (SELECT 1 FROM AspNetRoles WHERE NormalizedName = 'SOLOVASOS')
+BEGIN
+    INSERT INTO AspNetRoles (Id, [Name], NormalizedName, ConcurrencyStamp)
+    VALUES (NEWID(), 'SoloVasos', 'SOLOVASOS', NEWID());
+    PRINT '   + Rol SoloVasos creado'
+END
+ELSE PRINT '   = SoloVasos ya existe'
 GO
 
 -- =====================================================================
@@ -800,11 +864,14 @@ IF NOT EXISTS (SELECT * FROM __EFMigrationsHistory WHERE MigrationId = '20260331
 IF NOT EXISTS (SELECT * FROM __EFMigrationsHistory WHERE MigrationId = '20260331141542_AddEsTrabajadorCFEFields')
     INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ('20260331141542_AddEsTrabajadorCFEFields', '8.0.2');
 
-PRINT '   8 migraciones registradas'
+IF NOT EXISTS (SELECT * FROM __EFMigrationsHistory WHERE MigrationId = '20260408191706_AddPasswordLastChanged')
+    INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ('20260408191706_AddPasswordLastChanged', '8.0.2');
+
+PRINT '   9 migraciones registradas'
 GO
 
 -- =============================================================================
--- PARTE I: ACTUALIZACIONES FINALES
+-- PARTE I: ACTUALIZACIONES FINALES (2026-04-01)
 -- =============================================================================
 PRINT '>> I. Actualizaciones finales...'
 

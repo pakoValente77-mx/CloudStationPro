@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace CloudStationWeb.Controllers
 {
-    [Authorize]
+    [Authorize(AuthenticationSchemes = "Identity.Application," + Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)]
     public class MapController : Controller
     {
         private readonly DataService _dataService;
@@ -26,6 +26,13 @@ namespace CloudStationWeb.Controllers
         {
             ViewBag.Variables = await _dataService.GetAvailableVariablesAsync();
             return View();
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetVariables()
+        {
+            var vars = await _dataService.GetAvailableVariablesAsync();
+            return Json(vars);
         }
 
         [HttpGet]

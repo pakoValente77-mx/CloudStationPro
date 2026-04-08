@@ -528,10 +528,16 @@
         <!-- Presa Tabs -->
         <div class="presa-tabs">
             <div class="presa-tab active" data-presa="todas">Todas</div>
+            @if (!User.IsInRole("SoloVasos"))
+            {
             <div class="presa-tab" data-presa="cascada3d" style="background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(33,150,243,0.15)); border:1px solid rgba(0,230,118,0.3);"><i class="water icon"></i> Cascada 3D</div>
             <div class="presa-tab" data-presa="promapor" style="background:linear-gradient(135deg,rgba(255,171,64,0.15),rgba(233,30,99,0.15)); border:1px solid rgba(255,171,64,0.3);"><i class="chart line icon"></i> PromApor SHG</div>
+            }
             <div class="presa-tab" data-presa="niveleshorarios" style="background:linear-gradient(135deg,rgba(76,175,80,0.15),rgba(255,235,59,0.15)); border:1px solid rgba(76,175,80,0.3);"><i class="table icon"></i> Niveles Horarios</div>
+            @if (!User.IsInRole("SoloVasos"))
+            {
             <div class="presa-tab" data-presa="hydrosim" style="background:linear-gradient(135deg,rgba(244,67,54,0.18),rgba(255,152,0,0.18)); border:1px solid rgba(244,67,54,0.4);"><i class="lightning icon"></i> Simulación Hidro</div>
+            }
             @foreach (var p in Model.Presas)
             {
                 <div class="presa-tab" data-presa="@SafeId(p.Presa)">@p.Presa</div>

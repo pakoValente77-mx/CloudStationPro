@@ -55,6 +55,13 @@ namespace CloudStationWeb.Controllers
             public string Semaforo { get; set; } = "verde";
         }
 
+        public class SubcuencaReporte
+        {
+            public string Subcuenca { get; set; } = "";
+            public List<EstacionLluvia> Estaciones { get; set; } = new();
+            public double PromedioMm { get; set; }
+        }
+
         public class HoraLluvia
         {
             public string HoraUtc { get; set; } = "";
@@ -215,6 +222,67 @@ namespace CloudStationWeb.Controllers
         }
 
         // ── Lógica interna ──────────────────────────────────────────
+
+        /// <summary>
+        /// Reporte de precipitación agrupado por subcuenca con promedio (estilo CFE).
+        /// tipo: "24h" o "parcial"
+        /// </summary>
+        [HttpGet("reporte")]
+        public async Task<IActionResult> ReporteSubcuenca(
+            [FromQuery] string tipo = "parcial",
+            [FromQuery] string? fecha = null)
+        {
+            var (ayer6am, hoy6am, ahora) = CalcularPeriodos(fecha);
+            DateTimeOffset inicio, fin;
+            string titulo;
+            if (tipo == "24h")
+            {
+                inicio = ayer6am; fin = hoy6am;
+                var inicioLocal = inicio.ToOffset(UtcMinus6);
+                var finLocal = fin.ToOffset(UtcMinus6);
+                titulo = $"Reporte de precipitación 24 horas";
+            }
+            else
+            {
+                inicio = hoy6am; fin = ahora;
+                titulo = $"Reporte parcial de precipitación";
+            }
+
+            var estaciones = await ConsultarAcumulado(inicio, fin);
+            // Filtrar solo las que tienen acumulado > 0
+            var conLluvia = estaciones.Where(e => e.AcumuladoMm > 0).ToList();
+
+            var subcuencas = conLluvia
+                .GroupBy(e => string.IsNullOrEmpty(e.Subcuenca) ? "Sin subcuenca" : e.Subcuenca)
+                .OrderBy(g => g.Key)
+                .Select(g => new SubcuencaReporte
+                {
+                    Subcuenca = g.Key,
+                    Estaciones = g.OrderBy(e => e.Nombre).ToList(),
+                    PromedioMm = Math.Round(g.Average(e => e.AcumuladoMm), 1)
+                })
+                .ToList();
+
+            var inicioL = inicio.ToOffset(UtcMinus6);
+            var finL = fin.ToOffset(UtcMinus6);
+
+            return Ok(new
+            {
+                titulo,
+                tipo,
+                periodoInicio = inicio.ToString("o"),
+                periodoFin = fin.ToString("o"),
+                periodoInicioLocal = inicioL.ToString("dd/MM/yyyy HH:mm"),
+                periodoFinLocal = finL.ToString("dd/MM/yyyy HH:mm"),
+                generado = ahora.ToString("o"),
+                totalEstaciones = estaciones.Count,
+                estacionesConLluvia = conLluvia.Count,
+                subcuencas,
+                cuencas = AgruparPorCuenca(estaciones)
+            });
+        }
+
+        // ── Lógica interna original ─────────────────────────────────
 
         private (DateTimeOffset ayer6am, DateTimeOffset hoy6am, DateTimeOffset ahora) CalcularPeriodos(string? fechaStr)
         {
