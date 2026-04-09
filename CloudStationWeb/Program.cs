@@ -97,6 +97,15 @@ builder.Services.AddAuthentication()
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            // Suppress JWT 401 challenge for browser requests so cookie auth can redirect to login
+            OnChallenge = context =>
+            {
+                if (!context.Request.Path.StartsWithSegments("/api"))
+                {
+                    context.HandleResponse();
+                }
+                return Task.CompletedTask;
             }
         };
     });
