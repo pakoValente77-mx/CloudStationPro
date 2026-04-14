@@ -1,7 +1,8 @@
 -- =====================================================================
 -- CLOUDSTATION PIH - Script COMPLETO PostgreSQL/TimescaleDB (Producción)
 -- Base de datos: mycloud_timescale
--- Fecha: 2026-04-08
+-- Fecha: 2026-04-13
+-- Versión: v3.1
 -- Descripción: Script completo desde cero para servidor nuevo.
 --              Cada bloque es idempotente (puede re-ejecutarse sin daño).
 -- INSTRUCCIONES:
@@ -231,7 +232,158 @@ CREATE TABLE IF NOT EXISTS public.estatus_estaciones (
 );
 
 -- =============================================================================
--- 11. Triggers y funciones
+-- 11. alertas_precipitacion (alertas por umbral de precipitación)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.alertas_precipitacion (
+    ts                  TIMESTAMPTZ NOT NULL,
+    id_asignado         VARCHAR(50) NOT NULL,
+    dcp_id              VARCHAR(20) NOT NULL,
+    sensor_id           VARCHAR(20) NOT NULL,
+    estacion_nombre     VARCHAR(200),
+    umbral_id           BIGINT NOT NULL,
+    umbral_nombre       VARCHAR(100),
+    valor_referencia    REAL,
+    valor_medido        REAL,
+    operador            VARCHAR(2),
+    periodo_minutos     INT,
+    color               VARCHAR(50),
+    activa              BOOLEAN DEFAULT TRUE,
+    notificada          BOOLEAN DEFAULT FALSE,
+    CONSTRAINT alertas_precipitacion_pkey
+        PRIMARY KEY (ts, dcp_id, sensor_id, umbral_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_precip_estacion
+ON public.alertas_precipitacion (id_asignado, ts DESC);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_precip_activa
+ON public.alertas_precipitacion (activa, notificada);
+
+-- =============================================================================
+-- 12. eventos_lluvia (tracking de eventos de precipitación)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.eventos_lluvia (
+    id                   BIGSERIAL PRIMARY KEY,
+    id_asignado          VARCHAR(50) NOT NULL,
+    dcp_id               VARCHAR(20) NOT NULL,
+    sensor_id            VARCHAR(20) NOT NULL,
+    estacion_nombre      VARCHAR(200),
+    inicio               TIMESTAMPTZ NOT NULL,
+    fin                  TIMESTAMPTZ,
+    acumulado_mm         REAL DEFAULT 0,
+    intensidad_max_mmh   REAL DEFAULT 0,
+    duracion_minutos     INT DEFAULT 0,
+    estado               VARCHAR(20) DEFAULT 'activo',
+    sospechoso           BOOLEAN DEFAULT FALSE,
+    motivo_sospecha      TEXT,
+    ceros_consecutivos   INT DEFAULT 0,
+    ultimo_ts_procesado  TIMESTAMPTZ,
+    ultima_actualizacion TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Agregar columnas si tabla ya existía sin ellas
+DO $$ BEGIN
+    ALTER TABLE public.eventos_lluvia ADD COLUMN IF NOT EXISTS sospechoso BOOLEAN DEFAULT FALSE;
+    ALTER TABLE public.eventos_lluvia ADD COLUMN IF NOT EXISTS motivo_sospecha TEXT;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_eventos_lluvia_activo
+ON public.eventos_lluvia (id_asignado, sensor_id, estado);
+
+-- =============================================================================
+-- 13. precipitacion_cuenca (promedios de precipitación por cuenca/subcuenca)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.precipitacion_cuenca (
+    ts                  TIMESTAMPTZ NOT NULL,
+    tipo                VARCHAR(10) NOT NULL,
+    nombre              VARCHAR(200) NOT NULL,
+    promedio_mm         REAL DEFAULT 0,
+    max_mm              REAL DEFAULT 0,
+    min_mm              REAL DEFAULT 0,
+    estaciones_con_dato INTEGER DEFAULT 0,
+    estaciones_total    INTEGER DEFAULT 0,
+    semaforo            VARCHAR(10),
+    ultima_actualizacion TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT precipitacion_cuenca_pkey
+        PRIMARY KEY (ts, tipo, nombre)
+);
+
+CREATE INDEX IF NOT EXISTS idx_precip_cuenca_ts
+ON public.precipitacion_cuenca (ts DESC, tipo);
+
+-- =============================================================================
+-- 14. Módulo BHG - Boletín Hidrológico Grijalva
+-- =============================================================================
+
+-- 14a. Datos diarios por presa/embalse
+CREATE TABLE IF NOT EXISTS public.bhg_presa_diario (
+    ts                      DATE NOT NULL,
+    presa                   TEXT NOT NULL,
+    nivel                   DOUBLE PRECISION,
+    curva_guia              DOUBLE PRECISION,
+    diff_curva_guia         DOUBLE PRECISION,
+    vol_almacenado          DOUBLE PRECISION,
+    pct_llenado_namo        DOUBLE PRECISION,
+    pct_llenado_name        DOUBLE PRECISION,
+    aportacion_vol          DOUBLE PRECISION,
+    aportacion_q            DOUBLE PRECISION,
+    extraccion_vol          DOUBLE PRECISION,
+    extraccion_q            DOUBLE PRECISION,
+    generacion_gwh          DOUBLE PRECISION,
+    factor_planta           DOUBLE PRECISION,
+    PRIMARY KEY (ts, presa)
+);
+
+-- 14b. Datos diarios por estación convencional
+CREATE TABLE IF NOT EXISTS public.bhg_estacion_diario (
+    ts                      DATE NOT NULL,
+    estacion                TEXT NOT NULL,
+    subcuenca               TEXT,
+    precip_24h              DOUBLE PRECISION,
+    precip_acum_mensual     DOUBLE PRECISION,
+    escala                  DOUBLE PRECISION,
+    gasto                   DOUBLE PRECISION,
+    evaporacion             DOUBLE PRECISION,
+    temp_max                DOUBLE PRECISION,
+    temp_min                DOUBLE PRECISION,
+    temp_amb                DOUBLE PRECISION,
+    PRIMARY KEY (ts, estacion)
+);
+
+-- 14c. Registro de archivos BHG procesados
+CREATE TABLE IF NOT EXISTS public.bhg_archivo (
+    id                      SERIAL PRIMARY KEY,
+    fecha                   DATE NOT NULL,
+    nombre_archivo          TEXT NOT NULL,
+    procesado_ts            TIMESTAMPTZ DEFAULT NOW(),
+    mes                     INT,
+    anio                    INT,
+    dias_con_datos          INT DEFAULT 0,
+    num_estaciones          INT DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bhg_archivo_fecha ON public.bhg_archivo(fecha);
+
+CREATE INDEX IF NOT EXISTS idx_bhg_presa_presa ON public.bhg_presa_diario(presa);
+CREATE INDEX IF NOT EXISTS idx_bhg_estacion_sub ON public.bhg_estacion_diario(subcuenca);
+CREATE INDEX IF NOT EXISTS idx_bhg_estacion_est ON public.bhg_estacion_diario(estacion);
+
+-- Convertir BHG a hypertables
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+        PERFORM create_hypertable('bhg_presa_diario', 'ts',
+            chunk_time_interval => INTERVAL '1 year',
+            if_not_exists => TRUE,
+            migrate_data => TRUE);
+        PERFORM create_hypertable('bhg_estacion_diario', 'ts',
+            chunk_time_interval => INTERVAL '1 year',
+            if_not_exists => TRUE,
+            migrate_data => TRUE);
+    END IF;
+END $$;
+
+-- =============================================================================
+-- 15. Triggers y funciones
 -- =============================================================================
 
 -- Trigger: actualizar estatus de estación al recibir transmisión
@@ -321,8 +473,14 @@ UNION ALL SELECT 'pronostico_lluvia', COUNT(*) FROM public.pronostico_lluvia
 UNION ALL SELECT 'funvasos_horario', COUNT(*) FROM public.funvasos_horario
 UNION ALL SELECT 'ultimas_mediciones', COUNT(*) FROM public.ultimas_mediciones
 UNION ALL SELECT 'estatus_estaciones', COUNT(*) FROM public.estatus_estaciones
+UNION ALL SELECT 'alertas_precipitacion', COUNT(*) FROM public.alertas_precipitacion
+UNION ALL SELECT 'eventos_lluvia', COUNT(*) FROM public.eventos_lluvia
+UNION ALL SELECT 'precipitacion_cuenca', COUNT(*) FROM public.precipitacion_cuenca
+UNION ALL SELECT 'bhg_presa_diario', COUNT(*) FROM public.bhg_presa_diario
+UNION ALL SELECT 'bhg_estacion_diario', COUNT(*) FROM public.bhg_estacion_diario
+UNION ALL SELECT 'bhg_archivo', COUNT(*) FROM public.bhg_archivo
 ORDER BY 1;
 
 -- =====================================================================
--- FIN - DEPLOY TIMESCALEDB COMPLETO
+-- FIN - DEPLOY TIMESCALEDB v3.1 COMPLETO (16 tablas)
 -- =====================================================================

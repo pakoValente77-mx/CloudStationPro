@@ -503,3 +503,38 @@ grijalva-rain-forecast-service/
 
 # Static vendor files
 static/
+publicado_ok3/
+publish_produccion/
+publicado_ok4/
+
+# Android build artifacts
+AndroidPIH/.gradle/
+AndroidPIH/app/build/
+AndroidPIH/build/
+AndroidPIH/local.properties
+*.apk
+*.aab
+
+# iOS/Xcode build artifacts  
+ChatiOS/CloudStationChat.xcodeproj/xcuserdata/
+ChatiOS/CloudStationChat.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+
+# Java/Gradle build artifacts
+grijalva-hydro-model-service/.gradle/
+grijalva-hydro-model-service/build/
+grijalva-hydro-model-service/bin/
+grijalva-notification-service/.gradle/
+grijalva-notification-service/build/
+grijalva-notification-service/bin/
+
+# Electron
+ChatDesktop/node_modules/
+ChatDesktop/dist/
+
+# Node modules
+node_modules/
+
+# Firebase credentials (sensitive)
+*firebase-adminsdk*.json
+CloudStationWeb/cuenca-grijalva-firebase-adminsdk-fbsvc*.json

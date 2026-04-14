@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PIH</string>
+    <string name="app_subtitle">Plataforma Integral Hidrometeorológica</string>
+    <string name="cfe_unit">CFE Subgerencia Técnica Grijalva</string>
+</resources>

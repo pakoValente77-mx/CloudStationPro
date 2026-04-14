@@ -1,0 +1,58 @@
+name: CloudStationChat
+options:
+  bundleIdPrefix: com.cfe.grijalva
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "L9749C3YM5"
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  SignalRClient:
+    url: https://github.com/moozzyk/SignalR-Client-Swift
+    from: "0.9.0"
+
+targets:
+  CloudStationChat:
+    type: application
+    platform: iOS
+    sources:
+      - CloudStationChat
+    settings:
+      base:
+        INFOPLIST_FILE: CloudStationChat/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.cfe.grijalva.cloudstationchat
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MULTIPLE_WINDOWS: NO
+    dependencies:
+      - package: SignalRClient
+    info:
+      path: CloudStationChat/Info.plist
+      properties:
+        CFBundleDisplayName: PIH
+        CFBundleName: PIH
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+          UIImageName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - remote-notification

@@ -1,7 +1,7 @@
 -- =====================================================================
 -- CLOUDSTATION PIH - Script COMPLETO de Despliegue a Producción
 -- Base de datos: IGSCLOUD (SQL Server)
--- Fecha: 2026-04-08
+-- Fecha: 2026-04-13
 -- Descripción: Script completo desde cero - Identity, Documentos,
 --              Usuarios, Roles, Tablas nuevas, Seeds
 -- INSTRUCCIONES: 
@@ -14,7 +14,7 @@ USE IGSCLOUD;
 GO
 
 PRINT '================================================================'
-PRINT ' CLOUDSTATION PIH - DEPLOY PRODUCCIÓN v2.1 (COMPLETO)'
+PRINT ' CLOUDSTATION PIH - DEPLOY PRODUCCIÓN v3.0 (COMPLETO)'
 PRINT ' Fecha: ' + CONVERT(VARCHAR, GETDATE(), 120)
 PRINT '================================================================'
 PRINT ''
@@ -423,7 +423,13 @@ PRINT '>> C4. Campo PasswordLastChanged en AspNetUsers...'
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('AspNetUsers') AND name = 'PasswordLastChanged')
 BEGIN
     ALTER TABLE AspNetUsers ADD PasswordLastChanged DATETIME2 NULL;
-    -- Inicializar para usuarios existentes (les da 30 días desde ahora)
+END
+GO
+
+-- Inicializar para usuarios existentes (les da 30 días desde ahora)
+-- Se ejecuta en batch separado para que SQL Server reconozca la columna ya creada
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('AspNetUsers') AND name = 'PasswordLastChanged')
+BEGIN
     UPDATE AspNetUsers SET PasswordLastChanged = GETUTCDATE() WHERE PasswordLastChanged IS NULL;
     PRINT '   + PasswordLastChanged agregada e inicializada'
 END
@@ -655,7 +661,36 @@ ELSE PRINT '   = DeviceTokens ya existe'
 GO
 
 -- =====================================================================
--- E6. Organismo (tabla legacy Dapper)
+-- E6. UmbralAlertas (umbrales para alertas tempranas)
+-- =====================================================================
+PRINT '>> E6. UmbralAlertas...'
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UmbralAlertas')
+BEGIN
+    CREATE TABLE UmbralAlertas (
+        Id                  BIGINT IDENTITY(1,1) PRIMARY KEY,
+        IdSensor            UNIQUEIDENTIFIER NOT NULL,
+        Umbral              NVARCHAR(100) NULL,
+        ValorReferencia     DECIMAL(18,4) NOT NULL,
+        Operador            NVARCHAR(10) NOT NULL DEFAULT '>=',
+        Nombre              NVARCHAR(200) NOT NULL,
+        Activo              BIT NOT NULL DEFAULT 1,
+        Color               NVARCHAR(20) DEFAULT '#ff0000',
+        Periodo             NVARCHAR(20) DEFAULT 'horario',
+        IdUsuarioRegistra   NVARCHAR(256) NULL,
+        FechaCreacion       DATETIME2 DEFAULT GETDATE(),
+        CONSTRAINT FK_UmbralAlertas_Sensor 
+            FOREIGN KEY (IdSensor) REFERENCES Sensor(Id)
+    );
+    CREATE INDEX IX_UmbralAlertas_Sensor ON UmbralAlertas(IdSensor);
+    CREATE INDEX IX_UmbralAlertas_Activo ON UmbralAlertas(Activo) WHERE Activo = 1;
+    PRINT '   + UmbralAlertas creada'
+END
+ELSE PRINT '   = UmbralAlertas ya existe'
+GO
+
+-- =====================================================================
+-- E7. Organismo (tabla legacy Dapper)
 -- =====================================================================
 PRINT '>> E6. Tabla Organismo...'
 
@@ -788,6 +823,15 @@ BEGIN
     PRINT '   + Rol SoloVasos creado'
 END
 ELSE PRINT '   = SoloVasos ya existe'
+
+-- ApiConsumer (consumo exclusivo de API REST de pronóstico hidrológico)
+IF NOT EXISTS (SELECT 1 FROM AspNetRoles WHERE NormalizedName = 'APICONSUMER')
+BEGIN
+    INSERT INTO AspNetRoles (Id, [Name], NormalizedName, ConcurrencyStamp)
+    VALUES (NEWID(), 'ApiConsumer', 'APICONSUMER', NEWID());
+    PRINT '   + Rol ApiConsumer creado'
+END
+ELSE PRINT '   = ApiConsumer ya existe'
 GO
 
 -- =====================================================================
@@ -905,7 +949,7 @@ SELECT 'Operativas', t.name,
 FROM sys.tables t 
 WHERE t.name IN ('LoginAudits','CentrosTrabajo','Organismo','FunVasosReferencias',
                  'MantenimientoOrden','MantenimientoBitacora','MantenimientoAdjunto',
-                 'AlertRecord','ChatMessages','DeviceTokens')
+                 'AlertRecord','ChatMessages','DeviceTokens','UmbralAlertas')
 ORDER BY 1, 2;
 
 SELECT 'Roles' AS Tipo, [Name] AS Valor FROM AspNetRoles ORDER BY [Name];

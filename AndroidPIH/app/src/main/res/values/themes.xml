@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PIH" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF14141F</item>
+        <item name="android:navigationBarColor">#FF1C1C2E</item>
+        <item name="android:windowBackground">#FF14141F</item>
+    </style>
+</resources>

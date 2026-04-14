@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1084676863375",
+    "project_id": "cuenca-grijalva",
+    "storage_bucket": "cuenca-grijalva.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1084676863375:android:4d82932ec024d1fe4107fa",
+        "android_client_info": {
+          "package_name": "mx.cfe.grijalva.pih"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCL7aw00mEEdjiZKgUc1dnuVdl5m8ZkZso"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
