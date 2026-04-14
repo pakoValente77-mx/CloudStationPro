@@ -1,0 +1,471 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A6B26A2C9A7856A8C6225ED /* RainfallModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBAA619C697F2D47079D699 /* RainfallModels.swift */; };
+		0CE16003C086F206693525BB /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D044D32454E459CD25271815 /* ChatService.swift */; };
+		2C78E4C70DB682C324DD6E22 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE81252DA39F4BA60BB25A10 /* NotificationService.swift */; };
+		2CC67C4DE534AFBC10CD48D8 /* MapModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F26CD7AE3CF402D83E4C2560 /* MapModels.swift */; };
+		2ECCC41E6A37934F9205BB33 /* CloudStationChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88831B87C862EB8AFE5556E8 /* CloudStationChatApp.swift */; };
+		35E9D6EF94075ADCC6886273 /* PresaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0024749088A7001E6A0B305 /* PresaDetailView.swift */; };
+		3EFE3283A3F293445D58CA0E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524DEB27C9E05ACD8B6CB1AC /* LoginView.swift */; };
+		423D8D6A580970EC66358D5F /* OnlineUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BFD8D3EB9644558E0FDD207 /* OnlineUsersView.swift */; };
+		52960A12EEBD2366578CCD7A /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E826803D46C81124BB4EAE4 /* AuthService.swift */; };
+		596B4E5BABE7B1CC07033BF1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2951AEAEEB3F340100F079B /* ChatView.swift */; };
+		59CA7D048C9FE51AAE643199 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193D8C9A8ED64969195DF1B1 /* SettingsView.swift */; };
+		638E9271EFD0294EA94DBA4F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B61947AB9C2F2146B29136A3 /* GoogleService-Info.plist */; };
+		6A41F886F71681A0044D8FB5 /* FunVasosModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386580FD46FDE481DC4A066B /* FunVasosModels.swift */; };
+		6BAFB2103BB38246E598CB2A /* RainfallReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE4F3AAB16B360F9E7CAA424 /* RainfallReportView.swift */; };
+		7C28C58825A9E38BAC90E5F9 /* StationDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B80165171A610FD508AFBB2 /* StationDataView.swift */; };
+		909D2B78E2AC48699B4E6094 /* FunVasosService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94A3C753CF4F4AFD8580DE2E /* FunVasosService.swift */; };
+		981936D1259FFAD7F074CA0E /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895CE7BDBAB4E0F4F58B3490 /* MainTabView.swift */; };
+		BDA3E788BF3892505ADAC9EF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FAAFC9D6F95D8635A318BB5 /* Assets.xcassets */; };
+		D399D3841F19AA7725447BA2 /* RainfallService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5458B187B5153CF73471567 /* RainfallService.swift */; };
+		D6A57AC978D0558EC0F34775 /* ChatContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE374B26DF5922D9339230A /* ChatContainerView.swift */; };
+		E11ED2AD73398CF8CF8FEAC9 /* MapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664CF59B334023BBAA8B7D4D /* MapService.swift */; };
+		E5B034B6F446D4B3726FDA9A /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA5CBD7D24BFD68F3FE3356 /* ChatModels.swift */; };
+		EDCC8481A3A19DA10F3408EC /* StationDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9869D429EB83A54F300B6C1 /* StationDataService.swift */; };
+		EE0A3F49F84822E904243512 /* StationMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98456F4CD9B2A8DD53313CCD /* StationMapView.swift */; };
+		EF8F42B404F2355A57FEE38B /* StationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6968F9EBC67D43BB246B4A86 /* StationModels.swift */; };
+		F2558BC0A107DAD8EE7E03B7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7454C7167AC7F05B416E29A3 /* AppDelegate.swift */; };
+		FAE69EA6B603C81932CC2D0E /* FunVasosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B2DAC73387638BA7AFCAD21 /* FunVasosView.swift */; };
+		FF8F916CF72350CFE617FF1E /* SignalRClient in Frameworks */ = {isa = PBXBuildFile; productRef = 2F42AA5F70E80D3AD5301EC8 /* SignalRClient */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0E826803D46C81124BB4EAE4 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		193D8C9A8ED64969195DF1B1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1B2DAC73387638BA7AFCAD21 /* FunVasosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunVasosView.swift; sourceTree = "<group>"; };
+		2DE374B26DF5922D9339230A /* ChatContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatContainerView.swift; sourceTree = "<group>"; };
+		386580FD46FDE481DC4A066B /* FunVasosModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunVasosModels.swift; sourceTree = "<group>"; };
+		3BFD8D3EB9644558E0FDD207 /* OnlineUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineUsersView.swift; sourceTree = "<group>"; };
+		4FAAFC9D6F95D8635A318BB5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		524DEB27C9E05ACD8B6CB1AC /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		62A696B2D8A4BC3E04A0E950 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		664CF59B334023BBAA8B7D4D /* MapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapService.swift; sourceTree = "<group>"; };
+		6968F9EBC67D43BB246B4A86 /* StationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationModels.swift; sourceTree = "<group>"; };
+		7454C7167AC7F05B416E29A3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		88831B87C862EB8AFE5556E8 /* CloudStationChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStationChatApp.swift; sourceTree = "<group>"; };
+		895CE7BDBAB4E0F4F58B3490 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		8B80165171A610FD508AFBB2 /* StationDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationDataView.swift; sourceTree = "<group>"; };
+		8CBAA619C697F2D47079D699 /* RainfallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RainfallModels.swift; sourceTree = "<group>"; };
+		8E15D1DF741E1A7F6123A698 /* CloudStationChat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CloudStationChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		94A3C753CF4F4AFD8580DE2E /* FunVasosService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunVasosService.swift; sourceTree = "<group>"; };
+		98456F4CD9B2A8DD53313CCD /* StationMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationMapView.swift; sourceTree = "<group>"; };
+		AE81252DA39F4BA60BB25A10 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		B2951AEAEEB3F340100F079B /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		B61947AB9C2F2146B29136A3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		BDA5CBD7D24BFD68F3FE3356 /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		D0024749088A7001E6A0B305 /* PresaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresaDetailView.swift; sourceTree = "<group>"; };
+		D044D32454E459CD25271815 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+		E9869D429EB83A54F300B6C1 /* StationDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationDataService.swift; sourceTree = "<group>"; };
+		EE4F3AAB16B360F9E7CAA424 /* RainfallReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RainfallReportView.swift; sourceTree = "<group>"; };
+		F26CD7AE3CF402D83E4C2560 /* MapModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapModels.swift; sourceTree = "<group>"; };
+		F5458B187B5153CF73471567 /* RainfallService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RainfallService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		81AF114D8900B96CDC5C4F43 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF8F916CF72350CFE617FF1E /* SignalRClient in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		46E6BCD9D439656202D5AAD4 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				0E826803D46C81124BB4EAE4 /* AuthService.swift */,
+				D044D32454E459CD25271815 /* ChatService.swift */,
+				94A3C753CF4F4AFD8580DE2E /* FunVasosService.swift */,
+				664CF59B334023BBAA8B7D4D /* MapService.swift */,
+				AE81252DA39F4BA60BB25A10 /* NotificationService.swift */,
+				F5458B187B5153CF73471567 /* RainfallService.swift */,
+				E9869D429EB83A54F300B6C1 /* StationDataService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		5084DA6B03A9F297199EFBBF = {
+			isa = PBXGroup;
+			children = (
+				C50BC17DE4F2D924248AB9E0 /* CloudStationChat */,
+				68BC1E8B31FA010AE40DFFE9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		61D3B235A35DDC49223F0E61 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2DE374B26DF5922D9339230A /* ChatContainerView.swift */,
+				B2951AEAEEB3F340100F079B /* ChatView.swift */,
+				1B2DAC73387638BA7AFCAD21 /* FunVasosView.swift */,
+				524DEB27C9E05ACD8B6CB1AC /* LoginView.swift */,
+				895CE7BDBAB4E0F4F58B3490 /* MainTabView.swift */,
+				3BFD8D3EB9644558E0FDD207 /* OnlineUsersView.swift */,
+				D0024749088A7001E6A0B305 /* PresaDetailView.swift */,
+				EE4F3AAB16B360F9E7CAA424 /* RainfallReportView.swift */,
+				193D8C9A8ED64969195DF1B1 /* SettingsView.swift */,
+				8B80165171A610FD508AFBB2 /* StationDataView.swift */,
+				98456F4CD9B2A8DD53313CCD /* StationMapView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		68BC1E8B31FA010AE40DFFE9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8E15D1DF741E1A7F6123A698 /* CloudStationChat.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C50BC17DE4F2D924248AB9E0 /* CloudStationChat */ = {
+			isa = PBXGroup;
+			children = (
+				7454C7167AC7F05B416E29A3 /* AppDelegate.swift */,
+				4FAAFC9D6F95D8635A318BB5 /* Assets.xcassets */,
+				88831B87C862EB8AFE5556E8 /* CloudStationChatApp.swift */,
+				B61947AB9C2F2146B29136A3 /* GoogleService-Info.plist */,
+				62A696B2D8A4BC3E04A0E950 /* Info.plist */,
+				E156E68BCB88E2F76FC2F29F /* Models */,
+				46E6BCD9D439656202D5AAD4 /* Services */,
+				61D3B235A35DDC49223F0E61 /* Views */,
+			);
+			path = CloudStationChat;
+			sourceTree = "<group>";
+		};
+		E156E68BCB88E2F76FC2F29F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BDA5CBD7D24BFD68F3FE3356 /* ChatModels.swift */,
+				386580FD46FDE481DC4A066B /* FunVasosModels.swift */,
+				F26CD7AE3CF402D83E4C2560 /* MapModels.swift */,
+				8CBAA619C697F2D47079D699 /* RainfallModels.swift */,
+				6968F9EBC67D43BB246B4A86 /* StationModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C441D165DAE2B89B5D54CC16 /* CloudStationChat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 51801DCE03679154FDE176AA /* Build configuration list for PBXNativeTarget "CloudStationChat" */;
+			buildPhases = (
+				9DC3A15136F8679C3FFDD6C2 /* Sources */,
+				31A062C99F691F7B1630B04B /* Resources */,
+				81AF114D8900B96CDC5C4F43 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CloudStationChat;
+			packageProductDependencies = (
+				2F42AA5F70E80D3AD5301EC8 /* SignalRClient */,
+			);
+			productName = CloudStationChat;
+			productReference = 8E15D1DF741E1A7F6123A698 /* CloudStationChat.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AB6D5529E33E26A4030FE62E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					C441D165DAE2B89B5D54CC16 = {
+						DevelopmentTeam = L9749C3YM5;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 0952D564D2F13D883585B184 /* Build configuration list for PBXProject "CloudStationChat" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5084DA6B03A9F297199EFBBF;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7219C2840CFA3FFB1B9EA3DB /* XCRemoteSwiftPackageReference "SignalR-Client-Swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 68BC1E8B31FA010AE40DFFE9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C441D165DAE2B89B5D54CC16 /* CloudStationChat */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		31A062C99F691F7B1630B04B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BDA3E788BF3892505ADAC9EF /* Assets.xcassets in Resources */,
+				638E9271EFD0294EA94DBA4F /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9DC3A15136F8679C3FFDD6C2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F2558BC0A107DAD8EE7E03B7 /* AppDelegate.swift in Sources */,
+				52960A12EEBD2366578CCD7A /* AuthService.swift in Sources */,
+				D6A57AC978D0558EC0F34775 /* ChatContainerView.swift in Sources */,
+				E5B034B6F446D4B3726FDA9A /* ChatModels.swift in Sources */,
+				0CE16003C086F206693525BB /* ChatService.swift in Sources */,
+				596B4E5BABE7B1CC07033BF1 /* ChatView.swift in Sources */,
+				2ECCC41E6A37934F9205BB33 /* CloudStationChatApp.swift in Sources */,
+				6A41F886F71681A0044D8FB5 /* FunVasosModels.swift in Sources */,
+				909D2B78E2AC48699B4E6094 /* FunVasosService.swift in Sources */,
+				FAE69EA6B603C81932CC2D0E /* FunVasosView.swift in Sources */,
+				3EFE3283A3F293445D58CA0E /* LoginView.swift in Sources */,
+				981936D1259FFAD7F074CA0E /* MainTabView.swift in Sources */,
+				2CC67C4DE534AFBC10CD48D8 /* MapModels.swift in Sources */,
+				E11ED2AD73398CF8CF8FEAC9 /* MapService.swift in Sources */,
+				2C78E4C70DB682C324DD6E22 /* NotificationService.swift in Sources */,
+				423D8D6A580970EC66358D5F /* OnlineUsersView.swift in Sources */,
+				35E9D6EF94075ADCC6886273 /* PresaDetailView.swift in Sources */,
+				0A6B26A2C9A7856A8C6225ED /* RainfallModels.swift in Sources */,
+				6BAFB2103BB38246E598CB2A /* RainfallReportView.swift in Sources */,
+				D399D3841F19AA7725447BA2 /* RainfallService.swift in Sources */,
+				59CA7D048C9FE51AAE643199 /* SettingsView.swift in Sources */,
+				EDCC8481A3A19DA10F3408EC /* StationDataService.swift in Sources */,
+				7C28C58825A9E38BAC90E5F9 /* StationDataView.swift in Sources */,
+				EE0A3F49F84822E904243512 /* StationMapView.swift in Sources */,
+				EF8F42B404F2355A57FEE38B /* StationModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2839D52146F60F1EB5AA70EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = L9749C3YM5;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		A5F3658BBA75D6CA94942BA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = CloudStationChat/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.cfe.grijalva.cloudstationchat;
+				SDKROOT = iphoneos;
+				SUPPORTS_MULTIPLE_WINDOWS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AB90792C5A42158C49113397 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = CloudStationChat/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.cfe.grijalva.cloudstationchat;
+				SDKROOT = iphoneos;
+				SUPPORTS_MULTIPLE_WINDOWS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DB517A1AB74712891DC3234B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = L9749C3YM5;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0952D564D2F13D883585B184 /* Build configuration list for PBXProject "CloudStationChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB517A1AB74712891DC3234B /* Debug */,
+				2839D52146F60F1EB5AA70EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		51801DCE03679154FDE176AA /* Build configuration list for PBXNativeTarget "CloudStationChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB90792C5A42158C49113397 /* Debug */,
+				A5F3658BBA75D6CA94942BA6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7219C2840CFA3FFB1B9EA3DB /* XCRemoteSwiftPackageReference "SignalR-Client-Swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/moozzyk/SignalR-Client-Swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2F42AA5F70E80D3AD5301EC8 /* SignalRClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7219C2840CFA3FFB1B9EA3DB /* XCRemoteSwiftPackageReference "SignalR-Client-Swift" */;
+			productName = SignalRClient;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AB6D5529E33E26A4030FE62E /* Project object */;
+}
