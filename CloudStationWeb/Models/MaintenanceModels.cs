@@ -73,6 +73,7 @@ namespace CloudStationWeb.Models
         public string? FiltroEstado { get; set; }
         public string? FiltroTipo { get; set; }
         public Guid? FiltroEstacion { get; set; }
+        public bool FiltroSoloCfe { get; set; } = true;
         public int TotalActivas { get; set; }
         public int TotalEstacionesAisladas { get; set; }
     }

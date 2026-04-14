@@ -27,16 +27,22 @@ namespace CloudStationWeb.Controllers
             return View();
         }
 
-        private async Task<Dictionary<string, string>> GetStationNamesMap()
+        private async Task<Dictionary<string, string>> GetStationNamesMap(bool onlyCfe = true)
         {
             try
             {
-               return await _context.Database
-                    .SqlQueryRaw<StationNameDto>(@"
-                        SELECT g.IdSatelital, e.Nombre 
+                var sql = onlyCfe
+                    ? @"SELECT g.IdSatelital, e.Nombre 
                         FROM DatosGOES g
                         JOIN Estacion e ON g.IdEstacion = e.Id
-                    ")
+                        JOIN Organismo o ON e.IdOrganismo = o.Id
+                        WHERE o.Nombre = 'Comisión Federal de Electricidad'"
+                    : @"SELECT g.IdSatelital, e.Nombre 
+                        FROM DatosGOES g
+                        JOIN Estacion e ON g.IdEstacion = e.Id";
+
+               return await _context.Database
+                    .SqlQueryRaw<StationNameDto>(sql)
                     .ToDictionaryAsync(s => s.IdSatelital, s => s.Nombre);
             }
             catch
@@ -149,7 +155,7 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTransmissionStats(string period = "24h")
+        public async Task<IActionResult> GetTransmissionStats(string period = "24h", bool onlyCfe = true)
         {
             try
             {
@@ -164,7 +170,7 @@ namespace CloudStationWeb.Controllers
                 await conn.OpenAsync();
 
                 // Get authoritative station list from SQL Server
-                var stationNamesMap = await GetStationNamesMap();
+                var stationNamesMap = await GetStationNamesMap(onlyCfe);
                 var validStationIds = stationNamesMap.Keys.ToArray();
 
                 var stats = new TransmissionStats();
@@ -234,7 +240,7 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetStationHealth(string period = "24h", string filter = "all")
+        public async Task<IActionResult> GetStationHealth(string period = "24h", string filter = "all", bool onlyCfe = true)
         {
             try
             {
@@ -249,7 +255,7 @@ namespace CloudStationWeb.Controllers
                 await conn.OpenAsync();
 
                 // 1. Obtener lista autoritativa de SQL Server
-                var stationNamesMap = await GetStationNamesMap();
+                var stationNamesMap = await GetStationNamesMap(onlyCfe);
                 var validIds = stationNamesMap.Keys.ToArray();
 
                 if (validIds.Length == 0)
@@ -345,7 +351,7 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTransmissionTimeline(string period = "24h")
+        public async Task<IActionResult> GetTransmissionTimeline(string period = "24h", bool onlyCfe = true)
         {
             try
             {
@@ -369,7 +375,7 @@ namespace CloudStationWeb.Controllers
                 var timeline = new List<TransmissionTimelinePoint>();
 
                 // Obtener nombres de estaciones
-                var stationNames = await GetStationNamesMap();
+                var stationNames = await GetStationNamesMap(onlyCfe);
                 var validIds = stationNames.Keys.ToArray();
 
                 if (validIds.Length == 0)
@@ -415,7 +421,7 @@ namespace CloudStationWeb.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTransmissionTrend(string period = "24h")
+        public async Task<IActionResult> GetTransmissionTrend(string period = "24h", bool onlyCfe = true)
         {
             try
             {
@@ -437,7 +443,7 @@ namespace CloudStationWeb.Controllers
                 await conn.OpenAsync();
 
                 // Get authoritative list
-                var stationNames = await GetStationNamesMap();
+                var stationNames = await GetStationNamesMap(onlyCfe);
                 var validIds = stationNames.Keys.ToArray();
                 var trend = new List<TransmissionTrendPoint>();
 

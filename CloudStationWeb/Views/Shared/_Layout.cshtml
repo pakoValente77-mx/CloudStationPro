@@ -90,6 +90,51 @@
             font-size: 13px !important;
             padding: 10px 16px !important;
         }
+
+        /* ── Dropdown menus styling ── */
+        .ui.inverted.menu .ui.dropdown .menu,
+        .ui.inverted.menu .nav-dropdown > .menu,
+        .pih-dropdown-menu {
+            background: rgba(14,18,26,0.97) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            border-radius: 8px !important;
+            min-width: 200px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+        }
+        .ui.inverted.menu .ui.dropdown .menu > .item,
+        .ui.inverted.menu .ui.dropdown .menu > a.item,
+        .ui.inverted.menu .nav-dropdown > .menu > .item,
+        .ui.inverted.menu .nav-dropdown > .menu > a.item {
+            color: #fff !important;
+            transition: background 0.15s !important;
+        }
+        .ui.inverted.menu .ui.dropdown .menu > .item:hover,
+        .ui.inverted.menu .ui.dropdown .menu > a.item:hover,
+        .ui.inverted.menu .nav-dropdown > .menu > .item:hover,
+        .ui.inverted.menu .nav-dropdown > .menu > a.item:hover {
+            background: rgba(255,255,255,0.08) !important;
+            color: #fff !important;
+        }
+        .ui.inverted.menu .ui.dropdown .menu > .item.active,
+        .ui.inverted.menu .ui.dropdown .menu > a.item.active,
+        .ui.inverted.menu .nav-dropdown > .menu > .item.active,
+        .ui.inverted.menu .nav-dropdown > .menu > a.item.active {
+            background: rgba(76,175,80,0.15) !important;
+            color: #81c784 !important;
+        }
+        .ui.inverted.menu .ui.dropdown .menu .divider,
+        .pih-dropdown-menu .divider {
+            border-color: rgba(255,255,255,0.1) !important;
+        }
+        .nav-dropdown > .dropdown.icon {
+            margin-left: 2px !important;
+            font-size: 10px !important;
+            opacity: 0.6;
+        }
+        .nav-dropdown > .text {
+            display: inline !important;
+        }
+
         /* User dropdown menu overrides */
         .ui.fixed.menu .right.menu .ui.dropdown .menu {
             background: #111827 !important;
@@ -192,6 +237,7 @@
             /* Hide all nav items except logo and hamburger on narrow screens */
             .ui.fixed.menu > a.item:not(.header):not(.hamburger-btn),
             .ui.fixed.menu > .ui.dropdown.item,
+            .ui.fixed.menu > .nav-dropdown,
             .ui.fixed.menu > .right.menu {
                 display: none !important;
             }
@@ -232,15 +278,32 @@
             <img src="/img/logo-pih.svg" alt="PIH" />
             <span>PIH</span>
         </div>
+
         @if (!User.IsInRole("SoloVasos"))
         {
-        <a class="sidebar-item" href="/Map"><i class="map icon"></i> Mapa</a>
-        <a class="sidebar-item" href="/HourlyReport"><i class="clock outline icon"></i> Cortes Horarios</a>
-        <a class="sidebar-item" href="/RainfallReport"><i class="tint icon"></i> Corte de Lluvia</a>
-        <a class="sidebar-item" href="/StationGroup"><i class="users icon"></i> Mis Grupos</a>
-        <a class="sidebar-item" href="/DataAnalysis"><i class="chart line icon"></i> Análisis</a>
-        <a class="sidebar-item" href="@Url.Action("Index", "GoesMonitoring")"><i class="satellite icon"></i> GOES</a>
+        <a class="sidebar-item" href="/Map"><i class="map icon" style="color:#4fc3f7;"></i> Mapa</a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title"><i class="broadcast tower icon"></i> Monitoreo</div>
+        <a class="sidebar-item" href="/HourlyReport"><i class="clock outline icon" style="color:#4fc3f7;"></i> Cortes Horarios</a>
+        <a class="sidebar-item" href="/RainfallReport"><i class="tint icon" style="color:#64b5f6;"></i> Corte de Lluvia</a>
+        <a class="sidebar-item" href="@Url.Action("Index", "GoesMonitoring")"><i class="satellite icon" style="color:#ce93d8;"></i> GOES</a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title"><i class="chart line icon"></i> Análisis</div>
+        <a class="sidebar-item" href="/DataAnalysis"><i class="chart area icon" style="color:#4fc3f7;"></i> Análisis de Datos</a>
+        <a class="sidebar-item" href="/StationGroup"><i class="object group icon" style="color:#81c784;"></i> Mis Grupos</a>
         }
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title"><i class="water icon"></i> Hidrología</div>
+        <a class="sidebar-item" href="/FunVasos"><i class="water icon" style="color:#64b5f6;"></i> Fun. Vasos</a>
+        <a class="sidebar-item" href="/Bhg"><i class="chart bar icon" style="color:#81c784;"></i> Boletín BHG</a>
+        @if (!User.IsInRole("SoloVasos"))
+        {
+        <a class="sidebar-item" href="@Url.Action("Index", "RainForecast")"><i class="cloud rain icon" style="color:#ce93d8;"></i> Pronóstico de Lluvia</a>
+        }
+
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
         {
             <div class="sidebar-divider"></div>
@@ -256,21 +319,19 @@
             <a class="sidebar-item" href="@Url.Action("Index", "Settings")"><i class="sliders horizontal icon" style="color:#4fc3f7;"></i> Configuración</a>
             }
         }
+
+        @if (!User.IsInRole("SoloVasos"))
+        {
         <div class="sidebar-divider"></div>
-        @if (!User.IsInRole("SoloVasos"))
-        {
-        <a class="sidebar-item" href="/Documents"><i class="folder open icon"></i> Repositorio</a>
-        }
-        <a class="sidebar-item" href="/FunVasos"><i class="water icon"></i> Fun. Vasos</a>
-        @if (!User.IsInRole("SoloVasos"))
-        {
-        <a class="sidebar-item" href="@Url.Action("Index", "RainForecast")"><i class="cloud rain icon"></i> Pronóstico</a>
-        <a class="sidebar-item" href="@Url.Action("Index", "MisExport")"><i class="file export icon" style="color:#2185d0;"></i> Exportar .MIS</a>
+        <div class="sidebar-section-title"><i class="toolbox icon"></i> Herramientas</div>
+        <a class="sidebar-item" href="/Documents"><i class="folder open icon" style="color:#fbbf24;"></i> Repositorio</a>
+        <a class="sidebar-item" href="@Url.Action("Index", "MisExport")"><i class="file export icon" style="color:#4fc3f7;"></i> Exportar .MIS</a>
         @if (User.Identity?.IsAuthenticated == true)
         {
             <a class="sidebar-item" href="@Url.Action("Index", "Chat")" id="sidebarChatLink"><i class="comments icon"></i> Chat <span class="dm-global-badge" id="sidebarDmBadge" style="display:none;"></span></a>
         }
         }
+
         <div class="sidebar-divider"></div>
         @if (User.Identity?.IsAuthenticated == true)
         {
@@ -290,85 +351,125 @@
             <a class="hamburger-btn item" onclick="openSidebar()">
                 <i class="bars icon" style="margin:0;"></i>
             </a>
-            @if (!User.IsInRole("SoloVasos"))
-            {
-            <a href="/Map" class="item">
-                <i class="map icon"></i> Mapa
-            </a>
-            <a href="/HourlyReport" class="item">
-                <i class="clock outline icon"></i> Cortes Horarios
-            </a>
-            <a href="/RainfallReport" class="item">
-                <i class="tint icon"></i> Corte Lluvia
-            </a>
-            <a href="/StationGroup" class="item">
-                <i class="users icon"></i> Mis Grupos
-            </a>
-            <a href="/DataAnalysis" class="item">
-                <i class="chart line icon"></i> Análisis
-            </a>
-            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GoesMonitoring" ? "active" : "")" href="@Url.Action("Index", "GoesMonitoring")">
-                <i class="satellite icon"></i> GOES
-            </a>
-            }
-            
-            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
-            {
-                <div id="nav-admin-dropdown" class="ui dropdown item @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance","Notification","EarlyWarning","Settings"}.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")">
-                    <i class="cogs icon"></i> Administración <i class="dropdown icon"></i>
-                    <div class="menu" style="background: rgba(14,18,26,0.97) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 8px !important; min-width: 220px;">
-                        <a class="item" href="@Url.Action("Index", "StationAdmin")" style="color: #fff !important;">
-                            <i class="server icon" style="color: #81c784;"></i> Estaciones
-                        </a>
-                        <a class="item" href="@Url.Action("Index", "Maintenance")" style="color: #fff !important;">
-                            <i class="wrench icon" style="color: #fbbf24;"></i> Mantenimiento
-                        </a>
-                        <a class="item" href="@Url.Action("Index", "WatershedAdmin")" style="color: #fff !important;">
-                            <i class="tint icon" style="color: #64b5f6;"></i> Cuencas y Subcuencas
-                        </a>
-                        <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
-                        <a class="item" href="@Url.Action("Index", "Admin")" style="color: #fff !important;">
-                            <i class="users cog icon" style="color: #ffb74d;"></i> Usuarios
-                        </a>
-                        <a class="item" href="@Url.Action("Index", "Notification")" style="color: #fff !important;">
-                            <i class="bell icon" style="color: #ce93d8;"></i> Notificaciones
-                        </a>
-                        <a class="item" href="@Url.Action("Index", "EarlyWarning")" style="color: #fff !important;">
-                            <i class="exclamation triangle icon" style="color: #e74c3c;"></i> Alertas Tempranas
-                        </a>
-                        @if (User.IsInRole("SuperAdmin"))
-                        {
-                        <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
-                        <a class="item" href="@Url.Action("Index", "Settings")" style="color: #fff !important;">
-                            <i class="sliders horizontal icon" style="color: #4fc3f7;"></i> Configuración
-                        </a>
-                        }
-                    </div>
-                </div>
+
+            @{
+                var ctrl = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
             }
 
             @if (!User.IsInRole("SoloVasos"))
             {
-            <a href="/Documents" class="item" id="nav-documents">
-                <i class="folder open icon"></i> Repositorio
-                <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
+            <!-- Mapa: standalone -->
+            <a href="/Map" class="item @(ctrl == "Map" ? "active" : "")">
+                <i class="map icon"></i> Mapa
             </a>
+
+            <!-- Monitoreo dropdown -->
+            <div class="ui dropdown item nav-dropdown @(new[]{"HourlyReport","RainfallReport","GoesMonitoring"}.Contains(ctrl) ? "active" : "")">
+                <span class="text"><i class="broadcast tower icon"></i> Monitoreo</span> <i class="dropdown icon"></i>
+                <div class="menu pih-dropdown-menu">
+                    <a class="item @(ctrl == "HourlyReport" ? "active" : "")" href="/HourlyReport">
+                        <i class="clock outline icon" style="color:#4fc3f7;"></i> Cortes Horarios
+                    </a>
+                    <a class="item @(ctrl == "RainfallReport" ? "active" : "")" href="/RainfallReport">
+                        <i class="tint icon" style="color:#64b5f6;"></i> Corte de Lluvia
+                    </a>
+                    <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                    <a class="item @(ctrl == "GoesMonitoring" ? "active" : "")" href="@Url.Action("Index", "GoesMonitoring")">
+                        <i class="satellite icon" style="color:#ce93d8;"></i> GOES
+                    </a>
+                </div>
+            </div>
+
+            <!-- Análisis dropdown -->
+            <div class="ui dropdown item nav-dropdown @(new[]{"DataAnalysis","StationGroup"}.Contains(ctrl) ? "active" : "")">
+                <span class="text"><i class="chart line icon"></i> Análisis</span> <i class="dropdown icon"></i>
+                <div class="menu pih-dropdown-menu">
+                    <a class="item @(ctrl == "DataAnalysis" ? "active" : "")" href="/DataAnalysis">
+                        <i class="chart area icon" style="color:#4fc3f7;"></i> Análisis de Datos
+                    </a>
+                    <a class="item @(ctrl == "StationGroup" ? "active" : "")" href="/StationGroup">
+                        <i class="object group icon" style="color:#81c784;"></i> Mis Grupos
+                    </a>
+                </div>
+            </div>
             }
-            <a href="/FunVasos" class="item">
-                <i class="water icon"></i> Fun. Vasos
-            </a>
+
+            <!-- Hidrología dropdown -->
+            <div class="ui dropdown item nav-dropdown @(new[]{"FunVasos","Bhg","RainForecast"}.Contains(ctrl) ? "active" : "")">
+                <span class="text"><i class="water icon"></i> Hidrología</span> <i class="dropdown icon"></i>
+                <div class="menu pih-dropdown-menu">
+                    <a class="item @(ctrl == "FunVasos" ? "active" : "")" href="/FunVasos">
+                        <i class="water icon" style="color:#64b5f6;"></i> Fun. Vasos
+                    </a>
+                    <a class="item @(ctrl == "Bhg" ? "active" : "")" href="/Bhg">
+                        <i class="chart bar icon" style="color:#81c784;"></i> Boletín BHG
+                    </a>
+                    @if (!User.IsInRole("SoloVasos"))
+                    {
+                    <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                    <a class="item @(ctrl == "RainForecast" ? "active" : "")" href="@Url.Action("Index", "RainForecast")">
+                        <i class="cloud rain icon" style="color:#ce93d8;"></i> Pronóstico de Lluvia
+                    </a>
+                    }
+                </div>
+            </div>
+
+            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Administrador"))
+            {
+            <!-- Administración dropdown -->
+            <div id="nav-admin-dropdown" class="ui dropdown item nav-dropdown @(new[]{"StationAdmin","WatershedAdmin","Admin","Maintenance","Notification","EarlyWarning","Settings"}.Contains(ctrl) ? "active" : "")">
+                <span class="text"><i class="cogs icon"></i> Admin</span> <i class="dropdown icon"></i>
+                <div class="menu pih-dropdown-menu" style="min-width: 220px;">
+                    <a class="item @(ctrl == "StationAdmin" ? "active" : "")" href="@Url.Action("Index", "StationAdmin")">
+                        <i class="server icon" style="color:#81c784;"></i> Estaciones
+                    </a>
+                    <a class="item @(ctrl == "Maintenance" ? "active" : "")" href="@Url.Action("Index", "Maintenance")">
+                        <i class="wrench icon" style="color:#fbbf24;"></i> Mantenimiento
+                    </a>
+                    <a class="item @(ctrl == "WatershedAdmin" ? "active" : "")" href="@Url.Action("Index", "WatershedAdmin")">
+                        <i class="tint icon" style="color:#64b5f6;"></i> Cuencas y Subcuencas
+                    </a>
+                    <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                    <a class="item @(ctrl == "Admin" ? "active" : "")" href="@Url.Action("Index", "Admin")">
+                        <i class="users cog icon" style="color:#ffb74d;"></i> Usuarios
+                    </a>
+                    <a class="item @(ctrl == "Notification" ? "active" : "")" href="@Url.Action("Index", "Notification")">
+                        <i class="bell icon" style="color:#ce93d8;"></i> Notificaciones
+                    </a>
+                    <a class="item @(ctrl == "EarlyWarning" ? "active" : "")" href="@Url.Action("Index", "EarlyWarning")">
+                        <i class="exclamation triangle icon" style="color:#e74c3c;"></i> Alertas Tempranas
+                    </a>
+                    @if (User.IsInRole("SuperAdmin"))
+                    {
+                    <div class="divider" style="border-color: rgba(255,255,255,0.1) !important;"></div>
+                    <a class="item @(ctrl == "Settings" ? "active" : "")" href="@Url.Action("Index", "Settings")">
+                        <i class="sliders horizontal icon" style="color:#4fc3f7;"></i> Configuración
+                    </a>
+                    }
+                </div>
+            </div>
+            }
+
             @if (!User.IsInRole("SoloVasos"))
             {
-            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "RainForecast" ? "active" : "")" href="@Url.Action("Index", "RainForecast")">
-                <i class="cloud rain icon"></i> Pronóstico
-            </a>
-            <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "MisExport" ? "active" : "")" href="@Url.Action("Index", "MisExport")">
-                <i class="file export icon"></i> .MIS
-            </a>
+            <!-- Herramientas dropdown -->
+            <div class="ui dropdown item nav-dropdown @(new[]{"Documents","MisExport"}.Contains(ctrl) ? "active" : "")">
+                <span class="text"><i class="toolbox icon"></i> Herramientas</span> <i class="dropdown icon"></i>
+                <div class="menu pih-dropdown-menu">
+                    <a class="item @(ctrl == "Documents" ? "active" : "")" href="/Documents" id="nav-documents">
+                        <i class="folder open icon" style="color:#fbbf24;"></i> Repositorio
+                        <span id="doc-alert-badge" style="display:none; margin-left:6px; background:#ef4444; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;"></span>
+                    </a>
+                    <a class="item @(ctrl == "MisExport" ? "active" : "")" href="@Url.Action("Index", "MisExport")">
+                        <i class="file export icon" style="color:#4fc3f7;"></i> Exportar .MIS
+                    </a>
+                </div>
+            </div>
             }
+
             @if (User.Identity?.IsAuthenticated == true && !User.IsInRole("SoloVasos"))
             {
-                <a class="item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Chat" ? "active" : "")" href="@Url.Action("Index", "Chat")" id="navChatLink">
+                <a class="item @(ctrl == "Chat" ? "active" : "")" href="@Url.Action("Index", "Chat")" id="navChatLink">
                     <i class="comments icon"></i> Chat <span class="dm-global-badge" id="navDmBadge" style="display:none;"></span>
                 </a>
             }
@@ -468,10 +569,10 @@
         // Initialize Fomantic dropdowns (click-based, not hover)
         $('.ui.dropdown').dropdown({ on: 'click' });
 
-        // Re-initialize nav admin dropdown after page scripts may have overridden it
+        // Re-initialize nav dropdowns after page scripts may have overridden them
         $(function() {
             setTimeout(function() {
-                $('#nav-admin-dropdown').dropdown({ on: 'click' });
+                $('.nav-dropdown').dropdown({ on: 'click' });
             }, 100);
         });
 

@@ -124,7 +124,7 @@
     }
     
     body.light-theme .glass-panel {
-        background: rgba(0, 0, 0, 0.75); /* Más oscuro en día para contrastar con mapa blanco */
+        background: rgba(0, 0, 0, 0.75);
         color: white !important;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
@@ -380,12 +380,477 @@
             stroke-dashoffset: 0;
         }
     }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-toggle-btn {
+        background: rgba(0,230,118,0.1); border: 1px solid rgba(0,230,118,0.3); color: #00e676;
+        border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 11px; font-weight: 600;
+        display: flex; align-items: center; gap: 5px; transition: all 0.3s; margin-top: 8px;
+    }
+    .theme-toggle-btn:hover { background: rgba(0,230,118,0.2); color: #fff; }
+
+    /* ══════════════════════════════════════
+       LIGHT THEME  (body.map-light)
+       ══════════════════════════════════════ */
+
+    /* ── Glass Panel Base ── */
+    body.map-light .glass-panel {
+        background: rgba(255,255,255,0.94) !important;
+        border-color: rgba(0,0,0,0.1) !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+        backdrop-filter: blur(12px);
+    }
+
+    /* ── Typography ── */
+    body.map-light .glass-panel h3,
+    body.map-light .glass-panel h4,
+    body.map-light .glass-panel label,
+    body.map-light .glass-panel .ui.header,
+    body.map-light .glass-panel .ui.inverted.header {
+        color: #1a1a1a !important;
+    }
+    body.map-light .glass-panel p,
+    body.map-light .glass-panel span,
+    body.map-light .glass-panel div,
+    body.map-light .glass-panel td,
+    body.map-light .glass-panel th,
+    body.map-light .glass-panel strong {
+        color: #333 !important;
+    }
+
+    /* ── Dividers ── */
+    body.map-light .glass-panel .ui.inverted.divider,
+    body.map-light .glass-panel .ui.divider {
+        border-color: rgba(0,0,0,0.1) !important;
+    }
+
+    /* ── Inputs & Search ── */
+    body.map-light .glass-panel .ui.inverted.input input,
+    body.map-light .glass-panel .ui.inverted.transparent input,
+    body.map-light .glass-panel .ui.transparent input {
+        color: #333 !important;
+        border-color: rgba(0,0,0,0.15) !important;
+        background: rgba(0,0,0,0.03) !important;
+    }
+    body.map-light .glass-panel .ui.inverted.input input::placeholder,
+    body.map-light .glass-panel .ui.transparent input::placeholder {
+        color: rgba(0,0,0,0.4) !important;
+    }
+    body.map-light .glass-panel .ui.inverted.input i.icon,
+    body.map-light .glass-panel .ui.input i.icon {
+        color: rgba(0,0,0,0.4) !important;
+    }
+
+    /* ── Checkboxes (inverted + normal) ── */
+    body.map-light .glass-panel .ui.inverted.checkbox label,
+    body.map-light .glass-panel .ui.checkbox label {
+        color: #444 !important;
+    }
+    body.map-light .glass-panel .ui.inverted.checkbox label::before,
+    body.map-light .glass-panel .ui.checkbox label::before {
+        border-color: rgba(0,0,0,0.25) !important;
+        background: rgba(0,0,0,0.03) !important;
+    }
+
+    /* ── Toggle Checkboxes (weather layers) ── */
+    body.map-light .glass-panel .ui.toggle.checkbox label,
+    body.map-light .glass-panel .ui.inverted.toggle.checkbox label {
+        color: #444 !important;
+    }
+    body.map-light .glass-panel .ui.toggle.checkbox label::before,
+    body.map-light .glass-panel .ui.inverted.toggle.checkbox label::before {
+        background: rgba(0,0,0,0.12) !important;
+    }
+
+    /* ── Station Tables ── */
+    body.map-light .glass-panel .station-table {
+        color: #333 !important;
+    }
+    body.map-light .glass-panel .station-table th {
+        background: rgba(0,0,0,0.04) !important;
+        color: #555 !important;
+        border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+    }
+    body.map-light .glass-panel .station-table td {
+        color: #333 !important;
+        border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+    }
+    body.map-light .glass-panel .station-table tr:hover td {
+        background: rgba(76,175,80,0.06) !important;
+    }
+    body.map-light .glass-panel .station-table tr.highlighted td {
+        background: rgba(33,133,208,0.12) !important;
+    }
+
+    /* ── Dropdown ── */
+    body.map-light .glass-panel .ui.inverted.selection.dropdown,
+    body.map-light .glass-panel .ui.selection.dropdown {
+        background: rgba(0,0,0,0.04) !important;
+        border-color: rgba(0,0,0,0.15) !important;
+        color: #333 !important;
+    }
+    body.map-light .glass-panel .ui.inverted.selection.dropdown .text,
+    body.map-light .glass-panel .ui.inverted.selection.dropdown .default.text,
+    body.map-light .glass-panel .ui.selection.dropdown .text {
+        color: #333 !important;
+    }
+    body.map-light .glass-panel .ui.inverted.selection.dropdown i.icon,
+    body.map-light .glass-panel .ui.selection.dropdown i.dropdown.icon {
+        color: #666 !important;
+    }
+    body.map-light .glass-panel .ui.inverted.selection.dropdown .menu,
+    body.map-light .glass-panel .ui.selection.dropdown .menu {
+        background: #fff !important;
+        border-color: rgba(0,0,0,0.12) !important;
+    }
+    body.map-light .glass-panel .ui.inverted.selection.dropdown .menu > .item,
+    body.map-light .glass-panel .ui.selection.dropdown .menu > .item {
+        color: #333 !important;
+        border-color: rgba(0,0,0,0.05) !important;
+    }
+    body.map-light .glass-panel .ui.inverted.selection.dropdown .menu > .item:hover,
+    body.map-light .glass-panel .ui.selection.dropdown .menu > .item:hover {
+        background: rgba(76,175,80,0.08) !important;
+    }
+
+    /* ── Labels & Badges ── */
+    body.map-light .glass-panel .ui.mini.circular.label {
+        background: rgba(0,0,0,0.08) !important;
+        color: #333 !important;
+    }
+
+    /* ── Weather Layer Section Headers ── */
+    body.map-light .weather-section [style*="text-transform: uppercase"] {
+        color: rgba(0,0,0,0.4) !important;
+    }
+    body.map-light .weather-section .layer-toggle .ui.toggle.checkbox label {
+        color: #444 !important;
+    }
+
+    /* ── Opacity Sliders ── */
+    body.map-light .weather-section .opacity-slider {
+        background: rgba(0,0,0,0.1) !important;
+    }
+
+    /* ── Legend Section ── */
+    body.map-light #semaforo-legend span,
+    body.map-light #legend-verde,
+    body.map-light #legend-triangulo,
+    body.map-light #legend-azul,
+    body.map-light #legend-negro {
+        color: #444 !important;
+    }
+
+    /* ── Clock / Footer ── */
+    body.map-light #real-time-clock,
+    body.map-light #last-update-text {
+        color: rgba(0,0,0,0.55) !important;
+    }
+    body.map-light .glass-panel > div:last-child {
+        border-top-color: rgba(0,0,0,0.08) !important;
+    }
+
+    /* ── Stat Panel ── */
+    body.map-light #stat-panel .label,
+    body.map-light #stat-panel .value {
+        color: #333 !important;
+    }
+
+    /* ── Theme Toggle Button ── */
+    body.map-light .theme-toggle-btn {
+        background: rgba(33,150,243,0.1);
+        border-color: rgba(33,150,243,0.3);
+        color: #1565c0;
+    }
+    body.map-light .theme-toggle-btn:hover {
+        background: rgba(33,150,243,0.2);
+    }
+
+    /* ── Station Weather Banner ── */
+    body.map-light .station-weather-banner {
+        background: rgba(255,255,255,0.95) !important;
+        border-color: rgba(0,0,0,0.1) !important;
+    }
+    body.map-light .station-weather-banner .banner-name,
+    body.map-light .station-weather-banner .banner-tx,
+    body.map-light .station-weather-banner .banner-metrics {
+        color: #333 !important;
+    }
+
+    /* ── Zoom Controls ── */
+    body.map-light .custom-zoom-controls button {
+        background: rgba(255,255,255,0.92) !important;
+        color: #333 !important;
+        border-color: rgba(0,0,0,0.15) !important;
+    }
+    body.map-light .custom-zoom-controls button:hover {
+        background: rgba(76,175,80,0.15) !important;
+    }
+
+    /* ── Custom Marker borders on light map ── */
+    body.map-light .custom-marker {
+        border-color: #444 !important;
+        box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    }
+
+    /* ── Tooltips ── */
+    body.map-light .custom-tooltip {
+        background: rgba(255,255,255,0.92) !important;
+        color: #333 !important;
+        border: 1px solid rgba(0,0,0,0.12) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    body.map-light .leaflet-tooltip-top:before {
+        border-top-color: rgba(255,255,255,0.92) !important;
+    }
+
+    /* ── Cuencas section collapsible headers ── */
+    body.map-light #cuenca-toggles-wrap .ui.inverted.checkbox label,
+    body.map-light #cuencas-left-panel strong {
+        color: #333 !important;
+    }
+
+    /* ── Leaflet popup ── */
+    body.map-light .leaflet-popup-content-wrapper {
+        background: #fff !important;
+        color: #333 !important;
+    }
+    body.map-light .leaflet-popup-tip {
+        background: #fff !important;
+    }
+
+    /* ── Responsive Panel Controls ── */
+    .map-panel-toggle {
+        display: none;
+        position: absolute;
+        z-index: 1002;
+        width: 40px;
+        height: 40px;
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        background: rgba(14,18,26,0.85);
+        backdrop-filter: blur(8px);
+        color: #fff;
+        font-size: 16px;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .map-panel-toggle:hover { background: rgba(76,175,80,0.3); }
+    .map-panel-toggle-left { top: 12px; left: 12px; }
+    .map-panel-toggle-right { top: 12px; right: 12px; }
+    .map-panel-toggle.active { background: rgba(76,175,80,0.5); border-color: #4caf50; }
+
+    /* Tablet: ≤1200px — right panel collapsible */
+    @@media only screen and (max-width: 1200px) {
+        #map-right-panel {
+            position: absolute !important;
+            top: 0; right: 0; bottom: 0;
+            width: 340px !important;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1001 !important;
+        }
+        #map-right-panel.panel-visible {
+            transform: translateX(0);
+        }
+        .map-panel-toggle-right { display: flex; }
+    }
+
+    /* Smaller tablets / large phones: ≤1024px — both panels collapsible */
+    @@media only screen and (max-width: 1024px) {
+        #map-left-panel {
+            transform: translateX(calc(-100% - 40px));
+            transition: transform 0.3s ease;
+        }
+        #map-left-panel.panel-visible {
+            transform: translateX(0);
+        }
+        .map-panel-toggle-left { display: flex; }
+    }
+
+    /* Small screens: ≤768px — panels overlay full width */
+    @@media only screen and (max-width: 768px) {
+        #map-left-panel {
+            width: calc(100vw - 40px) !important;
+            max-width: 300px !important;
+            top: 55px !important;
+            left: 10px !important;
+            bottom: 40px !important;
+        }
+        #map-right-panel {
+            width: calc(100vw - 20px) !important;
+            max-width: 360px !important;
+            top: 0 !important;
+            right: 0 !important;
+        }
+        .map-panel-toggle-left { top: 8px; left: 8px; }
+        .map-panel-toggle-right { top: 8px; right: 8px; }
+    }
+
+    body.map-light .map-panel-toggle {
+        background: rgba(255,255,255,0.9);
+        color: #333;
+        border-color: rgba(0,0,0,0.15);
+    }
+    body.map-light .map-panel-toggle:hover { background: rgba(76,175,80,0.2); }
+    body.map-light .map-panel-toggle.active { background: rgba(76,175,80,0.4); color: #fff; }
+
+    /* ══════════════════════════════════════
+       ANIMACIONES SUTILES
+       ══════════════════════════════════════ */
+
+    /* ── Panel entrance ── */
+    @@keyframes panelSlideLeft {
+        from { opacity: 0; transform: translateX(-30px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+    @@keyframes panelSlideRight {
+        from { opacity: 0; transform: translateX(30px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+    #map-left-panel {
+        animation: panelSlideLeft 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    #map-right-panel {
+        animation: panelSlideRight 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+    }
+
+    /* ── Borde luminoso viajero ── */
+    @@keyframes borderGlow {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .glass-panel::before {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border-radius: 16px;
+        padding: 1px;
+        background: linear-gradient(
+            270deg,
+            transparent 0%,
+            rgba(0, 230, 118, 0.3) 25%,
+            rgba(33, 150, 243, 0.4) 50%,
+            rgba(0, 230, 118, 0.3) 75%,
+            transparent 100%
+        );
+        background-size: 300% 300%;
+        animation: borderGlow 8s ease infinite;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.5;
+    }
+    .glass-panel { position: relative; overflow: hidden; }
+    .glass-panel > * { position: relative; z-index: 1; }
+
+    /* ── Header shimmer ── */
+    @@keyframes shimmer {
+        0%   { background-position: -200% center; }
+        100% { background-position: 200% center; }
+    }
+    .glass-panel > div:first-child h3 {
+        background: linear-gradient(
+            90deg,
+            currentColor 35%,
+            rgba(0, 230, 118, 0.8) 50%,
+            currentColor 65%
+        );
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 6s linear infinite;
+    }
+    body.map-light .glass-panel > div:first-child h3 {
+        background: linear-gradient(
+            90deg,
+            #1a1a1a 35%,
+            rgba(33, 150, 243, 0.9) 50%,
+            #1a1a1a 65%
+        );
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    /* ── Valor actualizado pulse ── */
+    @@keyframes valuePop {
+        0%   { transform: scale(1); }
+        40%  { transform: scale(1.15); filter: brightness(1.5); }
+        100% { transform: scale(1); filter: brightness(1); }
+    }
+    .value-updated {
+        animation: valuePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ── Table row stagger entrance ── */
+    @@keyframes rowFadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .station-table tbody tr {
+        animation: rowFadeIn 0.3s ease both;
+    }
+    .station-table tbody tr:nth-child(1)  { animation-delay: 0.02s; }
+    .station-table tbody tr:nth-child(2)  { animation-delay: 0.04s; }
+    .station-table tbody tr:nth-child(3)  { animation-delay: 0.06s; }
+    .station-table tbody tr:nth-child(4)  { animation-delay: 0.08s; }
+    .station-table tbody tr:nth-child(5)  { animation-delay: 0.10s; }
+    .station-table tbody tr:nth-child(6)  { animation-delay: 0.12s; }
+    .station-table tbody tr:nth-child(7)  { animation-delay: 0.14s; }
+    .station-table tbody tr:nth-child(8)  { animation-delay: 0.16s; }
+    .station-table tbody tr:nth-child(9)  { animation-delay: 0.18s; }
+    .station-table tbody tr:nth-child(10) { animation-delay: 0.20s; }
+
+    /* ── Button micro-interactions ── */
+    .theme-toggle-btn,
+    .custom-zoom-controls button,
+    .map-panel-toggle {
+        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+    .theme-toggle-btn:active,
+    .custom-zoom-controls button:active,
+    .map-panel-toggle:active {
+        transform: scale(0.92);
+    }
+
+    /* ── Checkbox smooth check ── */
+    .ui.checkbox input:checked ~ label::after,
+    .ui.toggle.checkbox input:checked ~ label::after {
+        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+
+    /* ── Floating particles canvas ── */
+    #particles-canvas {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        opacity: 0.35;
+    }
 </style>
 }
 
-<div style="display: flex; height: 100%; overflow: hidden;">
+<div style="display: flex; height: 100%; overflow: hidden; position: relative;">
+    <!-- Toggle buttons para paneles (responsivo) -->
+    <button class="map-panel-toggle map-panel-toggle-left" id="btnToggleLeftPanel" onclick="toggleMapPanel('left')" title="Filtros">
+        <i class="filter icon"></i>
+    </button>
+    <button class="map-panel-toggle map-panel-toggle-right" id="btnToggleRightPanel" onclick="toggleMapPanel('right')" title="Datos">
+        <i class="table icon"></i>
+    </button>
+
     <div id="map-wrapper" style="flex: 1; position: relative;">
         <div id="map-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;"></div>
+        <canvas id="particles-canvas"></canvas>
         <!-- Custom zoom controls -->
         <div class="custom-zoom-controls" id="custom-zoom">
             <button onclick="map.zoomIn()" title="Acercar">+</button>
@@ -405,7 +870,7 @@
     </div>
     
     <!-- Panel Lateral Derecho (Tabla) -->
-    <div class="glass-panel" style="width: 380px; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 1000; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="glass-panel" id="map-right-panel" style="width: 380px; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 1000; overflow: hidden; display: flex; flex-direction: column;">
         
         <!-- Secciones de Precipitación (solo visibles con variable precipitación) -->
         <div id="precip-right-panel">
@@ -564,12 +1029,16 @@
 </div>
 
 <!-- Panel de Control Flotante Izquierdo -->
-<div class="glass-panel" style="position: absolute; top: 70px; left: 20px; bottom: 20px; width: 260px; padding: 0; z-index: 1000; display: flex; flex-direction: column; overflow: hidden;">
+<div class="glass-panel" id="map-left-panel" style="position: absolute; top: 70px; left: 20px; bottom: 20px; width: 260px; padding: 0; z-index: 1000; display: flex; flex-direction: column; overflow: hidden;">
     <div style="padding: 12px 14px 0; flex-shrink: 0;">
         <h3 class="ui inverted header" style="margin-bottom: 8px; font-size: 15px;">
             <i class="filter icon"></i>
             Visualización
         </h3>
+        <button class="theme-toggle-btn" id="btnMapThemeToggle">
+            <i class="moon icon"></i>
+            <span>Oscuro</span>
+        </button>
     </div>
     
     <div style="flex: 1; overflow-y: auto; padding: 0 14px 12px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;">
@@ -582,7 +1051,7 @@
                 <div class="default text">Variable</div>
                 <div class="menu">
                     @foreach (var v in ViewBag.Variables) {
-                        <div class="item" data-value="@v">@v</div>
+                        <div class="item" data-value="@v.Item1">@v.Item2</div>
                     }
                 </div>
             </div>
@@ -729,6 +1198,29 @@
     <script src="~/lib/leaflet/L.KML.js"></script>
     <script src="~/lib/leaflet/leaflet-omnivore.min.js"></script>
     <script>
+        // ── Panel toggle for responsive ──
+        function toggleMapPanel(side) {
+            if (side === 'left') {
+                var lp = document.getElementById('map-left-panel');
+                var btn = document.getElementById('btnToggleLeftPanel');
+                lp.classList.toggle('panel-visible');
+                btn.classList.toggle('active');
+                // Close right panel if open
+                document.getElementById('map-right-panel').classList.remove('panel-visible');
+                document.getElementById('btnToggleRightPanel').classList.remove('active');
+            } else {
+                var rp = document.getElementById('map-right-panel');
+                var btn = document.getElementById('btnToggleRightPanel');
+                rp.classList.toggle('panel-visible');
+                btn.classList.toggle('active');
+                // Close left panel if open
+                document.getElementById('map-left-panel').classList.remove('panel-visible');
+                document.getElementById('btnToggleLeftPanel').classList.remove('active');
+            }
+            // Invalidate map size after transition
+            setTimeout(function() { if (typeof map !== 'undefined' && map) map.invalidateSize(); }, 350);
+        }
+
         let map;
         let markersLayer = L.layerGroup();
         let sensorData = [];
@@ -803,6 +1295,29 @@
                 time: {
                     timezoneOffset: 6 * 60 // CDMX es UTC-6, offset en minutos
                 }
+            });
+
+            // Theme toggle
+            var mapTheme = localStorage.getItem('mapChartTheme') || 'dark';
+            if (mapTheme === 'light') {
+                document.body.classList.add('map-light');
+                $('#btnMapThemeToggle').find('i').removeClass('moon').addClass('sun');
+                $('#btnMapThemeToggle').find('span').text('Claro');
+            }
+            $('#btnMapThemeToggle').on('click', function() {
+                var isL = document.body.classList.toggle('map-light');
+                localStorage.setItem('mapChartTheme', isL ? 'light' : 'dark');
+                $(this).find('i').toggleClass('moon sun');
+                $(this).find('span').text(isL ? 'Claro' : 'Oscuro');
+                Highcharts.charts.forEach(function(c) {
+                    if (!c) return;
+                    c.update({
+                        chart: { backgroundColor: isL ? '#ffffff' : 'transparent' },
+                        xAxis: [{ labels: { style: { color: isL ? '#555' : '#aaa' } }, gridLineColor: isL ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)' }],
+                        yAxis: [{ labels: { style: { color: isL ? '#555' : '#aaa' } }, gridLineColor: isL ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)' }],
+                        tooltip: { backgroundColor: isL ? 'rgba(255,255,255,0.96)' : 'rgba(20,30,40,0.92)', style: { color: isL ? '#333' : '#e0e0e0' } }
+                    }, true, false);
+                });
             });
             
             loadData('precipitación');
@@ -1427,6 +1942,11 @@
                 
                 const now = new Date();
                 $('#last-update-text').html('<i class="sync icon"></i> ' + now.toLocaleTimeString());
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error('Error loading map data:', textStatus, errorThrown);
+                if (jqXHR.status === 401 || jqXHR.status === 302 || jqXHR.status === 0) {
+                    window.location.reload();
+                }
             });
         }
 
@@ -2217,5 +2737,104 @@
                 }]
             });
         }
+
+    // ═══════════════════════════════════════
+    // PARTÍCULAS FLOTANTES (Canvas, sutil)
+    // ═══════════════════════════════════════
+    (function initParticles() {
+        const canvas = document.getElementById('particles-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const particles = [];
+        const PARTICLE_COUNT = 35;
+
+        function resize() {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = -Math.random() * 0.3 - 0.1;
+                this.opacity = Math.random() * 0.4 + 0.1;
+                this.fadeSpeed = Math.random() * 0.003 + 0.001;
+                this.growing = Math.random() > 0.5;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.opacity += this.growing ? this.fadeSpeed : -this.fadeSpeed;
+                if (this.opacity >= 0.5) this.growing = false;
+                if (this.opacity <= 0.05) this.growing = true;
+                if (this.y < -10 || this.x < -10 || this.x > canvas.width + 10) this.reset();
+            }
+            draw() {
+                var isLight = document.body.classList.contains('map-light');
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = isLight
+                    ? 'rgba(33, 150, 243, ' + this.opacity + ')'
+                    : 'rgba(0, 230, 118, ' + this.opacity + ')';
+                ctx.fill();
+            }
+        }
+
+        for (var i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(function(p) { p.update(); p.draw(); });
+            // Líneas de conexión sutiles entre partículas cercanas
+            for (var a = 0; a < particles.length; a++) {
+                for (var b = a + 1; b < particles.length; b++) {
+                    var dx = particles[a].x - particles[b].x;
+                    var dy = particles[a].y - particles[b].y;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 120) {
+                        var isLight = document.body.classList.contains('map-light');
+                        ctx.beginPath();
+                        ctx.moveTo(particles[a].x, particles[a].y);
+                        ctx.lineTo(particles[b].x, particles[b].y);
+                        var lineOpacity = (1 - dist / 120) * 0.08;
+                        ctx.strokeStyle = isLight
+                            ? 'rgba(33, 150, 243, ' + lineOpacity + ')'
+                            : 'rgba(0, 230, 118, ' + lineOpacity + ')';
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+        animate();
+    })();
+
+    // ═══════════════════════════════════════
+    // ANIMACIÓN DE VALORES ACTUALIZADOS
+    // ═══════════════════════════════════════
+    // Observer para detectar cambios en celdas de valor y agregar clase animada
+    var valueObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            if (m.type === 'childList' || m.type === 'characterData') {
+                var el = m.target.nodeType === 3 ? m.target.parentElement : m.target;
+                if (el && (el.classList.contains('value-cell') || el.closest('.value-cell'))) {
+                    var cell = el.classList.contains('value-cell') ? el : el.closest('.value-cell');
+                    cell.classList.remove('value-updated');
+                    void cell.offsetWidth; // reflow
+                    cell.classList.add('value-updated');
+                }
+            }
+        });
+    });
+    document.querySelectorAll('.station-table').forEach(function(tbl) {
+        valueObserver.observe(tbl, { childList: true, subtree: true, characterData: true });
+    });
     </script>
 }

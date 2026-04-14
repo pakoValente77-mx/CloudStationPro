@@ -28,11 +28,12 @@ namespace CloudStationWeb.Controllers
             return View();
         }
 
+        [AllowAnonymous]
         [HttpGet]
         public async Task<JsonResult> GetVariables()
         {
             var vars = await _dataService.GetAvailableVariablesAsync();
-            return Json(vars);
+            return Json(vars.Select(v => new { value = v.Value, label = v.Label }));
         }
 
         [HttpGet]

@@ -149,6 +149,22 @@
         background: rgba(11,14,20,0.7); display: flex; align-items: center; justify-content: center;
         z-index: 10; border-radius: 12px;
     }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-toggle-btn {
+        background: rgba(66,165,245,0.1); border: 1px solid rgba(66,165,245,0.3); color: #42a5f5;
+        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+        display: flex; align-items: center; gap: 6px; transition: all 0.3s;
+    }
+    .theme-toggle-btn:hover { background: rgba(66,165,245,0.2); color: #fff; }
+    body.rf-light .forecast-container { color: #333; }
+    body.rf-light .forecast-header h2 { color: #1a237e; }
+    body.rf-light .forecast-header .meta { color: #666; }
+    body.rf-light .cuenca-card { background: rgba(255,255,255,0.95) !important; border-color: rgba(0,0,0,0.1) !important; }
+    body.rf-light .cuenca-card h4, body.rf-light .cuenca-card .cuenca-name { color: #333 !important; }
+    body.rf-light .cuenca-card .value { color: #1565c0 !important; }
+    body.rf-light .chart-panel { background: rgba(255,255,255,0.95) !important; border-color: rgba(0,0,0,0.1) !important; }
+    body.rf-light .theme-toggle-btn { background: rgba(33,150,243,0.1); border-color: rgba(33,150,243,0.3); color: #1565c0; }
 </style>
 }
 
@@ -170,7 +186,8 @@
                 }
             </div>
         </div>
-        <div class="date-picker-group">
+        <div class="date-picker-group" style="display:flex; align-items:center; gap:12px;">
+            <div>
             <label style="color:rgba(255,255,255,0.5); font-size:12px;">Fecha pronóstico:</label>
             <select id="forecast-date-select" onchange="changeForecastDate(this.value)">
                 @if (Model.RecentForecasts != null)
@@ -184,6 +201,11 @@
                     }
                 }
             </select>
+            </div>
+            <button class="theme-toggle-btn" id="btnRfThemeToggle">
+                <i class="sun icon" id="rfThemeIcon"></i>
+                <span id="rfThemeLabel">Tema Claro</span>
+            </button>
         </div>
     </div>
 
@@ -342,6 +364,33 @@
         Highcharts.setOptions({
             time: { timezoneOffset: 6 * 60 },
             accessibility: { enabled: false }
+        });
+
+        // Theme toggle
+        var rfTheme = localStorage.getItem('rfChartTheme') || 'dark';
+        if (rfTheme === 'light') {
+            document.body.classList.add('rf-light');
+            $('#rfThemeIcon').removeClass('sun').addClass('moon');
+            $('#rfThemeLabel').text('Tema Oscuro');
+        }
+        $('#btnRfThemeToggle').on('click', function() {
+            var isL = document.body.classList.toggle('rf-light');
+            localStorage.setItem('rfChartTheme', isL ? 'light' : 'dark');
+            $('#rfThemeIcon').toggleClass('sun moon');
+            $('#rfThemeLabel').text(isL ? 'Tema Oscuro' : 'Tema Claro');
+            var bg = isL ? '#ffffff' : 'transparent';
+            var tc = isL ? '#555' : '#aaa';
+            var gc = isL ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+            Highcharts.charts.forEach(function(c) {
+                if (!c) return;
+                c.update({
+                    chart: { backgroundColor: bg },
+                    xAxis: [{ labels: { style: { color: tc } }, gridLineColor: gc }],
+                    yAxis: [{ labels: { style: { color: tc } }, gridLineColor: gc, title: { style: { color: tc } } }],
+                    legend: { itemStyle: { color: isL ? '#333' : '#ccc' } },
+                    tooltip: { backgroundColor: isL ? 'rgba(255,255,255,0.96)' : 'rgba(15,25,30,0.95)', style: { color: isL ? '#333' : '#e0e0e0' } }
+                }, true, false);
+            });
         });
 
         initMap();

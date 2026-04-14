@@ -492,6 +492,40 @@
     .c3d-banner-val.c3d-gen { color: #ffd54f; }
     .c3d-banner-label.c3d-no-gen { color: rgba(255,255,255,0.2); font-style: italic; }
     .c3d-banner-gulf { border-left: 1px solid rgba(79,195,247,0.3); }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-toggle-btn {
+        background: rgba(0,230,118,0.1); border: 1px solid rgba(0,230,118,0.3); color: #00e676;
+        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+        display: flex; align-items: center; gap: 6px; transition: all 0.3s; margin-left: auto;
+    }
+    .theme-toggle-btn:hover { background: rgba(0,230,118,0.2); color: #fff; }
+
+    /* ===== LIGHT THEME ===== */
+    body.fv-light .compact-header { background: rgba(255,255,255,0.95); border-color: rgba(33,150,243,0.3); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    body.fv-light .header-title { color: #1a237e; text-shadow: none; }
+    body.fv-light .header-title i { color: #1565c0; }
+    body.fv-light .compact-header label { color: #555 !important; }
+    body.fv-light .compact-header input[type="date"] { background: #f5f5f5 !important; border-color: rgba(0,0,0,0.15) !important; color: #333 !important; }
+    body.fv-light .theme-toggle-btn { background: rgba(33,150,243,0.1); border-color: rgba(33,150,243,0.3); color: #1565c0; }
+    body.fv-light .summary-card { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
+    body.fv-light .summary-card .label { color: #666; }
+    body.fv-light .summary-card .unit { color: #999; }
+    body.fv-light .chart-card, body.fv-light .combo-chart-card { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
+    body.fv-light .combo-chart-card .combo-title, body.fv-light .chart-card .chart-title { color: #333; }
+    body.fv-light .fv-table-wrapper { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
+    body.fv-light .fv-table thead th { background: #f5f5f5; color: #333; border-bottom-color: rgba(0,0,0,0.1); }
+    body.fv-light .fv-table thead tr.subheader th { background: #fafafa; color: #666; }
+    body.fv-light .fv-table tbody td { color: #444; border-bottom-color: rgba(0,0,0,0.06); }
+    body.fv-light .fv-table tbody tr:hover { background: rgba(33,150,243,0.06); }
+    body.fv-light .presa-tab { background: rgba(255,255,255,0.9); border-color: rgba(33,150,243,0.3); color: #555; }
+    body.fv-light .presa-tab:hover { background: rgba(33,150,243,0.1); color: #333; }
+    body.fv-light .presa-tab.active { background: linear-gradient(135deg,rgba(33,150,243,0.2),rgba(0,230,118,0.2)); color: #1a237e; border-color: #1565c0; }
+    body.fv-light .presa-section-title { color: #1565c0; background: rgba(33,150,243,0.08); }
+    body.fv-light .btn-action-sm { background: rgba(33,150,243,0.1); border-color: rgba(33,150,243,0.3); color: #1565c0; }
+    body.fv-light .no-data-msg { color: #666; }
+    body.fv-light .no-data-msg i { color: #999; }
+    body.fv-light h3, body.fv-light h4 { color: #333 !important; }
 </style>
 }
 
@@ -513,6 +547,10 @@
                 <i class="search icon"></i> Consultar
             </button>
         </div>
+        <button class="theme-toggle-btn" id="btnFvThemeToggle">
+            <i class="sun icon" id="fvThemeIcon"></i>
+            <span id="fvThemeLabel">Tema Claro</span>
+        </button>
     </div>
 
     @if (Model.Presas.Count == 0)
@@ -537,6 +575,7 @@
             @if (!User.IsInRole("SoloVasos"))
             {
             <div class="presa-tab" data-presa="hydrosim" style="background:linear-gradient(135deg,rgba(244,67,54,0.18),rgba(255,152,0,0.18)); border:1px solid rgba(244,67,54,0.4);"><i class="lightning icon"></i> Simulación Hidro</div>
+            <div class="presa-tab" data-presa="tendencia" style="background:linear-gradient(135deg,rgba(0,188,212,0.18),rgba(156,39,176,0.18)); border:1px solid rgba(0,188,212,0.4);"><i class="chart area icon"></i> Tendencia</div>
             }
             @foreach (var p in Model.Presas)
             {
@@ -939,6 +978,50 @@
             </div>
         </div>
 
+        <!-- Tab: TENDENCIA (Datos reales + Pronóstico) -->
+        <div id="tab-tendencia" class="tab-content" style="display:none;">
+            <div style="padding:10px 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+                    <h3 style="color:#00bcd4; margin:0; font-size:18px; font-weight:600; letter-spacing:0.5px;">
+                        <i class="chart area icon" style="color:#00acc1;"></i> TENDENCIA — Nivel de Embalses
+                    </h3>
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <label style="color:#78909c; font-size:12px;">Días reales:</label>
+                        <select id="trendRealDays" style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,188,212,0.3); color:#e8f5e9; padding:5px 10px; border-radius:6px; font-size:12px;">
+                            <option value="3">3 días</option>
+                            <option value="5" selected>5 días</option>
+                            <option value="7">7 días</option>
+                            <option value="10">10 días</option>
+                            <option value="15">15 días</option>
+                        </select>
+                        <label style="color:#78909c; font-size:12px;">Pronóstico:</label>
+                        <select id="trendForecastHours" style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,188,212,0.3); color:#e8f5e9; padding:5px 10px; border-radius:6px; font-size:12px;">
+                            <option value="24">24h (1 día)</option>
+                            <option value="48">48h (2 días)</option>
+                            <option value="72" selected>72h (3 días)</option>
+                            <option value="120">120h (5 días)</option>
+                            <option value="168">168h (7 días)</option>
+                        </select>
+                        <button class="ui tiny inverted teal button" id="btnLoadTrend">
+                            <i class="sync icon"></i> Cargar Tendencia
+                        </button>
+                        <span id="trendStatus" style="color:#78909c; font-size:12px;"></span>
+                    </div>
+                </div>
+
+                <!-- Info -->
+                <div id="trendInfo" style="margin-bottom:12px; font-size:12px; color:#546e7a;"></div>
+
+                <!-- Contenedor de gráficas por embalse -->
+                <div id="trendChartsContainer">
+                    <div style="text-align:center; padding:60px 0; color:#546e7a;">
+                        <i class="chart area icon" style="font-size:48px; opacity:0.3;"></i>
+                        <div style="margin-top:12px;">Haga clic en <strong style="color:#00bcd4;">Cargar Tendencia</strong> para generar las gráficas.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Individual presa tabs -->
         @foreach (var p in Model.Presas)
         {
@@ -1316,17 +1399,53 @@ $(function() {
         }
     }
 
-    var chartTheme = {
+    // ===== DUAL THEME SYSTEM =====
+    var fvDarkTheme = {
         chart: { backgroundColor: 'transparent', style: { fontFamily: "'Segoe UI', sans-serif" } },
-        title: { text: null },
+        title: { text: null, style: { color: '#e8f5e9' } },
         credits: { enabled: false },
         legend: { itemStyle: { color: '#b0bec5', fontWeight: '400' }, itemHoverStyle: { color: '#fff' } },
         xAxis: { labels: { style: { color: '#78909c' } }, gridLineColor: 'rgba(255,255,255,0.05)', lineColor: 'rgba(255,255,255,0.1)' },
         yAxis: { labels: { style: { color: '#78909c' } }, gridLineColor: 'rgba(255,255,255,0.05)', title: { style: { color: '#78909c' } } },
-        tooltip: { backgroundColor: 'rgba(15,25,30,0.95)', borderColor: '#00e676', style: { color: '#e8f5e9' } }
+        tooltip: { shared: true, crosshairs: true, backgroundColor: 'rgba(15,25,30,0.95)', borderColor: '#00e676', style: { color: '#e8f5e9' } }
+    };
+    var fvLightTheme = {
+        chart: { backgroundColor: '#ffffff', style: { fontFamily: "'Segoe UI', sans-serif" } },
+        title: { text: null, style: { color: '#333' } },
+        credits: { enabled: false },
+        legend: { itemStyle: { color: '#333', fontWeight: '400' }, itemHoverStyle: { color: '#000' } },
+        xAxis: { labels: { style: { color: '#555' } }, gridLineColor: 'rgba(0,0,0,0.08)', lineColor: 'rgba(0,0,0,0.15)' },
+        yAxis: { labels: { style: { color: '#555' } }, gridLineColor: 'rgba(0,0,0,0.1)', title: { style: { color: '#555' } } },
+        tooltip: { shared: true, crosshairs: true, backgroundColor: 'rgba(255,255,255,0.96)', borderColor: '#1565c0', style: { color: '#333' } }
     };
 
-    Highcharts.setOptions(chartTheme);
+    var fvSavedTheme = localStorage.getItem('fvChartTheme') || 'dark';
+    Highcharts.setOptions(fvSavedTheme === 'light' ? fvLightTheme : fvDarkTheme);
+    if (fvSavedTheme === 'light') {
+        document.body.classList.add('fv-light');
+        $('#fvThemeIcon').removeClass('sun').addClass('moon');
+        $('#fvThemeLabel').text('Tema Oscuro');
+    }
+
+    // Theme toggle handler
+    $('#btnFvThemeToggle').on('click', function() {
+        var isLight = document.body.classList.toggle('fv-light');
+        var theme = isLight ? fvLightTheme : fvDarkTheme;
+        localStorage.setItem('fvChartTheme', isLight ? 'light' : 'dark');
+        $('#fvThemeIcon').toggleClass('sun moon');
+        $('#fvThemeLabel').text(isLight ? 'Tema Oscuro' : 'Tema Claro');
+        Highcharts.charts.forEach(function(c) {
+            if (!c) return;
+            c.update({
+                chart: { backgroundColor: theme.chart.backgroundColor },
+                title: { style: theme.title.style },
+                xAxis: [{ labels: { style: theme.xAxis.labels.style }, gridLineColor: theme.xAxis.gridLineColor, lineColor: theme.xAxis.lineColor }],
+                yAxis: [{ labels: { style: theme.yAxis.labels.style }, gridLineColor: theme.yAxis.gridLineColor, title: { style: theme.yAxis.title.style } }],
+                legend: { itemStyle: theme.legend.itemStyle, itemHoverStyle: theme.legend.itemHoverStyle },
+                tooltip: theme.tooltip
+            }, true, false);
+        });
+    });
 
     // ========== NIVELES DE REFERENCIA FIJOS POR PRESA ==========
     var NIVELES_REF = {
@@ -2601,64 +2720,160 @@ $(function() {
         var container = $('#hydroSimCharts');
         container.empty();
 
+        var isLight = document.body.classList.contains('fv-light');
+        var bgColor = isLight ? '#ffffff' : '#0f1923';
+        var textColor = isLight ? '#555' : '#78909c';
+        var gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
+        var tooltipBg = isLight ? 'rgba(255,255,255,0.96)' : 'rgba(15,25,30,0.95)';
+        var tooltipText = isLight ? '#333' : '#e8f5e9';
+        var legendColor = isLight ? '#333' : '#b0bec5';
+
         res.dams.forEach(function(d) {
             var color = damColors[d.damName] || '#00e676';
             var label = damLabels[d.damName] || d.damName;
             var chartId = 'hydro-chart-' + d.damName;
 
-            container.append('<div class="chart-card" style="position:relative;"><div id="' + chartId + '" style="height:320px;"></div></div>');
+            container.append(
+                '<div class="chart-card" style="position:relative;">' +
+                '  <div style="position:absolute; top:8px; right:8px; z-index:3; display:flex; gap:5px;">' +
+                '    <button class="btn-action-sm" type="button" onclick="exportHydroChart(\'' + d.damName + '\')" title="Exportar PNG"><i class="download icon"></i></button>' +
+                '  </div>' +
+                '  <div id="' + chartId + '" style="height:400px;"></div>' +
+                '</div>'
+            );
 
-            var categories = d.hourly.map(function(h) { return h.time.split(' ')[1]; });
-            var elevData = d.hourly.map(function(h) { return h.elev; });
-            var rainData = d.hourly.map(function(h) { return h.rain; });
-            var inputData = d.hourly.map(function(h) { return Math.round((h.basinInput + h.upstreamInput) * 10000) / 10000; });
+            var times = d.hourly.map(function(h) { return new Date(h.time).getTime(); });
+            var elevData = d.hourly.map(function(h, i) { return [times[i], h.elev]; });
+            var rainData = d.hourly.map(function(h, i) { return [times[i], h.rain]; });
+            // Aportación total = cuenca + aguas arriba, convertir Mm³/h → m³/s
+            var aportData = d.hourly.map(function(h, i) {
+                return [times[i], Math.round((h.basinInput + h.upstreamInput) * 1e6 / 3600 * 100) / 100];
+            });
+            // Extracción: Mm³/h → m³/s
+            var extracData = d.hourly.map(function(h, i) {
+                return [times[i], Math.round(h.extraction * 1e6 / 3600 * 100) / 100];
+            });
 
-            // Mostrar cada 6 horas en eje X
-            var step = Math.max(1, Math.floor(categories.length / 12));
+            // Nivel final = asíntota
+            var asintotaVal = d.finalElev;
+            var asintotaData = times.length >= 2 ? [[times[0], asintotaVal], [times[times.length - 1], asintotaVal]] : [];
 
-            Highcharts.chart(chartId, {
-                chart: { backgroundColor: '#0f1923', height: 320 },
-                title: { text: label + ' — Pronóstico de Nivel', style: { color: color, fontSize: '15px', fontWeight: '600' } },
-                subtitle: { text: 'Δ Nivel: ' + (d.deltaElev >= 0 ? '+' : '') + d.deltaElev.toFixed(2) + ' m en ' + res.horizonHours + 'h',
-                    style: { color: d.deltaElev >= 0 ? '#ff7043' : '#66bb6a', fontSize: '12px' } },
-                exporting: { enabled: false },
+            // PlotLines: NAMO, NAME, Nivel Actual
+            var elevPlotLines = [
+                { value: d.initialElev, color: 'rgba(255,255,255,0.3)', width: 1, dashStyle: 'Dot',
+                  label: { text: 'Actual: ' + d.initialElev.toFixed(2), style: { color: isLight ? '#666' : 'rgba(255,255,255,0.5)', fontSize: '10px' } } }
+            ];
+            // Add NAMO/NAME from known levels
+            var knownLevels = {
+                'Angostura': { namo: 539.00, name_e: 542.10 },
+                'Chicoasen': { namo: 395.00, name_e: 400.00 },
+                'Malpaso': { namo: 189.70, name_e: 192.00 },
+                'JGrijalva': { namo: 100.00, name_e: 105.50 },
+                'Penitas': { namo: 95.10, name_e: 99.20 }
+            };
+            var kl = knownLevels[d.damName];
+            if (kl) {
+                elevPlotLines.push({ value: kl.namo, color: '#ffeb3b', width: 2, dashStyle: 'Dash',
+                    label: { text: 'NAMO ' + kl.namo.toFixed(1), style: { color: '#ffeb3b', fontSize: '10px', fontWeight: '600' }, align: 'right' }, zIndex: 5 });
+                elevPlotLines.push({ value: kl.name_e, color: '#ff5252', width: 2, dashStyle: 'Dash',
+                    label: { text: 'NAME ' + kl.name_e.toFixed(1), style: { color: '#ff5252', fontSize: '10px', fontWeight: '600' }, align: 'right' }, zIndex: 5 });
+            }
+
+            var arrow = d.deltaElev >= 0 ? '▲' : '▼';
+            var deltaColor = d.deltaElev >= 0 ? (isLight ? '#d84315' : '#ff7043') : (isLight ? '#2e7d32' : '#66bb6a');
+
+            window['_hydroChart_' + d.damName] = Highcharts.chart(chartId, {
+                chart: { backgroundColor: bgColor, height: 400, zoomType: 'x' },
+                title: {
+                    text: label + ' — Comportamiento del Embalse',
+                    style: { color: color, fontSize: '15px', fontWeight: '700' }
+                },
+                subtitle: {
+                    text: 'Actual: ' + d.initialElev.toFixed(2) + ' msnm → ' + arrow + ' ' + (d.deltaElev >= 0 ? '+' : '') + d.deltaElev.toFixed(2) + ' m → Asíntota: ' + asintotaVal.toFixed(2) + ' msnm (' + res.horizonHours + 'h)',
+                    style: { color: deltaColor, fontSize: '12px', fontWeight: '600' }
+                },
+                exporting: { enabled: true, buttons: { contextButton: { theme: { fill: bgColor } } } },
+                time: { useUTC: false },
                 xAxis: {
-                    categories: categories,
-                    labels: { step: step, style: { color: '#78909c', fontSize: '10px' }, rotation: -45 },
-                    gridLineColor: 'rgba(255,255,255,0.03)'
+                    type: 'datetime',
+                    labels: { style: { color: textColor, fontSize: '10px' }, format: '{value:%d/%m %H:%M}' },
+                    gridLineColor: gridColor
                 },
                 yAxis: [{
-                    title: { text: 'Nivel (msnm)', style: { color: '#78909c' } },
-                    labels: { style: { color: '#78909c' } },
-                    gridLineColor: 'rgba(255,255,255,0.05)',
-                    plotLines: [{
-                        value: d.initialElev, color: 'rgba(255,255,255,0.3)', width: 1, dashStyle: 'Dot',
-                        label: { text: 'Actual: ' + d.initialElev.toFixed(2), style: { color: 'rgba(255,255,255,0.5)', fontSize: '10px' } }
-                    }]
+                    title: { text: 'Nivel (msnm)', style: { color: textColor } },
+                    labels: { style: { color: textColor }, format: '{value:.2f}' },
+                    gridLineColor: gridColor,
+                    plotLines: elevPlotLines
+                }, {
+                    title: { text: 'Gasto (m³/s)', style: { color: textColor } },
+                    labels: { style: { color: textColor } },
+                    opposite: true,
+                    gridLineColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                    min: 0
                 }, {
                     title: { text: 'Lluvia (mm)', style: { color: '#42a5f5' } },
                     labels: { style: { color: '#42a5f5' } },
-                    opposite: true, reversed: true, min: 0
+                    opposite: true,
+                    reversed: true, min: 0,
+                    gridLineWidth: 0,
+                    top: '0%', height: '20%', offset: 0
                 }],
-                series: [{
-                    name: 'Nivel (msnm)', type: 'areaspline', data: elevData, color: color,
-                    fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-                        stops: [[0, Highcharts.color(color).setOpacity(0.3).get()], [1, Highcharts.color(color).setOpacity(0.02).get()]] },
-                    lineWidth: 2.5, marker: { enabled: false }, yAxis: 0
-                }, {
-                    name: 'Lluvia (mm)', type: 'column', data: rainData, color: 'rgba(66,165,245,0.5)',
-                    borderWidth: 0, pointPadding: 0, groupPadding: 0, yAxis: 1
-                }, {
-                    name: 'Aportación (Mm³)', type: 'spline', data: inputData, color: '#ffab40',
-                    lineWidth: 1.5, dashStyle: 'ShortDot', marker: { enabled: false }, yAxis: 0, visible: false
-                }],
-                legend: { itemStyle: { color: '#b0bec5', fontSize: '11px' }, backgroundColor: 'transparent' },
+                plotOptions: {
+                    series: { animation: { duration: 800 } },
+                    column: { borderRadius: 1, borderWidth: 0, groupPadding: 0.1, pointPadding: 0.05 }
+                },
+                series: [
+                    // Nivel
+                    {
+                        name: 'Nivel (msnm)', type: 'areaspline', data: elevData, color: color,
+                        fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                            stops: [[0, Highcharts.color(color).setOpacity(0.25).get()], [1, Highcharts.color(color).setOpacity(0.02).get()]] },
+                        lineWidth: 2.5, marker: { enabled: false }, yAxis: 0, zIndex: 3
+                    },
+                    // Asíntota
+                    {
+                        name: 'Asíntota (' + asintotaVal.toFixed(2) + ' msnm)', type: 'line',
+                        data: asintotaData,
+                        color: '#ce93d8', lineWidth: 2, dashStyle: 'LongDashDot',
+                        marker: { enabled: false }, yAxis: 0, zIndex: 4
+                    },
+                    // Aportación (columna azul)
+                    {
+                        name: 'Aportación (m³/s)', type: 'column', data: aportData, color: '#2196F3',
+                        yAxis: 1, zIndex: 1, opacity: 0.7
+                    },
+                    // Extracción (columna naranja)
+                    {
+                        name: 'Extracción (m³/s)', type: 'column', data: extracData, color: '#FF5722',
+                        yAxis: 1, zIndex: 1, opacity: 0.7
+                    },
+                    // Lluvia (barras invertidas arriba)
+                    {
+                        name: 'Lluvia (mm)', type: 'column', data: rainData, color: 'rgba(66,165,245,0.5)',
+                        borderWidth: 0, pointPadding: 0, groupPadding: 0, yAxis: 2
+                    }
+                ],
+                legend: { itemStyle: { color: legendColor, fontSize: '11px' }, backgroundColor: 'transparent' },
                 credits: { enabled: false },
-                tooltip: { shared: true, backgroundColor: 'rgba(15,25,30,0.95)', borderColor: color,
-                    style: { color: '#e8f5e9' } }
+                tooltip: {
+                    shared: true, crosshairs: true,
+                    backgroundColor: tooltipBg, borderColor: color,
+                    style: { color: tooltipText },
+                    xDateFormat: '%d/%m/%Y %H:%M'
+                }
             });
         });
     }
+
+    window.exportHydroChart = function(damName) {
+        var chart = window['_hydroChart_' + damName];
+        if (chart) {
+            var isL = document.body.classList.contains('fv-light');
+            chart.exportChart({ type: 'image/png', filename: 'comportamiento_' + damName }, {
+                chart: { backgroundColor: isL ? '#ffffff' : '#0f1923' }
+            });
+        }
+    };
 
     // ══════════════════════════════════════════════════
     // TABLA FUNCIONAMIENTO DE VASOS SIMULADO
@@ -2778,6 +2993,225 @@ $(function() {
         tbody += '</tr>';
 
         $('#hydroTableBody').html(tbody);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // SECCIÓN: TENDENCIA — DATOS REALES + PRONÓSTICO
+    // ══════════════════════════════════════════════════════
+
+    var trendColors = {
+        'Angostura': '#00e676', 'Chicoasen': '#42a5f5', 'Malpaso': '#ffab40',
+        'JGrijalva': '#ab47bc', 'Penitas': '#ef5350'
+    };
+
+    var trendLoaded = false;
+
+    // Autoload cuando se activa el tab
+    $(document).on('click', '.presa-tab[data-presa="tendencia"]', function() {
+        if (!trendLoaded) loadTrendData();
+    });
+
+    $('#btnLoadTrend').on('click', function() { loadTrendData(); });
+
+    function loadTrendData() {
+        var realDays = parseInt($('#trendRealDays').val()) || 5;
+        var forecastHours = parseInt($('#trendForecastHours').val()) || 72;
+        var $btn = $('#btnLoadTrend');
+        $btn.addClass('loading disabled');
+        $('#trendStatus').html('<i class="spinner loading icon"></i> Calculando...').css('color', '#78909c');
+
+        $.getJSON('@Url.Action("GetTrendData", "HydroForecast")', { realDays: realDays, forecastHours: forecastHours }, function(res) {
+            $btn.removeClass('loading disabled');
+            if (!res.success) {
+                $('#trendStatus').text('Error: ' + res.message).css('color', '#ff5252');
+                return;
+            }
+            trendLoaded = true;
+            var fcDate = res.forecastDate || 'N/D';
+            $('#trendInfo').html(
+                '<i class="info circle icon" style="color:#00bcd4;"></i> ' +
+                '<span style="color:#78909c;">Datos reales: <strong style="color:#e8f5e9;">' + res.realDays + ' días</strong></span> · ' +
+                '<span style="color:#78909c;">Pronóstico: <strong style="color:#e8f5e9;">' + res.forecastHours + 'h</strong></span> · ' +
+                '<span style="color:#78909c;">Fecha pronóstico: <strong style="color:#81c784;">' + fcDate + '</strong></span> · ' +
+                '<span style="color:#78909c;">Generado: <strong style="color:#b0bec5;">' + res.generatedAt + '</strong></span>'
+            );
+            $('#trendStatus').html('<i class="check circle icon" style="color:#00e676;"></i> Listo').css('color', '#a5d6a7');
+            renderTrendCharts(res);
+        }).fail(function() {
+            $btn.removeClass('loading disabled');
+            $('#trendStatus').text('Error de conexión').css('color', '#ff5252');
+        });
+    }
+
+    function renderTrendCharts(res) {
+        var container = $('#trendChartsContainer');
+        container.empty();
+
+        if (!res.dams || !res.dams.length) {
+            container.html('<div style="text-align:center; padding:40px; color:#546e7a;">Sin datos disponibles</div>');
+            return;
+        }
+
+        res.dams.forEach(function(dam) {
+            var chartId = 'trend-chart-' + dam.damName;
+            var color = trendColors[dam.damName] || '#00e676';
+
+            container.append(
+                '<div class="chart-card" style="margin-bottom:16px; position:relative;">' +
+                '  <div id="' + chartId + '" style="height:400px;"></div>' +
+                '</div>'
+            );
+
+            // Separar series reales y pronóstico
+            var realPts = dam.series.filter(function(s) { return !s.isForecast; });
+            var fcPts = dam.series.filter(function(s) { return s.isForecast; });
+
+            // Datos para Highcharts (timestamps)
+            var realElev = realPts.map(function(s) { return [new Date(s.time).getTime(), s.elevation]; }).filter(function(p) { return p[1] != null; });
+            var realAport = realPts.map(function(s) { return [new Date(s.time).getTime(), s.aportacionQ]; }).filter(function(p) { return p[1] != null; });
+            var realExtrac = realPts.map(function(s) { return [new Date(s.time).getTime(), s.extractionQ]; }).filter(function(p) { return p[1] != null; });
+
+            // Para el pronóstico, incluir el último punto real como enlace
+            var lastReal = realElev.length > 0 ? realElev[realElev.length - 1] : null;
+            var fcElev = fcPts.map(function(s) { return [new Date(s.time).getTime(), s.elevation]; });
+            var fcAport = fcPts.map(function(s) { return [new Date(s.time).getTime(), s.aportacionQ]; });
+            var fcExtrac = fcPts.map(function(s) { return [new Date(s.time).getTime(), s.extractionQ]; });
+
+            // Conectar con el último punto real
+            if (lastReal) fcElev.unshift(lastReal);
+            if (realAport.length > 0) fcAport.unshift(realAport[realAport.length - 1]);
+            if (realExtrac.length > 0) fcExtrac.unshift(realExtrac[realExtrac.length - 1]);
+
+            // Zona vertical donde inicia el pronóstico
+            var forecastStartTime = fcPts.length > 0 ? new Date(fcPts[0].time).getTime() : null;
+
+            // Plotlines NAMO / NAME + ASÍNTOTA
+            var plotLines = [];
+            if (dam.namo) plotLines.push({ value: dam.namo, color: '#ffeb3b', width: 2, dashStyle: 'Dash', label: { text: 'NAMO ' + dam.namo.toFixed(1), style: { color: '#ffeb3b', fontSize: '10px', fontWeight: '600' }, align: 'right' }, zIndex: 5 });
+            if (dam.name_e) plotLines.push({ value: dam.name_e, color: '#ff5252', width: 2, dashStyle: 'Dash', label: { text: 'NAME ' + dam.name_e.toFixed(1), style: { color: '#ff5252', fontSize: '10px', fontWeight: '600' }, align: 'right' }, zIndex: 5 });
+            // Asíntota: nivel al que tiende el embalse (último valor del pronóstico)
+            if (dam.finalElev) plotLines.push({ value: dam.finalElev, color: '#ce93d8', width: 2, dashStyle: 'LongDashDot', label: { text: 'Asíntota ' + dam.finalElev.toFixed(2), style: { color: '#ce93d8', fontSize: '10px', fontWeight: '600' }, align: 'left' }, zIndex: 5 });
+
+            // Plot bands: zona pronóstico
+            var plotBands = [];
+            if (forecastStartTime) {
+                plotBands.push({
+                    from: forecastStartTime, to: Infinity,
+                    color: 'rgba(0,188,212,0.04)',
+                    label: { text: 'PRONÓSTICO', style: { color: 'rgba(0,188,212,0.4)', fontSize: '11px', fontWeight: '600' }, align: 'left', verticalAlign: 'top', y: 10 }
+                });
+            }
+
+            // Delta texto
+            var arrow = dam.deltaElev >= 0 ? '▲' : '▼';
+            var deltaColor = dam.deltaElev >= 0 ? '#ff7043' : '#66bb6a';
+
+            // Current theme
+            var isLight = document.body.classList.contains('fv-light');
+            var bgColor = isLight ? '#ffffff' : '#0f1923';
+            var textColor = isLight ? '#555' : '#78909c';
+            var gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
+            var tooltipBg = isLight ? 'rgba(255,255,255,0.96)' : 'rgba(15,25,30,0.95)';
+            var tooltipText = isLight ? '#333' : '#e8f5e9';
+            var legendColor = isLight ? '#333' : '#b0bec5';
+            var subtitleColor = isLight ? (dam.deltaElev >= 0 ? '#d84315' : '#2e7d32') : deltaColor;
+
+            Highcharts.chart(chartId, {
+                chart: { backgroundColor: bgColor, height: 420, zoomType: 'x' },
+                title: {
+                    text: dam.displayName + ' — Comportamiento del Embalse',
+                    style: { color: color, fontSize: '16px', fontWeight: '700' }
+                },
+                subtitle: {
+                    text: 'Actual: ' + dam.initialElev.toFixed(2) + ' msnm → ' + arrow + ' ' + (dam.deltaElev >= 0 ? '+' : '') + dam.deltaElev.toFixed(2) + ' m → Asíntota: ' + dam.finalElev.toFixed(2) + ' msnm',
+                    style: { color: subtitleColor, fontSize: '12px', fontWeight: '600' }
+                },
+                exporting: { enabled: true, buttons: { contextButton: { theme: { fill: bgColor } } } },
+                time: { useUTC: false },
+                xAxis: {
+                    type: 'datetime',
+                    labels: { style: { color: textColor, fontSize: '10px' }, format: '{value:%d/%m %H:%M}' },
+                    gridLineColor: gridColor,
+                    plotBands: plotBands
+                },
+                yAxis: [{
+                    title: { text: 'Nivel (msnm)', style: { color: textColor } },
+                    labels: { style: { color: textColor } },
+                    gridLineColor: gridColor,
+                    plotLines: plotLines
+                }, {
+                    title: { text: 'Gasto (m³/s)', style: { color: textColor } },
+                    labels: { style: { color: textColor } },
+                    opposite: true,
+                    gridLineColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                    min: 0
+                }],
+                legend: { itemStyle: { color: legendColor, fontSize: '11px' }, backgroundColor: 'transparent' },
+                credits: { enabled: false },
+                tooltip: {
+                    shared: true, crosshairs: true,
+                    backgroundColor: tooltipBg, borderColor: color,
+                    style: { color: tooltipText },
+                    xDateFormat: '%d/%m/%Y %H:%M'
+                },
+                plotOptions: {
+                    series: { animation: { duration: 800 } },
+                    column: { borderRadius: 1, borderWidth: 0, groupPadding: 0.1, pointPadding: 0.05 }
+                },
+                series: [
+                    // — Nivel Real —
+                    {
+                        name: 'Nivel Real', type: 'areaspline', data: realElev, color: color,
+                        fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                            stops: [[0, Highcharts.color(color).setOpacity(0.25).get()], [1, Highcharts.color(color).setOpacity(0.02).get()]] },
+                        lineWidth: 2.5, marker: { enabled: false }, yAxis: 0, zIndex: 3
+                    },
+                    // — Nivel Pronóstico —
+                    {
+                        name: 'Nivel Pronóstico', type: 'areaspline', data: fcElev, color: color,
+                        fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                            stops: [[0, Highcharts.color(color).setOpacity(0.12).get()], [1, Highcharts.color(color).setOpacity(0.01).get()]] },
+                        lineWidth: 2, dashStyle: 'ShortDash', marker: { enabled: false }, yAxis: 0, zIndex: 2
+                    },
+                    // — Asíntota (línea horizontal al nivel final pronosticado) —
+                    {
+                        name: 'Asíntota (' + dam.finalElev.toFixed(2) + ' msnm)', type: 'line',
+                        data: (function() {
+                            var allTimes = realElev.concat(fcElev);
+                            if (allTimes.length < 2) return [];
+                            return [[allTimes[0][0], dam.finalElev], [allTimes[allTimes.length - 1][0], dam.finalElev]];
+                        })(),
+                        color: '#ce93d8', lineWidth: 2, dashStyle: 'LongDashDot',
+                        marker: { enabled: false }, enableMouseTracking: true,
+                        yAxis: 0, zIndex: 4
+                    },
+                    // — Aportaciones Real (columna) —
+                    {
+                        name: 'Aportación Real (m³/s)', type: 'column', data: realAport, color: '#2196F3',
+                        yAxis: 1, zIndex: 1, opacity: 0.7
+                    },
+                    // — Aportaciones Pronóstico (columna punteada) —
+                    {
+                        name: 'Aportación Pronóstico', type: 'column', data: fcAport,
+                        color: Highcharts.color('#2196F3').setOpacity(0.4).get(),
+                        borderColor: '#2196F3', borderWidth: 1,
+                        yAxis: 1, zIndex: 1
+                    },
+                    // — Extracciones Real (columna) —
+                    {
+                        name: 'Extracción Real (m³/s)', type: 'column', data: realExtrac, color: '#FF5722',
+                        yAxis: 1, zIndex: 1, opacity: 0.7
+                    },
+                    // — Extracciones Pronóstico (columna punteada) —
+                    {
+                        name: 'Extracción Pronóstico', type: 'column', data: fcExtrac,
+                        color: Highcharts.color('#FF5722').setOpacity(0.4).get(),
+                        borderColor: '#FF5722', borderWidth: 1,
+                        yAxis: 1, zIndex: 1
+                    }
+                ]
+            });
+        });
     }
 
 });

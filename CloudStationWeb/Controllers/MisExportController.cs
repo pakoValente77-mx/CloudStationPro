@@ -71,17 +71,28 @@ namespace CloudStationWeb.Controllers
 
         // GET: /MisExport/GetStations
         [HttpGet]
-        public async Task<IActionResult> GetStations()
+        public async Task<IActionResult> GetStations(bool onlyCfe = true)
         {
             try
             {
                 using var db = new SqlConnection(_sqlConn);
-                var stations = await db.QueryAsync<MisStationDto>(@"
+                var sql = @"
                     SELECT e.IdAsignado, ISNULL(g.IdSatelital, '') AS IdSatelital, e.Nombre
                     FROM Estacion e
-                    LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
-                    WHERE e.Activo = 1 AND e.GOES = 1
-                    ORDER BY e.Nombre");
+                    LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id";
+                if (onlyCfe)
+                {
+                    sql += @"
+                    JOIN Organismo o ON e.IdOrganismo = o.Id
+                    WHERE e.Activo = 1 AND e.GOES = 1 AND o.Nombre = N'Comisión Federal de Electricidad'";
+                }
+                else
+                {
+                    sql += @"
+                    WHERE e.Activo = 1 AND e.GOES = 1";
+                }
+                sql += " ORDER BY e.Nombre";
+                var stations = await db.QueryAsync<MisStationDto>(sql);
                 return Json(stations);
             }
             catch (Exception ex)

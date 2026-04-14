@@ -51,9 +51,10 @@ namespace CloudStationWeb.Controllers
                 AzureOpenAIDeployment = _config["AzureOpenAI:DeploymentName"] ?? "",
                 AzureOpenAIApiVersion = _config["AzureOpenAI:ApiVersion"] ?? "",
 
-                // Azure Blob
-                AzureBlobConnectionString = _config["AzureBlob:ConnectionString"] ?? "",
-                AzureBlobContainer = _config["AzureBlob:Container"] ?? "",
+                // ImageStore (Local)
+                ImageStorePath = _config["ImageStore:Path"] ?? "",
+                ImageStoreApiKey = _config["ImageStore:ApiKey"] ?? "",
+                ImageStoreBaseUrl = _config["ImageStore:BaseUrl"] ?? "",
 
                 // Early Warning
                 EarlyWarningEnabled = bool.TryParse(_config["EarlyWarning:Enabled"], out var ew) && ew,
@@ -141,10 +142,11 @@ namespace CloudStationWeb.Controllers
                     ["ApiVersion"] = model.AzureOpenAIApiVersion
                 };
 
-                newJson["AzureBlob"] = new Dictionary<string, string>
+                newJson["ImageStore"] = new Dictionary<string, string>
                 {
-                    ["ConnectionString"] = model.AzureBlobConnectionString,
-                    ["Container"] = model.AzureBlobContainer
+                    ["Path"] = model.ImageStorePath,
+                    ["ApiKey"] = model.ImageStoreApiKey,
+                    ["BaseUrl"] = model.ImageStoreBaseUrl
                 };
 
                 newJson["EarlyWarning"] = new Dictionary<string, object>
@@ -239,9 +241,10 @@ namespace CloudStationWeb.Controllers
         public string AzureOpenAIDeployment { get; set; } = "";
         public string AzureOpenAIApiVersion { get; set; } = "";
 
-        // Azure Blob
-        public string AzureBlobConnectionString { get; set; } = "";
-        public string AzureBlobContainer { get; set; } = "";
+        // ImageStore (Local)
+        public string ImageStorePath { get; set; } = "";
+        public string ImageStoreApiKey { get; set; } = "";
+        public string ImageStoreBaseUrl { get; set; } = "";
 
         // Early Warning
         public bool EarlyWarningEnabled { get; set; }

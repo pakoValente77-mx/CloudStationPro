@@ -667,6 +667,519 @@ def importar_funvasos_automatico():
         print(f"[ERROR FUNVASOS] {e}")
 
 
+# ==================== IMPORTACIÓN AUTOMÁTICA DE BHG (BOLETÍN HIDROLÓGICO) ====================
+
+# Mapeo de estaciones del Boletín: fila → (nombre_normalizado, subcuenca)
+_BHG_ESTACIONES_BOLETIN = {
+    11: ('LA ANGOSTURA', 'ANGOSTURA'),
+    12: ('PTE. CONCORDIA', 'ANGOSTURA'),
+    13: ('SAN MIGUEL', 'ANGOSTURA'),
+    14: ('REFORMA', 'ANGOSTURA'),
+    15: ('REV. MEXICANA', 'ANGOSTURA'),
+    18: ('CHICOASEN', 'CHICOASEN'),
+    19: ('STO. DOMINGO', 'CHICOASEN'),
+    20: ('EL BOQUERON', 'CHICOASEN'),
+    21: ('ACALA', 'CHICOASEN'),
+    22: ('TUXTLA', 'CHICOASEN'),
+    23: ('SIERRA MORENA', 'CHICOASEN'),
+    26: ('VERTEDORES MALPASO', 'MALPASO'),
+    27: ('POBLADO CHICOASEN', 'MALPASO'),
+    28: ('LAS FLORES II', 'MALPASO'),
+    29: ('STA. MARIA', 'MALPASO'),
+    30: ('YAMONHO', 'MALPASO'),
+    33: ('VERTEDORES PEÑITAS', 'PEÑITAS'),
+    34: ('TZIMBAC', 'PEÑITAS'),
+    35: ('SAYULA', 'PEÑITAS'),
+    36: ('OCOTEPEC', 'PEÑITAS'),
+    37: ('JUAN GRIJALVA SUP.', 'PEÑITAS'),
+    41: ('SAMARIA', 'BAJO GRIJALVA'),
+    42: ('GONZALEZ', 'BAJO GRIJALVA'),
+    45: ('VILLAHERMOSA', 'BAJO GRIJALVA'),
+    48: ('OXOLOTAN', 'TACOTALPA'),
+    52: ('BOCA DEL CERRO', 'USUMACINTA'),
+}
+
+# Presas y sus columnas en las hojas de detalle (Niveles/Aportaciones/Extracción)
+# Columna (1-based) → nombre_presa
+_BHG_PRESAS_COLS = {
+    2: 'ANGOSTURA',    # col B
+    4: 'CHICOASEN',    # col D
+    5: 'MALPASO',      # col E (en Niveles), col F (en Aportaciones/Extracción)
+    7: 'CANAL_JG',     # col G (solo en Niveles)
+    8: 'PEÑITAS',      # col H
+}
+
+# Columnas para hojas Niveles (B=Ang, C=DiffCG_Ang, D=Chic, E=Mps, F=DiffCG_Mps, G=Canal, H=Peñ)
+_BHG_NIVELES_COLS = {
+    'ANGOSTURA': {'nivel': 2, 'diff_cg': 3},
+    'CHICOASEN': {'nivel': 4},
+    'MALPASO':   {'nivel': 5, 'diff_cg': 6},
+    'CANAL_JG':  {'nivel': 7},
+    'PEÑITAS':   {'nivel': 8},
+}
+
+# Columnas para Aportaciones (B/C=Ang vol/q, D/E=Chic, F/G=Mps, H/I=Peñ)
+_BHG_APORT_COLS = {
+    'ANGOSTURA': {'vol': 2, 'q': 3},
+    'CHICOASEN': {'vol': 4, 'q': 5},
+    'MALPASO':   {'vol': 6, 'q': 7},
+    'PEÑITAS':   {'vol': 8, 'q': 9},
+}
+
+# Columnas para Extracción (mismo layout que Aportaciones)
+_BHG_EXTRAC_COLS = _BHG_APORT_COLS
+
+# Columnas para Generación (B/C=Ang gen/fp, D/E=Chic, F/G=Mps, H/I=Peñ)
+_BHG_GENER_COLS = {
+    'ANGOSTURA': {'gen': 2, 'fp': 3},
+    'CHICOASEN': {'gen': 4, 'fp': 5},
+    'MALPASO':   {'gen': 6, 'fp': 7},
+    'PEÑITAS':   {'gen': 8, 'fp': 9},
+}
+
+# Estaciones en Precipitación detalle (col AT=num, AU=nombre, AV=acum, AW+=días)
+_BHG_PRECIP_ROWS = range(10, 39)  # filas 10-38 en hoja Precipitación
+
+
+def _bhg_get_float(ws, row, col):
+    """Lee un valor float de una celda BHG, retorna None si vacía, #N/A o no numérica."""
+    val = ws.cell(row=row, column=col).value
+    if val is None:
+        return None
+    if isinstance(val, str) and ('#N/A' in val or val.strip() == '' or '#' in val):
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _bhg_extraer_fecha_boletin(ws):
+    """Extrae fecha del Boletín desde celda N4 (datetime)."""
+    from datetime import datetime as dt_cls
+    val = ws.cell(row=4, column=14).value  # N4
+    if isinstance(val, dt_cls):
+        return val.replace(hour=0, minute=0, second=0, microsecond=0)
+    return None
+
+
+def _bhg_extraer_mes_anio(ws, sheet_name):
+    """Extrae mes/año desde la celda de título de las hojas (ej: 'MES: ABRIL  AÑO: 2026')."""
+    # Buscar en fila 5 el texto "MES:...AÑO:..."
+    import re
+    for col in range(1, 20):
+        val = ws.cell(row=5, column=col).value
+        if val and isinstance(val, str) and 'MES:' in val.upper():
+            txt = val.upper()
+            mes_match = re.search(r'MES:\s*(\w+)', txt)
+            anio_match = re.search(r'AÑO:\s*(\d{4})', txt)
+            if mes_match and anio_match:
+                mes_nombre = mes_match.group(1).strip().lower()
+                anio = int(anio_match.group(1))
+                mes = _MESES_ES.get(mes_nombre)
+                if mes:
+                    return mes, anio
+    return None, None
+
+
+def _bhg_parsear_excel(filepath):
+    """Parsea un archivo Excel BHG y retorna los datos estructurados.
+    Returns: (fecha, mes, anio, presas_data, estaciones_data, errores)
+      - presas_data: dict { (dia, presa): {nivel, aportacion_vol, ...} }
+      - estaciones_data: list of dicts {ts, estacion, subcuenca, precip_24h, ...}
+    """
+    from openpyxl import load_workbook
+    from datetime import datetime as dt_cls, date as date_cls
+    import calendar
+
+    errores = []
+    presas_data = {}
+    estaciones_data = []
+
+    try:
+        wb = load_workbook(filepath, data_only=True)
+    except Exception as e:
+        return None, None, None, {}, [], [f"Error abriendo Excel BHG: {e}"]
+
+    # ── 1. BOLETÍN: extraer fecha y datos del día ──
+    fecha = None
+    if 'Boletín' in wb.sheetnames:
+        ws_bol = wb['Boletín']
+        fecha = _bhg_extraer_fecha_boletin(ws_bol)
+
+        if fecha:
+            dia = fecha.day
+            # Datos de presas del Boletín (resumen del día)
+            presa_cols = {
+                'ANGOSTURA': 3,  # col C
+                'CHICOASEN': 4,  # col D
+                'MALPASO': 5,    # col E
+                'CANAL_JG': 6,   # col F
+                'PEÑITAS': 7,    # col G
+            }
+
+            for presa, col in presa_cols.items():
+                key = (dia, presa)
+                if key not in presas_data:
+                    presas_data[key] = {}
+                p = presas_data[key]
+                p['nivel'] = _bhg_get_float(ws_bol, 52, col)           # 6:00h
+                p['vol_almacenado'] = _bhg_get_float(ws_bol, 53, col)
+                p['pct_llenado_namo'] = _bhg_get_float(ws_bol, 55, col)
+                p['pct_llenado_name'] = _bhg_get_float(ws_bol, 57, col)
+
+            # Estaciones convencionales del Boletín
+            for row_num, (est_nombre, subcuenca) in _BHG_ESTACIONES_BOLETIN.items():
+                precip = _bhg_get_float(ws_bol, row_num, 10)   # col J
+                escala = _bhg_get_float(ws_bol, row_num, 11)   # col K
+                gasto = _bhg_get_float(ws_bol, row_num, 12)    # col L
+                evap = _bhg_get_float(ws_bol, row_num, 13)     # col M
+                tmax = _bhg_get_float(ws_bol, row_num, 14)     # col N
+                tmin = _bhg_get_float(ws_bol, row_num, 15)     # col O
+                tamb = _bhg_get_float(ws_bol, row_num, 16)     # col P
+
+                # Solo agregar si tiene al menos un dato
+                if any(v is not None for v in [precip, escala, gasto, evap, tmax, tmin, tamb]):
+                    estaciones_data.append({
+                        'ts': fecha,
+                        'estacion': est_nombre,
+                        'subcuenca': subcuenca,
+                        'precip_24h': precip,
+                        'precip_acum_mensual': None,  # se llena desde Precipitación
+                        'escala': escala,
+                        'gasto': gasto,
+                        'evaporacion': evap,
+                        'temp_max': tmax,
+                        'temp_min': tmin,
+                        'temp_amb': tamb,
+                    })
+    else:
+        errores.append("No se encontró la hoja 'Boletín'.")
+
+    if not fecha:
+        # Intentar extraer de nombre de archivo: bhgDDMMAA.xlsm
+        nombre = os.path.basename(filepath).lower()
+        import re
+        m = re.match(r'bhg(\d{2})(\d{2})(\d{2})', nombre)
+        if m:
+            try:
+                d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                fecha = dt_cls(2000 + y, mo, d)
+            except ValueError:
+                pass
+
+    if not fecha:
+        wb.close()
+        return None, None, None, {}, [], ["No se pudo extraer la fecha del BHG."]
+
+    mes = fecha.month
+    anio = fecha.year
+
+    # ── 2. NIVELES: serie diaria del mes ──
+    if 'Niveles' in wb.sheetnames:
+        ws_niv = wb['Niveles']
+        # Curva guía: AJ=col 36 (Angostura), AM=col 39 (Malpaso)
+        for row in range(9, 40):  # filas 9-39 = días 1-31
+            dia_val = _bhg_get_float(ws_niv, row, 1)  # col A
+            if dia_val is None or dia_val < 1 or dia_val > 31:
+                continue
+            dia = int(dia_val)
+
+            for presa, cols in _BHG_NIVELES_COLS.items():
+                nivel = _bhg_get_float(ws_niv, row, cols['nivel'])
+                if nivel is None:
+                    continue
+                key = (dia, presa)
+                if key not in presas_data:
+                    presas_data[key] = {}
+                presas_data[key]['nivel'] = nivel
+                if 'diff_cg' in cols:
+                    presas_data[key]['diff_curva_guia'] = _bhg_get_float(ws_niv, row, cols['diff_cg'])
+
+            # Curva guía Angostura (col AJ=36) y Malpaso (col AM=39)
+            cg_ang = _bhg_get_float(ws_niv, row, 36)
+            if cg_ang and (dia, 'ANGOSTURA') in presas_data:
+                presas_data[(dia, 'ANGOSTURA')]['curva_guia'] = cg_ang
+            cg_mps = _bhg_get_float(ws_niv, row, 39)
+            if cg_mps and (dia, 'MALPASO') in presas_data:
+                presas_data[(dia, 'MALPASO')]['curva_guia'] = cg_mps
+
+        print(f"[BHG]   Niveles: {sum(1 for k in presas_data if presas_data[k].get('nivel') is not None)} registros")
+
+    # ── 3. APORTACIONES: serie diaria del mes ──
+    if 'Aportaciones' in wb.sheetnames:
+        ws_apo = wb['Aportaciones']
+        for row in range(10, 41):
+            dia_val = _bhg_get_float(ws_apo, row, 1)
+            if dia_val is None or dia_val < 1 or dia_val > 31:
+                continue
+            dia = int(dia_val)
+
+            for presa, cols in _BHG_APORT_COLS.items():
+                vol = _bhg_get_float(ws_apo, row, cols['vol'])
+                q = _bhg_get_float(ws_apo, row, cols['q'])
+                if vol is None and q is None:
+                    continue
+                key = (dia, presa)
+                if key not in presas_data:
+                    presas_data[key] = {}
+                presas_data[key]['aportacion_vol'] = vol
+                presas_data[key]['aportacion_q'] = q
+
+        print(f"[BHG]   Aportaciones parseadas")
+
+    # ── 4. EXTRACCIÓN: serie diaria del mes ──
+    if 'Extracción' in wb.sheetnames:
+        ws_ext = wb['Extracción']
+        for row in range(10, 41):
+            dia_val = _bhg_get_float(ws_ext, row, 1)
+            if dia_val is None or dia_val < 1 or dia_val > 31:
+                continue
+            dia = int(dia_val)
+
+            for presa, cols in _BHG_EXTRAC_COLS.items():
+                vol = _bhg_get_float(ws_ext, row, cols['vol'])
+                q = _bhg_get_float(ws_ext, row, cols['q'])
+                if vol is None and q is None:
+                    continue
+                key = (dia, presa)
+                if key not in presas_data:
+                    presas_data[key] = {}
+                presas_data[key]['extraccion_vol'] = vol
+                presas_data[key]['extraccion_q'] = q
+
+        print(f"[BHG]   Extracciones parseadas")
+
+    # ── 5. GENERACIÓN: serie diaria del mes ──
+    gen_sheet = None
+    for sn in wb.sheetnames:
+        if 'eneración' in sn or 'eneracion' in sn.lower():
+            gen_sheet = sn
+            break
+    if gen_sheet:
+        ws_gen = wb[gen_sheet]
+        for row in range(10, 41):
+            dia_val = _bhg_get_float(ws_gen, row, 1)
+            if dia_val is None or dia_val < 1 or dia_val > 31:
+                continue
+            dia = int(dia_val)
+
+            for presa, cols in _BHG_GENER_COLS.items():
+                gen = _bhg_get_float(ws_gen, row, cols['gen'])
+                fp = _bhg_get_float(ws_gen, row, cols['fp'])
+                if gen is None and fp is None:
+                    continue
+                key = (dia, presa)
+                if key not in presas_data:
+                    presas_data[key] = {}
+                # Generación viene en GWh directamente
+                presas_data[key]['generacion_gwh'] = gen
+                presas_data[key]['factor_planta'] = fp
+
+        print(f"[BHG]   Generación parseada")
+
+    # ── 6. PRECIPITACIÓN: acumulados mensuales por estación ──
+    if 'Precipitación' in wb.sheetnames and fecha:
+        ws_prec = wb['Precipitación']
+        # Área de detalle: col AU(47)=nombre estación, AV(48)=acumulado
+        for row in _BHG_PRECIP_ROWS:
+            nombre_raw = ws_prec.cell(row=row, column=47).value  # col AU
+            acum = _bhg_get_float(ws_prec, row, 48)  # col AV
+            if nombre_raw and isinstance(nombre_raw, str) and nombre_raw.strip():
+                nombre_norm = nombre_raw.strip().upper().replace('*', '').strip()
+                # Buscar la estación en estaciones_data y agregar acumulado
+                for est in estaciones_data:
+                    if est['estacion'] in nombre_norm or nombre_norm in est['estacion']:
+                        est['precip_acum_mensual'] = acum
+                        break
+
+    wb.close()
+
+    dias_con_datos = len(set(dia for dia, _ in presas_data.keys()))
+    print(f"[BHG]   Total: {len(presas_data)} registros presa, {len(estaciones_data)} estaciones, {dias_con_datos} días")
+
+    if not presas_data and not estaciones_data:
+        errores.append("No se encontraron datos en el archivo BHG.")
+
+    return fecha, mes, anio, presas_data, estaciones_data, errores
+
+
+def _bhg_insertar_pg(fecha, mes, anio, presas_data, estaciones_data, nombre_archivo):
+    """Inserta datos BHG en PostgreSQL con upsert (ON CONFLICT UPDATE)."""
+    from datetime import date as date_cls
+    import calendar
+
+    conn = get_pg_conn()
+    try:
+        cur = conn.cursor()
+        dias_max = calendar.monthrange(anio, mes)[1]
+
+        # ── Insertar/actualizar datos de presas ──
+        upsert_presa = """
+            INSERT INTO bhg_presa_diario
+            (ts, presa, nivel, curva_guia, diff_curva_guia, vol_almacenado,
+             pct_llenado_namo, pct_llenado_name,
+             aportacion_vol, aportacion_q, extraccion_vol, extraccion_q,
+             generacion_gwh, factor_planta)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ts, presa) DO UPDATE SET
+             nivel = COALESCE(EXCLUDED.nivel, bhg_presa_diario.nivel),
+             curva_guia = COALESCE(EXCLUDED.curva_guia, bhg_presa_diario.curva_guia),
+             diff_curva_guia = COALESCE(EXCLUDED.diff_curva_guia, bhg_presa_diario.diff_curva_guia),
+             vol_almacenado = COALESCE(EXCLUDED.vol_almacenado, bhg_presa_diario.vol_almacenado),
+             pct_llenado_namo = COALESCE(EXCLUDED.pct_llenado_namo, bhg_presa_diario.pct_llenado_namo),
+             pct_llenado_name = COALESCE(EXCLUDED.pct_llenado_name, bhg_presa_diario.pct_llenado_name),
+             aportacion_vol = COALESCE(EXCLUDED.aportacion_vol, bhg_presa_diario.aportacion_vol),
+             aportacion_q = COALESCE(EXCLUDED.aportacion_q, bhg_presa_diario.aportacion_q),
+             extraccion_vol = COALESCE(EXCLUDED.extraccion_vol, bhg_presa_diario.extraccion_vol),
+             extraccion_q = COALESCE(EXCLUDED.extraccion_q, bhg_presa_diario.extraccion_q),
+             generacion_gwh = COALESCE(EXCLUDED.generacion_gwh, bhg_presa_diario.generacion_gwh),
+             factor_planta = COALESCE(EXCLUDED.factor_planta, bhg_presa_diario.factor_planta)
+        """
+
+        presa_count = 0
+        for (dia, presa), data in presas_data.items():
+            if dia < 1 or dia > dias_max:
+                continue
+            ts = date_cls(anio, mes, dia)
+            cur.execute(upsert_presa, (
+                ts, presa,
+                data.get('nivel'), data.get('curva_guia'), data.get('diff_curva_guia'),
+                data.get('vol_almacenado'), data.get('pct_llenado_namo'), data.get('pct_llenado_name'),
+                data.get('aportacion_vol'), data.get('aportacion_q'),
+                data.get('extraccion_vol'), data.get('extraccion_q'),
+                data.get('generacion_gwh'), data.get('factor_planta'),
+            ))
+            presa_count += 1
+
+        # ── Insertar/actualizar estaciones ──
+        upsert_est = """
+            INSERT INTO bhg_estacion_diario
+            (ts, estacion, subcuenca, precip_24h, precip_acum_mensual,
+             escala, gasto, evaporacion, temp_max, temp_min, temp_amb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ts, estacion) DO UPDATE SET
+             subcuenca = COALESCE(EXCLUDED.subcuenca, bhg_estacion_diario.subcuenca),
+             precip_24h = COALESCE(EXCLUDED.precip_24h, bhg_estacion_diario.precip_24h),
+             precip_acum_mensual = COALESCE(EXCLUDED.precip_acum_mensual, bhg_estacion_diario.precip_acum_mensual),
+             escala = COALESCE(EXCLUDED.escala, bhg_estacion_diario.escala),
+             gasto = COALESCE(EXCLUDED.gasto, bhg_estacion_diario.gasto),
+             evaporacion = COALESCE(EXCLUDED.evaporacion, bhg_estacion_diario.evaporacion),
+             temp_max = COALESCE(EXCLUDED.temp_max, bhg_estacion_diario.temp_max),
+             temp_min = COALESCE(EXCLUDED.temp_min, bhg_estacion_diario.temp_min),
+             temp_amb = COALESCE(EXCLUDED.temp_amb, bhg_estacion_diario.temp_amb)
+        """
+
+        est_count = 0
+        for est in estaciones_data:
+            cur.execute(upsert_est, (
+                est['ts'], est['estacion'], est['subcuenca'],
+                est['precip_24h'], est['precip_acum_mensual'],
+                est['escala'], est['gasto'], est['evaporacion'],
+                est['temp_max'], est['temp_min'], est['temp_amb'],
+            ))
+            est_count += 1
+
+        # ── Registrar archivo procesado ──
+        dias_con_datos = len(set(dia for dia, _ in presas_data.keys()))
+        cur.execute("""
+            INSERT INTO bhg_archivo (fecha, nombre_archivo, mes, anio, dias_con_datos, num_estaciones)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (fecha) DO UPDATE SET
+                nombre_archivo = EXCLUDED.nombre_archivo,
+                procesado_ts = NOW(),
+                dias_con_datos = EXCLUDED.dias_con_datos,
+                num_estaciones = EXCLUDED.num_estaciones
+        """, (fecha, nombre_archivo, mes, anio, dias_con_datos, est_count))
+
+        conn.commit()
+        print(f"[BHG]   BD: {presa_count} presas + {est_count} estaciones insertados")
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"[BHG] Error insertando en PostgreSQL: {e}")
+        return False
+    finally:
+        release_pg_conn(conn)
+
+
+def importar_bhg_automatico():
+    """Monitorea carpeta de entrada BHG, parsea Excel, inserta en DB y archiva.
+    Se ejecuta periódicamente desde el scheduler."""
+    try:
+        import glob as glob_mod
+        import shutil
+
+        inbox_key = 'bhg_inbox_windows' if platform.system() == 'Windows' else 'bhg_inbox_mac'
+        inbox_dir = config.get('paths', inbox_key, fallback='')
+        if not inbox_dir or not os.path.isdir(inbox_dir):
+            return
+
+        repo_key = 'bhg_repo_windows' if platform.system() == 'Windows' else 'bhg_repo_mac'
+        repo_dir = config.get('paths', repo_key, fallback='')
+
+        procesados_dir = os.path.join(inbox_dir, 'procesados')
+        errores_dir = os.path.join(inbox_dir, 'errores')
+
+        # Buscar archivos .xlsx y .xlsm
+        archivos = sorted(
+            glob_mod.glob(os.path.join(inbox_dir, '*.xlsx')) +
+            glob_mod.glob(os.path.join(inbox_dir, '*.xls')) +
+            glob_mod.glob(os.path.join(inbox_dir, '*.xlsm'))
+        )
+        if not archivos:
+            return
+
+        os.makedirs(procesados_dir, exist_ok=True)
+        os.makedirs(errores_dir, exist_ok=True)
+        if repo_dir:
+            os.makedirs(repo_dir, exist_ok=True)
+
+        print(f"[BHG] {len(archivos)} archivos Excel pendientes en {inbox_dir}")
+
+        for filepath in archivos:
+            try:
+                nombre = os.path.basename(filepath)
+                print(f"[BHG] Procesando: {nombre}")
+
+                fecha, mes, anio, presas_data, estaciones_data, errores = _bhg_parsear_excel(filepath)
+
+                if errores:
+                    for err in errores:
+                        print(f"[BHG]   Error: {err}")
+
+                if not fecha or (not presas_data and not estaciones_data):
+                    print(f"[BHG]   → Movido a errores/")
+                    shutil.move(filepath, os.path.join(errores_dir, nombre))
+                    continue
+
+                # Insertar en PostgreSQL
+                ok = _bhg_insertar_pg(fecha, mes, anio, presas_data, estaciones_data, nombre)
+                if not ok:
+                    print(f"[BHG]   → Error BD, movido a errores/")
+                    shutil.move(filepath, os.path.join(errores_dir, nombre))
+                    continue
+
+                # Copiar al repositorio
+                if repo_dir:
+                    repo_path = os.path.join(repo_dir, nombre)
+                    try:
+                        shutil.copy2(filepath, repo_path)
+                        print(f"[BHG]   → Archivado en repo: {nombre}")
+                    except Exception as e:
+                        print(f"[BHG]   Advertencia copiando a repo: {e}")
+
+                # Mover a procesados
+                shutil.move(filepath, os.path.join(procesados_dir, nombre))
+                print(f"[BHG]   → Procesado OK ({fecha.strftime('%d/%m/%Y')})")
+            except Exception as ef:
+                print(f"[BHG] Error procesando {os.path.basename(filepath)}: {ef}")
+
+        print(f"[BHG] Procesamiento completado.")
+    except Exception as e:
+        print(f"[ERROR BHG] {e}")
+
+
 # Pool de conexiones a TimescaleDB (reutiliza conexiones en lugar de abrir/cerrar cada vez)
 _pg_pool = None
 _pg_pool_lock = threading.Lock()
@@ -872,6 +1385,7 @@ def _ensure_pg_tables():
                 channel SMALLINT,
                 spacecraft CHARACTER VARYING(10),
                 data_source CHARACTER VARYING(10),
+                raw_message TEXT,
                 CONSTRAINT dcp_headers_pkey PRIMARY KEY (dcp_id, timestamp_msg)
             );
         """)
@@ -2381,7 +2895,7 @@ def log_to_pg(dcp_id: str, success: bool, timestamp: datetime.datetime | None, h
     finally:
         release_pg_conn(conn)
 
-def guardar_header_goes(dcp_id: str, meta: dict):
+def guardar_header_goes(dcp_id: str, meta: dict, raw_header: bytes = None, raw_payload: bytes = None):
     """Guardar datos del header GOES en TimescaleDB"""
     conn = None
     try:
@@ -2396,12 +2910,23 @@ def guardar_header_goes(dcp_id: str, meta: dict):
         except:
             pass
         
+        # Build raw DOMSAT message for MIS footer
+        raw_message = None
+        try:
+            if raw_header and raw_payload:
+                raw_content = raw_header + raw_payload
+                raw_message = raw_content.decode('latin-1', errors='replace')
+            elif raw_header:
+                raw_message = raw_header.decode('latin-1', errors='replace')
+        except:
+            pass
+        
         cur.execute("""
             INSERT INTO dcp_headers 
             (timestamp_msg, ts, dcp_id, signal_strength, frequency_offset, mod_index,
-             data_quality, channel, spacecraft, data_source, failure_code)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (dcp_id, timestamp_msg) DO NOTHING
+             data_quality, channel, spacecraft, data_source, failure_code, raw_message)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (dcp_id, timestamp_msg) DO UPDATE SET raw_message = EXCLUDED.raw_message
         """, (
             meta["timestamp"],
             meta["timestamp"],
@@ -2413,7 +2938,8 @@ def guardar_header_goes(dcp_id: str, meta: dict):
             meta.get("channel"),
             meta.get("spacecraft"),
             meta.get("uplink"),
-            meta.get("fail")
+            meta.get("fail"),
+            raw_message
         ))
         
         conn.commit()
@@ -2588,7 +3114,7 @@ def fetch_from_host(host: str, dcp_id: str, nombre: str, since: str = "now - 2 h
                 meta = decode_domsat_header(header)
                 if meta["dcp"].upper() != dcp_id.upper(): return False
                 
-                guardar_header_goes(dcp_id, meta)
+                guardar_header_goes(dcp_id, meta, raw_header, raw_payload)
 
                 valores = []
                 if payload:
@@ -3805,9 +4331,24 @@ def main():
     fv_inbox_key = 'funvasos_inbox_windows' if platform.system() == 'Windows' else 'funvasos_inbox_mac'
     fv_inbox_dir = config.get('paths', fv_inbox_key, fallback='')
     if fv_inbox_dir:
-        os.makedirs(fv_inbox_dir, exist_ok=True)
+        try:
+            os.makedirs(fv_inbox_dir, exist_ok=True)
+        except OSError as e:
+            print(f"[WARN] No se pudo crear carpeta FunVasos '{fv_inbox_dir}': {e} — se reintentará en cada ciclo")
         schedule.every(fv_interval).minutes.do(importar_funvasos_automatico)
         print(f"[INFO] Importación automática de FunVasos cada {fv_interval} min desde: {fv_inbox_dir}")
+
+    # Programar importación automática de Excel BHG (Boletín Hidrológico)
+    bhg_interval = config.getint('settings', 'bhg_import_interval_minutes', fallback=10)
+    bhg_inbox_key = 'bhg_inbox_windows' if platform.system() == 'Windows' else 'bhg_inbox_mac'
+    bhg_inbox_dir = config.get('paths', bhg_inbox_key, fallback='')
+    if bhg_inbox_dir:
+        try:
+            os.makedirs(bhg_inbox_dir, exist_ok=True)
+        except OSError as e:
+            print(f"[WARN] No se pudo crear carpeta BHG '{bhg_inbox_dir}': {e} — se reintentará en cada ciclo")
+        schedule.every(bhg_interval).minutes.do(importar_bhg_automatico)
+        print(f"[INFO] Importación automática de BHG cada {bhg_interval} min desde: {bhg_inbox_dir}")
 
     # Ejecutar una primera detección al arrancar (después de 2 minutos para dar tiempo al primer ciclo)
     schedule.every(2).minutes.do(lambda: (recuperacion_automatica(), schedule.CancelJob)[-1]).tag("recover_inicial")
@@ -3922,8 +4463,20 @@ if platform.system() == 'Windows':
                 fv_interval = config.getint('settings', 'funvasos_import_interval_minutes', fallback=5)
                 fv_inbox_dir = config.get('paths', 'funvasos_inbox_windows', fallback='')
                 if fv_inbox_dir:
-                    os.makedirs(fv_inbox_dir, exist_ok=True)
+                    try:
+                        os.makedirs(fv_inbox_dir, exist_ok=True)
+                    except OSError as e:
+                        print(f"[WARN] No se pudo crear carpeta FunVasos '{fv_inbox_dir}': {e} — se reintentará en cada ciclo")
                     schedule.every(fv_interval).minutes.do(importar_funvasos_automatico)
+
+                bhg_interval = config.getint('settings', 'bhg_import_interval_minutes', fallback=10)
+                bhg_inbox_dir = config.get('paths', 'bhg_inbox_windows', fallback='')
+                if bhg_inbox_dir:
+                    try:
+                        os.makedirs(bhg_inbox_dir, exist_ok=True)
+                    except OSError as e:
+                        print(f"[WARN] No se pudo crear carpeta BHG '{bhg_inbox_dir}': {e}")
+                    schedule.every(bhg_interval).minutes.do(importar_bhg_automatico)
 
                 schedule.every(2).minutes.do(lambda: (recuperacion_automatica(), schedule.CancelJob)[-1]).tag("recover_inicial")
 

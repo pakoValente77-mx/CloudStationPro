@@ -1,5 +1,3 @@
-using Azure.Storage.Blobs;
-using Azure.Storage.Sas;
 using Dapper;
 using Npgsql;
 using ScottPlot;
@@ -10,16 +8,16 @@ namespace CloudStationWeb.Services
     {
         private readonly string _pgConn;
         private readonly string _sqlConn;
-        private readonly string? _blobConnectionString;
-        private readonly string _blobContainer;
+        private readonly string _imageStorePath;
+        private readonly string _imageStoreBaseUrl;
         private readonly ILogger<ChartService> _logger;
 
         public ChartService(IConfiguration config, ILogger<ChartService> logger)
         {
             _pgConn = config.GetConnectionString("PostgreSQL") ?? "";
             _sqlConn = config.GetConnectionString("SqlServer") ?? "";
-            _blobConnectionString = config["AzureBlob:ConnectionString"];
-            _blobContainer = config["AzureBlob:Container"] ?? "unidades";
+            _imageStorePath = config["ImageStore:Path"] ?? Path.Combine(AppContext.BaseDirectory, "ImageStore");
+            _imageStoreBaseUrl = config["ImageStore:BaseUrl"] ?? "";
             _logger = logger;
         }
 
@@ -375,37 +373,31 @@ namespace CloudStationWeb.Services
             myPlot.SavePng(tempPath, 800, 420);
             var imageBytes = await File.ReadAllBytesAsync(tempPath);
 
-            // Upload to Azure Blob
-            if (!string.IsNullOrEmpty(_blobConnectionString))
+            // 1) Guardar en ImageStore local (prioridad)
+            var chartsDir = Path.Combine(_imageStorePath, "charts");
+            try
             {
-                try
+                Directory.CreateDirectory(chartsDir);
+                var localPath = Path.Combine(chartsDir, fileName);
+                await File.WriteAllBytesAsync(localPath, imageBytes);
+                try { File.Delete(tempPath); } catch { }
+
+                var localUrl = !string.IsNullOrEmpty(_imageStoreBaseUrl)
+                    ? $"{_imageStoreBaseUrl.TrimEnd('/')}/api/images/charts/{fileName}"
+                    : $"/api/images/charts/{fileName}";
+
+                return new BotResponse
                 {
-                    var blobServiceClient = new BlobServiceClient(_blobConnectionString);
-                    var containerClient = blobServiceClient.GetBlobContainerClient(_blobContainer);
-                    var blobClient = containerClient.GetBlobClient($"charts/{fileName}");
-
-                    using var stream = new MemoryStream(imageBytes);
-                    await blobClient.UploadAsync(stream, new Azure.Storage.Blobs.Models.BlobHttpHeaders
-                    {
-                        ContentType = "image/png"
-                    });
-
-                    try { File.Delete(tempPath); } catch { }
-
-                    var sasUrl = GenerateSasUrl(blobClient);
-                    return new BotResponse
-                    {
-                        Message = caption,
-                        FileUrl = sasUrl,
-                        FileName = fileName,
-                        FileType = "image/png",
-                        FileSize = imageBytes.Length
-                    };
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to upload chart to Azure Blob, using local fallback");
-                }
+                    Message = caption,
+                    FileUrl = localUrl,
+                    FileName = fileName,
+                    FileType = "image/png",
+                    FileSize = imageBytes.Length
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save chart to ImageStore, using wwwroot fallback");
             }
 
             // Fallback: serve from wwwroot/temp
@@ -423,19 +415,6 @@ namespace CloudStationWeb.Services
                 FileType = "image/png",
                 FileSize = imageBytes.Length
             };
-        }
-
-        private static string GenerateSasUrl(BlobClient blobClient)
-        {
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = blobClient.BlobContainerName,
-                BlobName = blobClient.Name,
-                Resource = "b",
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(2)
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Read);
-            return blobClient.GenerateSasUri(sasBuilder).ToString();
         }
 
         private static string FormatVariableName(string variable)

@@ -355,6 +355,10 @@
             <option value="attention">Solo atención</option>
             <option value="failed">Solo fallas</option>
         </select>
+        <div class="ui inverted checkbox" id="cfe-only-toggle" style="margin-left: 12px; display: flex; align-items: center;">
+            <input type="checkbox" name="only_cfe" checked>
+            <label style="font-size: 13px; color: rgba(255,255,255,0.85);">Solo CFE</label>
+        </div>
     </div>
 
     <!-- Transmission Trend Chart -->
@@ -446,6 +450,11 @@
             filterStationTable(term);
         });
 
+        // CFE only toggle
+        $('#cfe-only-toggle').checkbox({
+            onChange: function() { loadAllData(); }
+        });
+
         // Initial load
         loadAllData();
 
@@ -461,7 +470,8 @@
     }
 
     function loadTransmissionStats() {
-        $.getJSON(`/GoesMonitoring/GetTransmissionStats?period=${currentPeriod}`, function(data) {
+        const onlyCfe = $('#cfe-only-toggle').checkbox('is checked');
+        $.getJSON(`/GoesMonitoring/GetTransmissionStats?period=${currentPeriod}&onlyCfe=${onlyCfe}`, function(data) {
             $('#total-stations').text(data.totalStations || 0);
             $('#active-stations').text(data.activeStations || 0);
             $('#silent-stations').text(data.silentStations || 0);
@@ -480,7 +490,8 @@
     }
 
     function loadStationHealth() {
-        $.getJSON(`/GoesMonitoring/GetStationHealth?period=${currentPeriod}&filter=${currentFilter}`, function(data) {
+        const onlyCfe = $('#cfe-only-toggle').checkbox('is checked');
+        $.getJSON(`/GoesMonitoring/GetStationHealth?period=${currentPeriod}&filter=${currentFilter}&onlyCfe=${onlyCfe}`, function(data) {
             stationsData = data || [];
             renderStationTable(data || []);
         }).fail(function() {
@@ -555,7 +566,8 @@
     }
 
     function loadTransmissionTrend() {
-        $.getJSON(`/GoesMonitoring/GetTransmissionTrend?period=${currentPeriod}`, function(data) {
+        const onlyCfe = $('#cfe-only-toggle').checkbox('is checked');
+        $.getJSON(`/GoesMonitoring/GetTransmissionTrend?period=${currentPeriod}&onlyCfe=${onlyCfe}`, function(data) {
             if (!data || data.length === 0) {
                 $('#trend-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4); text-align: center;"><div><i class="chart line icon" style="font-size: 48px; opacity: 0.3;"></i><div style="margin-top: 16px;">No hay datos de tendencia disponibles</div></div></div>');
                 return;
@@ -600,7 +612,8 @@
     }
 
     function loadTransmissionTimeline() {
-        $.getJSON(`/GoesMonitoring/GetTransmissionTimeline?period=${currentPeriod}`, function(data) {
+        const onlyCfe = $('#cfe-only-toggle').checkbox('is checked');
+        $.getJSON(`/GoesMonitoring/GetTransmissionTimeline?period=${currentPeriod}&onlyCfe=${onlyCfe}`, function(data) {
             if (!data || data.length === 0) {
                 $('#timeline-chart').html('<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4); text-align: center;"><div><i class="calendar icon" style="font-size: 48px; opacity: 0.3;"></i><div style="margin-top: 16px;">No hay datos de timeline disponibles</div></div></div>');
                 return;
