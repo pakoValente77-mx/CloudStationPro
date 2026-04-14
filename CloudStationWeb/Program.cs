@@ -139,6 +139,7 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<CloudStationWeb.Services.DataService>();
 builder.Services.AddScoped<CloudStationWeb.Services.FunVasosService>();
+builder.Services.AddScoped<CloudStationWeb.Services.BhgService>();
 builder.Services.AddScoped<CloudStationWeb.Services.HydroForecastService>();
 builder.Services.AddScoped<CloudStationWeb.Services.IEmailSender, CloudStationWeb.Services.SmtpEmailSender>();
 builder.Services.AddSingleton<CloudStationWeb.Services.PushNotificationService>();
@@ -176,6 +177,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
+
+// Cloudflare / IIS reverse proxy: respetar headers X-Forwarded-*
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+});
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");

@@ -1,21 +1,29 @@
 #!/bin/bash
 # =====================================================================
 # CLOUDSTATION PIH - Script de Publicación Producción
-# Fecha: 2026-04-06
-# Cambios incluidos:
-#   - Centinela AI: Gráficas server-side con ScottPlot 5 (5 tipos)
-#     * Elevación de presas, Generación MW, Precipitación barras
-#     * Sensores por estación, Precipitación por cuenca
-#   - Centinela AI: Enrutamiento inteligente de gráficas
-#     * "Cuenca del Grijalva" / "cascada" → presas (5 puntos)
-#     * "Precipitación por cuenca" → comparación cuencas
-#   - Centinela AI: Búsqueda de estaciones en BD (NV_Estacion)
-#   - Centinela AI: Filtro de variables (temp, nivel agua, etc.)
-#   - Charts: Tema oscuro, upload Azure Blob, SAS URLs 1hr
-#   - MIS Export: Header GOES reconstruido
-#   - Chat: Soporte archivos adjuntos (drag & drop, paste, upload)
-#   - Chat: App de escritorio (Electron) Windows + macOS
-#   - Chat: Autenticación dual (Cookie + JWT) para SignalR
+# Fecha: 2026-06-10
+# Dominio: hidrometria.mx (Cloudflare SSL)
+# Hosting: IIS Windows (in-process, AspNetCoreModuleV2)
+# Cambios v3.1:
+#   - Menú navegación rediseñado: 13 items → 6 dropdowns agrupados
+#     (Monitoreo, Análisis, Hidrología, Admin, Herramientas)
+#   - Filtro "Solo CFE" en todas las pantallas de estaciones
+#     (GoesMonitoring, Maintenance, MisExport)
+#   - Mapa responsive: paneles colapsables con toggle buttons
+#     (breakpoints 1200px, 1024px, 768px para iPad/tablet)
+#   - Tema claro coherente en mapa (glass-panel, tablas, dropdowns,
+#     controles zoom, banner clima, inputs, checkboxes)
+#   - Dropdown dark theme fix (selectores alta especificidad Fomantic)
+# Cambios v3.0:
+#   - API REST Pronóstico Hidrológico (formato Spring Boot)
+#   - Autenticación dual: API Key + JWT (rol ApiConsumer)
+#   - FunVasos API + FunVasosUploader
+#   - ImageStore local (reemplaza Azure Blob)
+#   - Gráficas de tendencia en Funcionamiento de Vasos
+#   - UmbralAlertas (alertas tempranas por sensor)
+#   - ForwardedHeaders para Cloudflare proxy
+#   - Centinela AI: Gráficas server-side, enrutamiento inteligente
+#   - Chat: archivos adjuntos, app escritorio, auth dual SignalR
 # =====================================================================
 
 set -e
@@ -68,6 +76,15 @@ if [ -f "$PROJ_DIR/package.json" ]; then
     cp "$PROJ_DIR/package.json" "$PUBLISH_DIR/"
 fi
 
+# KML de cuencas
+if [ -d "$PROJ_DIR/KML Cuencas y Rios Grijalva" ]; then
+    cp -r "$PROJ_DIR/KML Cuencas y Rios Grijalva" "$PUBLISH_DIR/"
+fi
+
+# Scripts de deploy SQL para referencia
+cp "$PROJ_DIR/deploy_produccion_v2.sql" "$PUBLISH_DIR/" 2>/dev/null || true
+cp "$PROJ_DIR/deploy_timescale_v2.sql" "$PUBLISH_DIR/" 2>/dev/null || true
+
 echo "   Archivos copiados"
 
 # 5. Copiar a publicado_ok si existe
@@ -90,10 +107,14 @@ echo " PASOS MANUALES EN SERVIDOR:"
 echo " 1. Detener sitio IIS: CloudStation"
 echo " 2. Copiar contenido de publish_produccion/ al servidor"
 echo " 3. Ejecutar deploy_produccion_v2.sql en SQL Server (IGSCLOUD)"
-echo " 4. Ejecutar deploy_postgres_v2.sql en PostgreSQL (mycloud_timescale)"
-echo " 5. Crear carpeta ChatUploads/ junto al exe (para archivos del chat)"
-echo " 6. [Opcional] Copiar ChatDesktop/dist/ al servidor para descarga de app"
-echo " 7. Iniciar sitio IIS"
+echo " 4. Ejecutar deploy_timescale_v2.sql en PostgreSQL (mycloud_timescale)"
+echo " 5. Crear carpetas junto al exe:"
+echo "      mkdir ChatUploads"
+echo "      mkdir ImageStore"
+echo " 6. Configurar appsettings.json con IPs/passwords de produccion"
+echo " 7. Configurar binding IIS: hidrometria.mx, puerto 5215"
+echo " 8. Cloudflare: DNS A record → IP servidor, Proxy ON, SSL Full"
+echo " 9. Iniciar sitio IIS"
 echo ""
 echo " COMANDOS PostgreSQL (si no hay psql, usar desde Python):"
 echo "   psql -h atlas16.ddns.net -p 5432 -U postgres -d mycloud_timescale"

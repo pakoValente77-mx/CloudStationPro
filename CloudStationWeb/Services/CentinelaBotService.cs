@@ -2,8 +2,6 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Azure.Storage.Blobs;
-using Azure.Storage.Sas;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Npgsql;
@@ -39,8 +37,8 @@ namespace CloudStationWeb.Services
         private readonly string? _azureOpenAIKey;
         private readonly string _azureOpenAIDeployment;
         private readonly string _azureOpenAIApiVersion;
-        private readonly string? _blobConnectionString;
-        private readonly string _blobContainer;
+        private readonly string _imageStorePath;
+        private readonly string _imageStoreBaseUrl;
         private readonly ChartService? _chartService;
 
         // Track per-user Gemini AI mode: userName → active
@@ -119,8 +117,8 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
             _azureOpenAIKey = config["AzureOpenAI:ApiKey"];
             _azureOpenAIDeployment = config["AzureOpenAI:DeploymentName"] ?? "gpt-4o";
             _azureOpenAIApiVersion = config["AzureOpenAI:ApiVersion"] ?? "2024-10-21";
-            _blobConnectionString = config["AzureBlob:ConnectionString"];
-            _blobContainer = config["AzureBlob:Container"] ?? "unidades";
+            _imageStorePath = config["ImageStore:Path"] ?? Path.Combine(AppContext.BaseDirectory, "ImageStore");
+            _imageStoreBaseUrl = config["ImageStore:BaseUrl"] ?? "";
         }
 
         /// <summary>
@@ -773,75 +771,71 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
 
         // DeepSeek processing is now handled by CallDeepSeekAsync in the AI Processing region above
 
-        #region Azure Blob Image Commands
+        #region Image Commands (Local + Azure Blob fallback)
 
         private async Task<BotResponse> GetImageCommandResponse(string command)
         {
             try
             {
-                if (string.IsNullOrEmpty(_blobConnectionString))
-                    return new BotResponse { Message = "⚠️ Azure Blob Storage no está configurado." };
-
                 var (blobName, caption) = ImageCommands[command];
-                var sasUrl = await GetBlobSasUrlAsync(blobName, command);
 
-                if (sasUrl == null)
-                    return new BotResponse { Message = $"⚠️ No se encontró la imagen para el comando `{command}`." };
-
-                return new BotResponse
+                // 1) Buscar en ImageStore local (prioridad)
+                var localUrl = GetLocalImageUrl(blobName, command);
+                if (localUrl != null)
                 {
-                    Message = caption,
-                    FileUrl = sasUrl,
-                    FileName = blobName,
-                    FileType = "image/png"
-                };
+                    return new BotResponse
+                    {
+                        Message = caption,
+                        FileUrl = localUrl,
+                        FileName = Path.GetFileName(localUrl),
+                        FileType = "image/png"
+                    };
+                }
+
+                return new BotResponse { Message = $"⚠️ No se encontró la imagen para el comando `{command}`. Verifique que exista en ImageStore/unidades/." };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting blob image for command {Command}", command);
+                _logger.LogError(ex, "Error getting image for command {Command}", command);
                 return new BotResponse { Message = $"⚠️ Error al obtener la imagen del comando `{command}`." };
             }
         }
 
-        private async Task<string?> GetBlobSasUrlAsync(string blobName, string command)
+        /// <summary>
+        /// Busca la imagen en el almacén local (ImageStore/unidades/).
+        /// Soporta búsqueda por nombre exacto y por prefijo (reportes de lluvia).
+        /// </summary>
+        private string? GetLocalImageUrl(string fileName, string command)
         {
-            var blobServiceClient = new BlobServiceClient(_blobConnectionString);
-            var containerClient = blobServiceClient.GetBlobContainerClient(_blobContainer);
+            var categoryDir = Path.Combine(_imageStorePath, "unidades");
+            if (!Directory.Exists(categoryDir))
+                return null;
 
-            var blobClient = containerClient.GetBlobClient(blobName);
+            // Buscar por nombre exacto
+            var exactPath = Path.Combine(categoryDir, fileName);
+            if (File.Exists(exactPath))
+                return BuildLocalImageUrl("unidades", fileName);
 
-            // Check if exact blob exists
-            if (await blobClient.ExistsAsync())
-            {
-                return GenerateSasUrl(blobClient);
-            }
-
-            // For rain reports, try prefix-based search (name may change with timestamp)
+            // Para reportes de lluvia, buscar por prefijo (el timestamp cambia)
             if (RainPrefixes.TryGetValue(command, out var prefix))
             {
-                await foreach (var blob in containerClient.GetBlobsAsync(Azure.Storage.Blobs.Models.BlobTraits.None, Azure.Storage.Blobs.Models.BlobStates.None, prefix, default))
-                {
-                    var fallbackClient = containerClient.GetBlobClient(blob.Name);
-                    return GenerateSasUrl(fallbackClient);
-                }
+                var match = Directory.GetFiles(categoryDir)
+                    .Where(f => Path.GetFileName(f).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => new FileInfo(f).LastWriteTimeUtc)
+                    .FirstOrDefault();
+
+                if (match != null)
+                    return BuildLocalImageUrl("unidades", Path.GetFileName(match));
             }
 
             return null;
         }
 
-        private static string GenerateSasUrl(BlobClient blobClient)
+        private string BuildLocalImageUrl(string category, string fileName)
         {
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = blobClient.BlobContainerName,
-                BlobName = blobClient.Name,
-                Resource = "b",
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Read);
-
-            var sasUri = blobClient.GenerateSasUri(sasBuilder);
-            return sasUri.ToString();
+            if (!string.IsNullOrEmpty(_imageStoreBaseUrl))
+                return $"{_imageStoreBaseUrl.TrimEnd('/')}/api/images/{category}/{fileName}";
+            return $"/api/images/{category}/{fileName}";
         }
 
         #endregion

@@ -27,7 +27,7 @@
         <a class="item" data-tab="firebase"><i class="mobile alternate icon"></i> Firebase</a>
         <a class="item" data-tab="ai"><i class="robot icon"></i> IA</a>
         <a class="item" data-tab="security"><i class="shield alternate icon"></i> Seguridad</a>
-        <a class="item" data-tab="azure"><i class="cloud icon"></i> Azure</a>
+        <a class="item" data-tab="azure"><i class="folder open icon"></i> ImageStore</a>
     </div>
 
     <!-- ====== TAB: BASES DE DATOS ====== -->
@@ -235,17 +235,26 @@
         </div>
     </div>
 
-    <!-- ====== TAB: AZURE ====== -->
+    <!-- ====== TAB: IMAGESTORE ====== -->
     <div class="ui bottom attached inverted tab segment" data-tab="azure">
         <div class="ui inverted form">
-            <h4 class="ui inverted dividing header"><i class="cloud upload icon" style="color:#00a4ef;"></i> Azure Blob Storage</h4>
+            <h4 class="ui inverted dividing header"><i class="folder open icon" style="color:#21ba45;"></i> Almacén Local de Imágenes</h4>
             <div class="field">
-                <label>Cadena de conexión</label>
-                <input type="text" id="cfgBlobConn" value="@Model.AzureBlobConnectionString" placeholder="DefaultEndpointsProtocol=https;AccountName=...">
+                <label>Ruta de almacenamiento</label>
+                <input type="text" id="cfgImageStorePath" value="@Model.ImageStorePath" placeholder="ImageStore">
             </div>
             <div class="field">
-                <label>Contenedor</label>
-                <input type="text" id="cfgBlobContainer" value="@Model.AzureBlobContainer" placeholder="nombre-contenedor">
+                <label>API Key (para servicios externos)</label>
+                <input type="text" id="cfgImageStoreApiKey" value="@Model.ImageStoreApiKey" placeholder="***REDACTED-API-KEY***">
+            </div>
+            <div class="field">
+                <label>URL Base (dejar vacío para auto-detectar)</label>
+                <input type="text" id="cfgImageStoreBaseUrl" value="@Model.ImageStoreBaseUrl" placeholder="https://tu-servidor.com">
+            </div>
+            <div class="ui info message" style="background:rgba(33,186,69,0.1); color:#a9d5de;">
+                <i class="info circle icon"></i>
+                Las imágenes se sirven en <code>/api/images/{category}/{filename}</code>.<br/>
+                Categorías: <b>unidades</b>, <b>charts</b>, <b>lluvia</b>, <b>general</b>.
             </div>
         </div>
     </div>
@@ -286,8 +295,9 @@ function gatherSettings() {
         azureOpenAIApiKey: $('#cfgAzureOAIKey').val(),
         azureOpenAIDeployment: $('#cfgAzureOAIDeploy').val(),
         azureOpenAIApiVersion: $('#cfgAzureOAIVersion').val(),
-        azureBlobConnectionString: $('#cfgBlobConn').val(),
-        azureBlobContainer: $('#cfgBlobContainer').val(),
+        imageStorePath: $('#cfgImageStorePath').val(),
+        imageStoreApiKey: $('#cfgImageStoreApiKey').val(),
+        imageStoreBaseUrl: $('#cfgImageStoreBaseUrl').val(),
         earlyWarningEnabled: $('#cfgEWEnabled').is(':checked'),
         earlyWarningIntervalSeconds: parseInt($('#cfgEWInterval').val()) || 300,
         earlyWarningCooldownMinutes: parseInt($('#cfgEWCooldown').val()) || 60,

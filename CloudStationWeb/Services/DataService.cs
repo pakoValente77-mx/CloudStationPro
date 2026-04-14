@@ -601,12 +601,54 @@ namespace CloudStationWeb.Services
             }
         }
 
-        public async Task<List<string>> GetAvailableVariablesAsync()
+        private static readonly HashSet<string> _hiddenVariables = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "precipitación_acumulada", "cod_tab", "estado", "estado_del_cbs", "estado_del_pluvio",
+            "estado_rls", "indefinido", "virtual", "señal_de_ruido", "señal_de_velocidad",
+            "señal_rls", "corriente_rls", "reflectividad", "partículas_detectadas"
+        };
+
+        private static readonly Dictionary<string, string> _variableDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "precipitación", "Precipitación" },
+            { "nivel_de_agua", "Nivel de Agua" },
+            { "temperatura", "Temperatura" },
+            { "humedad_relativa", "Humedad Relativa" },
+            { "velocidad_del_viento", "Velocidad del Viento" },
+            { "dirección_del_viento", "Dirección del Viento" },
+            { "presión_atmosférica", "Presión Atmosférica" },
+            { "radiación_solar", "Radiación Solar" },
+            { "voltaje_de_batería", "Voltaje de Batería" },
+            { "intensidad_de_precipitación", "Intensidad de Precipitación" },
+            { "temperatura_interna", "Temperatura Interna" },
+            { "punto_de_rocío", "Punto de Rocío" },
+            { "velocidad_de_ráfaga", "Velocidad de Ráfaga" },
+            { "dirección_de_ráfaga", "Dirección de Ráfaga" },
+            { "nivel_recipiente", "Nivel Recipiente" },
+            { "gasto", "Gasto" },
+            { "voltaje", "Voltaje" },
+            { "voltaje_de_bateria_radio", "Voltaje Batería Radio" },
+            { "voltaje_del_panel_solar", "Voltaje Panel Solar" },
+            { "velocidad_del_agua", "Velocidad del Agua" },
+            { "visibilidad", "Visibilidad" },
+            { "humedad_del_aire", "Humedad del Aire" }
+        };
+
+        public static string GetVariableDisplayName(string variable)
+        {
+            return _variableDisplayNames.TryGetValue(variable, out var name) ? name : variable;
+        }
+
+        public async Task<List<(string Value, string Label)>> GetAvailableVariablesAsync()
         {
             using (IDbConnection pgDb = new NpgsqlConnection(_postgresConn))
             {
                 var vars = await pgDb.QueryAsync<string>("SELECT DISTINCT variable FROM public.ultimas_mediciones ORDER BY variable");
-                return vars.Where(v => v != "precipitación_acumulada").ToList();
+                return vars
+                    .Where(v => !_hiddenVariables.Contains(v))
+                    .Select(v => (v, GetVariableDisplayName(v)))
+                    .OrderBy(x => x.Item2)
+                    .ToList();
             }
         }
 

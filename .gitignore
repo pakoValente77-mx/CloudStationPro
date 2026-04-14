@@ -538,3 +538,5 @@ node_modules/
 # Firebase credentials (sensitive)
 *firebase-adminsdk*.json
 CloudStationWeb/cuenca-grijalva-firebase-adminsdk-fbsvc*.json
+publicado_pih_2026/
+publicado_pih_2026.zip

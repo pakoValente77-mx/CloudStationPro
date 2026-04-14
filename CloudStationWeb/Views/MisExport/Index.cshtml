@@ -162,6 +162,12 @@
                     </button>
                 </div>
             </div>
+            <div style="margin-top: 8px;">
+                <div class="ui inverted checkbox" id="cfe-only-toggle">
+                    <input type="checkbox" name="only_cfe" checked>
+                    <label style="font-size: 13px;">Solo CFE</label>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -205,18 +211,29 @@ $(function() {
     $('#txtFechaInicio').val(formatDate(yesterday));
 
     // Load stations
-    $.getJSON('@Url.Action("GetStations", "MisExport")', function(data) {
+    loadStations();
+
+    // CFE toggle reload
+    $('#cfe-only-toggle').checkbox({
+        onChange: function() { loadStations(); }
+    });
+});
+
+function loadStations() {
+    var onlyCfe = $('#cfe-only-toggle').checkbox('is checked');
+    var menu = $('#ddStationMenu');
+    menu.empty();
+    $.getJSON('@Url.Action("GetStations", "MisExport")?onlyCfe=' + onlyCfe, function(data) {
         if (data.error) { alert(data.error); return; }
-        var menu = $('#ddStationMenu');
         menu.append('<div class="item" data-value="">-- Todas --</div>');
         data.forEach(function(st) {
             var label = st.nombre + ' (' + st.idAsignado + ')';
             if (st.idSatelital) label += ' [' + st.idSatelital + ']';
             menu.append('<div class="item" data-value="' + st.idAsignado + '">' + label + '</div>');
         });
-        $('#ddStation').dropdown({ fullTextSearch: true, forceSelection: false });
+        $('#ddStation').dropdown('destroy').dropdown({ fullTextSearch: true, forceSelection: false });
     });
-});
+}
 
 function formatDate(d) {
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');

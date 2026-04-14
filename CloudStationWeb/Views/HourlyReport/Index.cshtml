@@ -372,6 +372,41 @@
         background: rgba(0, 230, 118, 0.1);
         border-right-color: #00e676;
     }
+
+    /* ── Maintenance indicator ── */
+    tr.mtto-row td {
+        opacity: 0.55;
+    }
+    tr.mtto-row td.station-col {
+        opacity: 1;
+        border-right-color: rgba(255, 152, 0, 0.5) !important;
+    }
+    tr.mtto-row:hover td {
+        opacity: 0.75;
+    }
+    .mtto-badge {
+        display: inline-block;
+        background: rgba(255, 152, 0, 0.2);
+        border: 1px solid rgba(255, 152, 0, 0.5);
+        color: #ffb74d;
+        font-size: 8px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-left: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        vertical-align: middle;
+        animation: mtto-pulse 3s ease-in-out infinite;
+    }
+    @@keyframes mtto-pulse {
+        0%, 100% { opacity: 0.7; }
+        50%      { opacity: 1; }
+    }
+    tr.mtto-row td.value-cell {
+        text-decoration: line-through;
+        text-decoration-color: rgba(255, 152, 0, 0.4);
+    }
     
     /* Value styling */
     .value-cell {
@@ -568,6 +603,21 @@
     .table-container::-webkit-scrollbar-thumb:hover {
         background: rgba(0, 230, 118, 0.8);
     }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-toggle-btn {
+        background: rgba(0,230,118,0.1); border: 1px solid rgba(0,230,118,0.3); color: #00e676;
+        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+        display: flex; align-items: center; gap: 6px; transition: all 0.3s;
+    }
+    .theme-toggle-btn:hover { background: rgba(0,230,118,0.2); color: #fff; }
+    body.hr-light .compact-header { background: rgba(255,255,255,0.95) !important; border-color: rgba(0,0,0,0.1) !important; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    body.hr-light .compact-header label { color: #555 !important; }
+    body.hr-light .info-message { background: rgba(245,245,245,0.95) !important; color: #333 !important; border-color: rgba(0,0,0,0.1) !important; }
+    body.hr-light .table-container { background: rgba(255,255,255,0.95) !important; border-color: rgba(0,0,0,0.1) !important; }
+    body.hr-light .table-container th { background: #f5f5f5 !important; color: #333 !important; }
+    body.hr-light .table-container td { color: #444 !important; }
+    body.hr-light .theme-toggle-btn { background: rgba(33,150,243,0.1); border-color: rgba(33,150,243,0.3); color: #1565c0; }
 </style>
 }
 
@@ -637,6 +687,10 @@
         </div>
         
         <div class="header-actions">
+            <button class="theme-toggle-btn" id="btnHrThemeToggle">
+                <i class="sun icon" id="hrThemeIcon"></i>
+                <span id="hrThemeLabel">Claro</span>
+            </button>
             <button id="load-report-btn" class="ui primary button">
                 <i class="refresh icon"></i> Cargar
             </button>
@@ -694,6 +748,29 @@
     $(document).ready(function() {
         $('.main-content .ui.dropdown').dropdown();
         $('.ui.checkbox').checkbox();
+
+        // Theme toggle
+        var hrTheme = localStorage.getItem('hrChartTheme') || 'dark';
+        if (hrTheme === 'light') {
+            document.body.classList.add('hr-light');
+            $('#hrThemeIcon').removeClass('sun').addClass('moon');
+            $('#hrThemeLabel').text('Oscuro');
+        }
+        $('#btnHrThemeToggle').on('click', function() {
+            var isL = document.body.classList.toggle('hr-light');
+            localStorage.setItem('hrChartTheme', isL ? 'light' : 'dark');
+            $('#hrThemeIcon').toggleClass('sun moon');
+            $('#hrThemeLabel').text(isL ? 'Oscuro' : 'Claro');
+            Highcharts.charts.forEach(function(c) {
+                if (!c) return;
+                c.update({
+                    chart: { backgroundColor: isL ? '#ffffff' : 'transparent' },
+                    xAxis: [{ labels: { style: { color: isL ? '#555' : '#ccc' } }, title: { style: { color: isL ? '#555' : '#a5d6a7' } } }],
+                    yAxis: [{ labels: { style: { color: isL ? '#555' : '#ccc' } }, title: { style: { color: isL ? '#555' : '#a5d6a7' } } }],
+                    tooltip: { backgroundColor: isL ? 'rgba(255,255,255,0.96)' : 'rgba(30,40,30,0.95)', style: { color: isL ? '#333' : '#e0e0e0' } }
+                }, true, false);
+            });
+        });
         
         // Set default date to tomorrow (for current period ending tomorrow at 6am)
         const tomorrow = new Date();
@@ -969,6 +1046,7 @@
             
             let total = 0;
             data.stations.forEach(station => {
+                if (station.enMantenimiento) return; // Excluir estaciones en mantenimiento del totalizador
                 function dtKey(d) { return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'-'+d.getHours(); }
                 const key = dtKey(hourTime);
                 const hv = station.hourlyValues.find(v => dtKey(new Date(v.hour)) === key);
@@ -1032,7 +1110,10 @@
 
     function renderStationRow(station, startTime, isPrecipitation, body, indent) {
         const cotaIcon = station.hasCota ? ' <i class="bullseye icon" title="Valores calibrados con Cota" style="color:#ff9800;"></i>' : '';
-        let row = `<tr><td class="station-col" title="${station.stationName}">${indent}${station.stationName}${cotaIcon}</td>`;
+        const isMtto = station.enMantenimiento === true;
+        const mttoIcon = isMtto ? ' <span class="mtto-badge" title="Estación en mantenimiento — valores excluidos de promedios"><i class="wrench icon" style="font-size:9px;margin:0;"></i> MTTO</span>' : '';
+        const rowClass = isMtto ? ' class="mtto-row"' : '';
+        let row = `<tr${rowClass}><td class="station-col" title="${station.stationName}${isMtto ? ' (En Mantenimiento)' : ''}">${indent}${station.stationName}${cotaIcon}${mttoIcon}</td>`;
 
         // Use date+hour key to avoid cross-day collisions
         function dtKey(d) { return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'-'+d.getHours(); }
@@ -1081,14 +1162,18 @@
         const startDate = new Date(data.startTime);
         const endDate = new Date(data.endTime);
         const stationCount = data.stations.filter(s => s.hourlyValues.length > 0).length;
+        const mttoCount = data.stations.filter(s => s.enMantenimiento).length;
         
         const startStr = startDate.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const startTimeStr = (startDate.getHours() + 1).toString().padStart(2, '0') + ':00';
         const endStr = endDate.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const endTimeStr = endDate.getHours().toString().padStart(2, '0') + ':00';
         
-        const text = `Mostrando ${stationCount} estaciones con datos de ${data.variable} desde ${startStr} ${startTimeStr} hasta ${endStr} ${endTimeStr}`;
-        $('#report-info-text').text(text);
+        let text = `Mostrando ${stationCount} estaciones con datos de ${data.variable} desde ${startStr} ${startTimeStr} hasta ${endStr} ${endTimeStr}`;
+        if (mttoCount > 0) {
+            text += ` — <span style="color:#ffb74d;"><i class="wrench icon"></i>${mttoCount} en mantenimiento</span>`;
+        }
+        $('#report-info-text').html(text);
         $('#report-info').show();
     }
 

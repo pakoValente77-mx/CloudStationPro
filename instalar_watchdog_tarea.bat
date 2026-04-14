@@ -1,4 +1,4 @@
-@echo off
+e@echo off
 :: ============================================================
 :: instalar_watchdog_tarea.bat
 :: Ejecutar como Administrador.

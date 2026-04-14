@@ -27,7 +27,7 @@ namespace CloudStationWeb.Data
             await context.Database.ExecuteSqlRawAsync(createTableSql);
 
             // Create roles
-            string[] roles = { "SuperAdmin", "Administrador", "Operador", "Visualizador", "SoloVasos" };
+            string[] roles = { "SuperAdmin", "Administrador", "Operador", "Visualizador", "SoloVasos", "ApiConsumer" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
