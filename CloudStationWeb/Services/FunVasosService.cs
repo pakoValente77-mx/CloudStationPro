@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 using CloudStationWeb.Models;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 using OfficeOpenXml;
 
@@ -10,8 +11,10 @@ namespace CloudStationWeb.Services
     public class FunVasosService
     {
         private readonly string _postgresConn;
+        private readonly string _sqlConn;
 
-        private static readonly Dictionary<string, (int headerRow, int dataStartRow, int dataEndRow, bool isTapon)> PresaSections = new()
+        // Fallback PresaSections used only if EmbalseConfig table cannot be read
+        private static readonly Dictionary<string, (int headerRow, int dataStartRow, int dataEndRow, bool isTapon)> FallbackPresaSections = new()
         {
             ["Angostura"]          = (12, 15, 38, false),
             ["Chicoasén"]          = (45, 48, 70, false),
@@ -23,6 +26,46 @@ namespace CloudStationWeb.Services
         public FunVasosService(IConfiguration configuration)
         {
             _postgresConn = configuration.GetConnectionString("PostgreSQL") ?? "";
+            _sqlConn = configuration.GetConnectionString("SqlServer") ?? "";
+        }
+
+        /// <summary>
+        /// Load PresaSections from EmbalseConfig DB, falling back to hardcoded if unavailable.
+        /// </summary>
+        private async Task<Dictionary<string, (int headerRow, int dataStartRow, int dataEndRow, bool isTapon)>> GetPresaSectionsAsync()
+        {
+            try
+            {
+                using var db = new Microsoft.Data.SqlClient.SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<(string NombreDisplay, int? ExcelHeaderRow, int? ExcelDataStartRow, int? ExcelDataEndRow, bool IsTaponType)>(
+                    "SELECT NombreDisplay, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType FROM EmbalseConfig WHERE ExcelHeaderRow IS NOT NULL ORDER BY SortOrder");
+                var result = new Dictionary<string, (int, int, int, bool)>();
+                foreach (var c in configs)
+                {
+                    if (c.ExcelHeaderRow.HasValue && c.ExcelDataStartRow.HasValue && c.ExcelDataEndRow.HasValue)
+                        result[c.NombreDisplay] = (c.ExcelHeaderRow.Value, c.ExcelDataStartRow.Value, c.ExcelDataEndRow.Value, c.IsTaponType);
+                }
+                if (result.Count > 0) return result;
+            }
+            catch { /* Fall through to fallback */ }
+            return FallbackPresaSections;
+        }
+
+        /// <summary>
+        /// Load presa sort order from EmbalseConfig DB.
+        /// </summary>
+        private async Task<string[]> GetPresaOrderAsync()
+        {
+            try
+            {
+                using var db = new Microsoft.Data.SqlClient.SqlConnection(_sqlConn);
+                var names = await db.QueryAsync<string>(
+                    "SELECT NombreDisplay FROM EmbalseConfig ORDER BY SortOrder");
+                var result = names.ToArray();
+                if (result.Length > 0) return result;
+            }
+            catch { /* Fall through to fallback */ }
+            return new[] { "Angostura", "Chicoasén", "Malpaso", "Tapón Juan Grijalva", "Peñitas" };
         }
 
         /// <summary>
@@ -49,8 +92,9 @@ namespace CloudStationWeb.Services
             reportDate = ExtractDate(ws);
 
             var allRows = new List<FunVasosHorario>();
+            var presaSections = await GetPresaSectionsAsync();
 
-            foreach (var (presa, (headerRow, dataStart, dataEnd, isTapon)) in PresaSections)
+            foreach (var (presa, (headerRow, dataStart, dataEnd, isTapon)) in presaSections)
             {
                 for (int row = dataStart; row <= dataEnd; row++)
                 {
@@ -173,7 +217,7 @@ namespace CloudStationWeb.Services
                   ORDER BY presa, ts, hora",
                 new { Start = startDate, End = endDate })).ToList();
 
-            var presaOrder = new[] { "Angostura", "Chicoasén", "Malpaso", "Tapón Juan Grijalva", "Peñitas" };
+            var presaOrder = await GetPresaOrderAsync();
 
             var presas = rows
                 .GroupBy(r => r.Presa)

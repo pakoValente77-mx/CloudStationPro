@@ -1,5 +1,6 @@
 using System.Data;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 
 namespace CloudStationWeb.Services
@@ -12,10 +13,11 @@ namespace CloudStationWeb.Services
     public class HydroForecastService
     {
         private readonly string _pgConn;
+        private readonly string _sqlConn;
         private readonly ILogger<HydroForecastService> _logger;
 
-        // Mapeo cuenca → presa (para agrupar lluvia)
-        private static readonly Dictionary<string, string> CuencaDam = new()
+        // Fallback mapeo cuenca → presa
+        private static readonly Dictionary<string, string> FallbackCuencaDam = new()
         {
             ["ang"] = "Angostura",
             ["mmt"] = "Chicoasen",
@@ -23,13 +25,48 @@ namespace CloudStationWeb.Services
             ["pea"] = "Penitas"
         };
 
-        // Orden de cascada
-        private static readonly string[] CascadeOrder = { "Angostura", "Chicoasen", "Malpaso", "JGrijalva", "Penitas" };
+        // Fallback orden de cascada
+        private static readonly string[] FallbackCascadeOrder = { "Angostura", "Chicoasen", "Malpaso", "JGrijalva", "Penitas" };
 
         public HydroForecastService(IConfiguration config, ILogger<HydroForecastService> logger)
         {
             _pgConn = config.GetConnectionString("PostgreSQL") ?? "";
+            _sqlConn = config.GetConnectionString("SqlServer") ?? "";
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Load CascadeOrder from EmbalseConfig (active embalses, by HydroKey).
+        /// </summary>
+        private async Task<string[]> GetCascadeOrderAsync()
+        {
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var keys = await db.QueryAsync<string>(
+                    "SELECT HydroKey FROM EmbalseConfig WHERE IsActive = 1 AND HydroKey IS NOT NULL ORDER BY SortOrder");
+                var result = keys.ToArray();
+                if (result.Length > 0) return result;
+            }
+            catch { }
+            return FallbackCascadeOrder;
+        }
+
+        /// <summary>
+        /// Load CuencaDam mapping from EmbalseConfig.
+        /// </summary>
+        private async Task<Dictionary<string, string>> GetCuencaDamAsync()
+        {
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<(string CuencaCode, string HydroKey)>(
+                    "SELECT CuencaCode, HydroKey FROM EmbalseConfig WHERE IsActive = 1 AND CuencaCode IS NOT NULL AND HydroKey IS NOT NULL ORDER BY SortOrder");
+                var result = configs.ToDictionary(c => c.CuencaCode, c => c.HydroKey);
+                if (result.Count > 0) return result;
+            }
+            catch { }
+            return FallbackCuencaDam;
         }
 
         /// <summary>
@@ -45,10 +82,11 @@ namespace CloudStationWeb.Services
             var rainForecast = await GetRainForecastByCuencaAsync(db, horizonHours);
             var forecastDate = await GetLatestForecastDateAsync(db);
             var damParams = await LoadDamParamsAsync(db);
+            var cascadeOrder = await GetCascadeOrderAsync();
 
             // Condiciones iniciales por presa
             var dams = new List<object>();
-            foreach (var damName in CascadeOrder)
+            foreach (var damName in cascadeOrder)
             {
                 var init = initialConditions.GetValueOrDefault(damName);
                 var param = damParams.GetValueOrDefault(damName);
@@ -135,8 +173,11 @@ namespace CloudStationWeb.Services
             // 6. Fecha del pronóstico
             result.ForecastDate = await GetLatestForecastDateAsync(db);
 
-            // 7. Simular cada presa en orden de cascada
-            foreach (var damName in CascadeOrder)
+            // 7. Load cascade order from DB
+            var cascadeOrder = await GetCascadeOrderAsync();
+
+            // 8. Simular cada presa en orden de cascada
+            foreach (var damName in cascadeOrder)
             {
                 var param = damParams.GetValueOrDefault(damName);
                 if (param == null) continue;

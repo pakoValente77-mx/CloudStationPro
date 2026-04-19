@@ -19,6 +19,28 @@ namespace CloudStationWeb.Controllers
         public bool Visible { get; set; } = true;
     }
 
+    public class EmbalseConfigDto
+    {
+        public long Id { get; set; }
+        public string PresaKey { get; set; } = "";
+        public string NombreDisplay { get; set; } = "";
+        public decimal? Namo { get; set; }
+        public decimal? Name { get; set; }
+        public decimal? Namino { get; set; }
+        public bool IsActive { get; set; } = true;
+        public int SortOrder { get; set; }
+        // Extended fields for full dynamic support
+        public string Color { get; set; } = "#00e676";
+        public string? HydroKey { get; set; }
+        public string? CuencaCode { get; set; }
+        public int? ExcelHeaderRow { get; set; }
+        public int? ExcelDataStartRow { get; set; }
+        public int? ExcelDataEndRow { get; set; }
+        public bool IsTaponType { get; set; }
+        public int TotalUnits { get; set; }
+        public string? BhgKey { get; set; }
+    }
+
     [Authorize(AuthenticationSchemes = "Identity.Application," + JwtBearerDefaults.AuthenticationScheme)]
     public class FunVasosController : Controller
     {
@@ -58,6 +80,17 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> Index(DateTime? fechaInicio, DateTime? fechaFin)
         {
             var model = await _service.GetDataAsync(fechaInicio, fechaFin);
+
+            // Load EmbalseConfig for dynamic rendering in the view
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var configs = (await db.QueryAsync<EmbalseConfigDto>(
+                    "SELECT Id, PresaKey, NombreDisplay, NAMO, NAME, NAMINO, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey FROM EmbalseConfig WHERE IsActive = 1 ORDER BY SortOrder")).ToList();
+                ViewBag.EmbalseConfigs = configs;
+            }
+            catch { ViewBag.EmbalseConfigs = new List<EmbalseConfigDto>(); }
+
             return View(model);
         }
 
@@ -69,14 +102,27 @@ namespace CloudStationWeb.Controllers
             return Json(model);
         }
 
-        // API ligero: /FunVasos/GetCascadeData — último dato de cada presa
+        // API ligero: /FunVasos/GetCascadeData — último dato de cada presa (incluye config embalse)
         [HttpGet]
         public async Task<IActionResult> GetCascadeData()
         {
             var model = await _service.GetDataAsync(null, null); // latest date
+
+            // Load EmbalseConfig for cascade enrichment
+            Dictionary<string, EmbalseConfigDto> configByDisplay;
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<EmbalseConfigDto>(
+                    "SELECT Id, PresaKey, NombreDisplay, NAMO, NAME, NAMINO, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey FROM EmbalseConfig WHERE IsActive = 1 ORDER BY SortOrder");
+                configByDisplay = configs.ToDictionary(c => c.NombreDisplay, c => c);
+            }
+            catch { configByDisplay = new Dictionary<string, EmbalseConfigDto>(); }
+
             var result = model.Presas.Select(p =>
             {
                 var last = p.Datos.LastOrDefault();
+                configByDisplay.TryGetValue(p.Presa, out var cfg);
                 return new
                 {
                     key = p.Presa.Normalize(System.Text.NormalizationForm.FormD)
@@ -92,7 +138,12 @@ namespace CloudStationWeb.Controllers
                     ultimaHora = p.UltimaHora,
                     fecha = model.FechaFin.ToString("yyyy-MM-dd"),
                     aportacionesV = last?.AportacionesV,
-                    extraccionesV = last?.ExtraccionesTotalV
+                    extraccionesV = last?.ExtraccionesTotalV,
+                    namo = cfg?.Namo,
+                    namino = cfg?.Namino,
+                    totalUnits = cfg?.TotalUnits ?? 0,
+                    isTapon = cfg?.IsTaponType ?? false,
+                    color = cfg?.Color
                 };
             }).ToList();
             return Json(new { presas = result, fecha = model.FechaFin.ToString("yyyy-MM-dd") });
@@ -207,8 +258,17 @@ namespace CloudStationWeb.Controllers
 
             var model = await _service.GetDataAsync(target, target);
 
-            var presasReport = new[] { "Angostura", "Chicoasén", "Malpaso", "Peñitas" };
-            var namoValues = new Dictionary<string, double> { { "Chicoasén", 392.50 }, { "Peñitas", 87.40 } };
+            // Load active embalses from config
+            await EnsureEmbalseConfigTableAsync();
+            var embalseConfigs = new List<EmbalseConfigDto>();
+            using (var db = new SqlConnection(_sqlConn))
+            {
+                embalseConfigs = (await db.QueryAsync<EmbalseConfigDto>(
+                    "SELECT Id, PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder, Color FROM EmbalseConfig WHERE IsActive = 1 ORDER BY SortOrder")).ToList();
+            }
+
+            var presasReport = embalseConfigs.Select(c => c.NombreDisplay).ToArray();
+            var namoValues = embalseConfigs.Where(c => c.Namo.HasValue).ToDictionary(c => c.NombreDisplay, c => (double)c.Namo!.Value);
 
             // Build hour→elevacion maps per presa
             var hourMaps = new Dictionary<string, Dictionary<int, double?>>();
@@ -257,7 +317,7 @@ namespace CloudStationWeb.Controllers
             ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
             row++;
 
-            // Header row 1 (presa names with merged columns)
+            // Header helper
             void SetHeader(int r, int c, string text, System.Drawing.Color bg)
             {
                 ws.Cells[r, c].Value = text;
@@ -270,30 +330,41 @@ namespace CloudStationWeb.Controllers
                 ws.Cells[r, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
             }
 
-            row++;
-            // Col layout: 1=Hora, 2=Angostura Nivel, 3=Chico Nivel, 4=Chico Dif, 5=Malpaso Nivel, 6=Peñitas Nivel, 7=Peñitas Dif
+            // Dynamic column layout: Col 1 = Hora, then 1-2 cols per presa (Nivel, optionally Dif al NAMO)
             ws.Cells[row, 1, row + 1, 1].Merge = true;
             SetHeader(row, 1, "Hora", headerBg);
             ws.Cells[row, 1].Style.VerticalAlignment = ExcelVerticalAlignment.Center;
 
-            SetHeader(row, 2, "Angostura", headerBg);
-
-            ws.Cells[row, 3, row, 4].Merge = true;
-            SetHeader(row, 3, "Chicoasén", headerBg);
-
-            SetHeader(row, 5, "Malpaso", headerBg);
-
-            ws.Cells[row, 6, row, 7].Merge = true;
-            SetHeader(row, 6, "Peñitas", headerBg);
+            int col = 2;
+            var presaColMap = new List<(string nombre, int nivelCol, int? difCol)>();
+            foreach (var presa in presasReport)
+            {
+                bool hasDif = namoValues.ContainsKey(presa);
+                int startCol = col;
+                if (hasDif)
+                {
+                    ws.Cells[row, col, row, col + 1].Merge = true;
+                    SetHeader(row, col, presa, headerBg);
+                    presaColMap.Add((presa, col, col + 1));
+                    col += 2;
+                }
+                else
+                {
+                    SetHeader(row, col, presa, headerBg);
+                    presaColMap.Add((presa, col, null));
+                    col++;
+                }
+            }
+            int totalCols = col - 1;
             row++;
 
             // Sub-header row
-            SetHeader(row, 2, "Nivel (msnm)", subHeaderBg);
-            SetHeader(row, 3, "Nivel (msnm)", subHeaderBg);
-            SetHeader(row, 4, "Dif. Al NAMO", subHeaderBg);
-            SetHeader(row, 5, "Nivel (msnm)", subHeaderBg);
-            SetHeader(row, 6, "Nivel (msnm)", subHeaderBg);
-            SetHeader(row, 7, "Dif. Al NAMO", subHeaderBg);
+            foreach (var pm in presaColMap)
+            {
+                SetHeader(row, pm.nivelCol, "Nivel (msnm)", subHeaderBg);
+                if (pm.difCol.HasValue)
+                    SetHeader(row, pm.difCol.Value, "Dif. Al NAMO", subHeaderBg);
+            }
             row++;
 
             // Data rows (hours 1 to 24)
@@ -304,25 +375,28 @@ namespace CloudStationWeb.Controllers
                 ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 1].Style.Font.Bold = true;
 
-                var aVal = hourMaps["Angostura"].GetValueOrDefault(h);
-                var cVal = hourMaps["Chicoasén"].GetValueOrDefault(h);
-                var mVal = hourMaps["Malpaso"].GetValueOrDefault(h);
-                var pVal = hourMaps["Peñitas"].GetValueOrDefault(h);
+                foreach (var pm in presaColMap)
+                {
+                    var val = hourMaps[pm.nombre].GetValueOrDefault(h);
+                    if (val.HasValue)
+                    {
+                        ws.Cells[row, pm.nivelCol].Value = val.Value;
+                        ws.Cells[row, pm.nivelCol].Style.Numberformat.Format = "0.00";
+                    }
+                    if (pm.difCol.HasValue && val.HasValue && namoValues.TryGetValue(pm.nombre, out var namoVal))
+                    {
+                        ws.Cells[row, pm.difCol.Value].Value = namoVal - val.Value;
+                        ws.Cells[row, pm.difCol.Value].Style.Numberformat.Format = "0.00";
+                    }
+                }
 
-                if (aVal.HasValue) { ws.Cells[row, 2].Value = aVal.Value; ws.Cells[row, 2].Style.Numberformat.Format = "0.00"; }
-                if (cVal.HasValue) { ws.Cells[row, 3].Value = cVal.Value; ws.Cells[row, 3].Style.Numberformat.Format = "0.00"; }
-                if (cVal.HasValue) { ws.Cells[row, 4].Value = namoValues["Chicoasén"] - cVal.Value; ws.Cells[row, 4].Style.Numberformat.Format = "0.00"; }
-                if (mVal.HasValue) { ws.Cells[row, 5].Value = mVal.Value; ws.Cells[row, 5].Style.Numberformat.Format = "0.00"; }
-                if (pVal.HasValue) { ws.Cells[row, 6].Value = pVal.Value; ws.Cells[row, 6].Style.Numberformat.Format = "0.00"; }
-                if (pVal.HasValue) { ws.Cells[row, 7].Value = pVal.Value; ws.Cells[row, 7].Style.Numberformat.Format = "0.00"; ws.Cells[row, 7].Value = namoValues["Peñitas"] - pVal.Value; }
-
-                for (int c = 1; c <= 7; c++)
+                for (int c = 1; c <= totalCols; c++)
                     ws.Cells[row, c].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
                 // Alternate row color
                 if (h % 2 == 0)
                 {
-                    using var rng = ws.Cells[row, 1, row, 7];
+                    using var rng = ws.Cells[row, 1, row, totalCols];
                     rng.Style.Fill.PatternType = ExcelFillStyle.Solid;
                     rng.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(232, 245, 233));
                 }
@@ -331,10 +405,10 @@ namespace CloudStationWeb.Controllers
 
             // Column widths
             ws.Column(1).Width = 8;
-            for (int c = 2; c <= 7; c++) ws.Column(c).Width = 16;
+            for (int c = 2; c <= totalCols; c++) ws.Column(c).Width = 16;
 
             // Borders for the entire data area
-            using (var rng = ws.Cells[dataStartRow - 2, 1, dataStartRow + 23, 7])
+            using (var rng = ws.Cells[dataStartRow - 2, 1, dataStartRow + 23, totalCols])
             {
                 rng.Style.Border.Top.Style = ExcelBorderStyle.Thin;
                 rng.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
@@ -348,6 +422,193 @@ namespace CloudStationWeb.Controllers
 
             var fileName = $"NivelesHorarios_{target:yyyyMMdd}.xlsx";
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+
+        // =====================================================================
+        // EMBALSE CONFIG — NAMO / NAME / NAMINO configurables por presa
+        // =====================================================================
+
+        private async Task EnsureEmbalseConfigTableAsync()
+        {
+            using var db = new SqlConnection(_sqlConn);
+            await db.ExecuteAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'EmbalseConfig')
+                BEGIN
+                    CREATE TABLE EmbalseConfig (
+                        Id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+                        PresaKey        NVARCHAR(100) NOT NULL,
+                        NombreDisplay   NVARCHAR(200) NOT NULL,
+                        Namo            DECIMAL(18,4) NULL,
+                        Name            DECIMAL(18,4) NULL,
+                        Namino          DECIMAL(18,4) NULL,
+                        IsActive        BIT NOT NULL DEFAULT 1,
+                        SortOrder       INT NOT NULL DEFAULT 0,
+                        Color           NVARCHAR(20) DEFAULT '#00e676',
+                        HydroKey        NVARCHAR(100) NULL,
+                        CuencaCode      NVARCHAR(20) NULL,
+                        ExcelHeaderRow  INT NULL,
+                        ExcelDataStartRow INT NULL,
+                        ExcelDataEndRow INT NULL,
+                        IsTaponType     BIT NOT NULL DEFAULT 0,
+                        TotalUnits      INT NOT NULL DEFAULT 0,
+                        BhgKey          NVARCHAR(100) NULL,
+                        UsuarioModifica NVARCHAR(256),
+                        FechaCreacion   DATETIME2 DEFAULT GETDATE(),
+                        FechaModifica   DATETIME2 DEFAULT GETDATE()
+                    );
+                    CREATE UNIQUE INDEX IX_EmbalseConfig_PresaKey ON EmbalseConfig(PresaKey);
+
+                    INSERT INTO EmbalseConfig (PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey)
+                    VALUES
+                        ('Angostura',           'Angostura',            539.00, 542.10, 510.40, 1, 1, '#1565C0', 'Angostura', 'ang', 12, 15, 38, 0, 5, 'ANGOSTURA'),
+                        ('Chicoasen',           'Chicoasén',            395.00, 400.00, 378.50, 1, 2, '#42a5f5', 'Chicoasen', 'mmt', 45, 48, 70, 0, 8, 'CHICOASEN'),
+                        ('Malpaso',             'Malpaso',              189.70, 192.00, 163.00, 1, 3, '#00838F', 'Malpaso',   'mps', 78, 81, 103, 0, 6, 'MALPASO'),
+                        ('Tapon_Juan_Grijalva', 'Tapón Juan Grijalva',  100.00, 105.50,  87.00, 0, 4, '#ff7043', 'JGrijalva', NULL,  111, 114, 136, 1, 0, 'CANAL_JG'),
+                        ('Penitas',             'Peñitas',               95.10,  99.20,  84.50, 1, 5, '#AD1457', 'Penitas',   'pea', 144, 147, 170, 0, 4, 'PEÑITAS');
+                END
+
+                -- Migration: add columns if they don't exist (for existing deployments)
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'Color')
+                    ALTER TABLE EmbalseConfig ADD Color NVARCHAR(20) DEFAULT '#00e676';
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'HydroKey')
+                    ALTER TABLE EmbalseConfig ADD HydroKey NVARCHAR(100) NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'CuencaCode')
+                    ALTER TABLE EmbalseConfig ADD CuencaCode NVARCHAR(20) NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'ExcelHeaderRow')
+                    ALTER TABLE EmbalseConfig ADD ExcelHeaderRow INT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'ExcelDataStartRow')
+                    ALTER TABLE EmbalseConfig ADD ExcelDataStartRow INT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'ExcelDataEndRow')
+                    ALTER TABLE EmbalseConfig ADD ExcelDataEndRow INT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'IsTaponType')
+                    ALTER TABLE EmbalseConfig ADD IsTaponType BIT NOT NULL DEFAULT 0;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'TotalUnits')
+                    ALTER TABLE EmbalseConfig ADD TotalUnits INT NOT NULL DEFAULT 0;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('EmbalseConfig') AND name = 'BhgKey')
+                    ALTER TABLE EmbalseConfig ADD BhgKey NVARCHAR(100) NULL;
+
+                -- Seed extended columns for existing rows that have NULLs
+                UPDATE EmbalseConfig SET Color='#1565C0', HydroKey='Angostura', CuencaCode='ang', ExcelHeaderRow=12, ExcelDataStartRow=15, ExcelDataEndRow=38, IsTaponType=0, TotalUnits=5, BhgKey='ANGOSTURA' WHERE PresaKey='Angostura' AND HydroKey IS NULL;
+                UPDATE EmbalseConfig SET Color='#42a5f5', HydroKey='Chicoasen', CuencaCode='mmt', ExcelHeaderRow=45, ExcelDataStartRow=48, ExcelDataEndRow=70, IsTaponType=0, TotalUnits=8, BhgKey='CHICOASEN' WHERE PresaKey='Chicoasen' AND HydroKey IS NULL;
+                UPDATE EmbalseConfig SET Color='#00838F', HydroKey='Malpaso', CuencaCode='mps', ExcelHeaderRow=78, ExcelDataStartRow=81, ExcelDataEndRow=103, IsTaponType=0, TotalUnits=6, BhgKey='MALPASO' WHERE PresaKey='Malpaso' AND HydroKey IS NULL;
+                UPDATE EmbalseConfig SET Color='#ff7043', HydroKey='JGrijalva', ExcelHeaderRow=111, ExcelDataStartRow=114, ExcelDataEndRow=136, IsTaponType=1, TotalUnits=0, BhgKey='CANAL_JG' WHERE PresaKey='Tapon_Juan_Grijalva' AND HydroKey IS NULL;
+                UPDATE EmbalseConfig SET Color='#AD1457', HydroKey='Penitas', CuencaCode='pea', ExcelHeaderRow=144, ExcelDataStartRow=147, ExcelDataEndRow=170, IsTaponType=0, TotalUnits=4, BhgKey='PEÑITAS' WHERE PresaKey='Penitas' AND HydroKey IS NULL;
+            ");
+        }
+
+        // GET: /FunVasos/GetEmbalseConfig — solo activos
+        [HttpGet]
+        public async Task<IActionResult> GetEmbalseConfig()
+        {
+            try
+            {
+                await EnsureEmbalseConfigTableAsync();
+                using var db = new SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<EmbalseConfigDto>(
+                    "SELECT Id, PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey FROM EmbalseConfig WHERE IsActive = 1 ORDER BY SortOrder");
+                return Json(new { success = true, data = configs });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // GET: /FunVasos/GetEmbalseConfigAll — todos incluido inactivos
+        [HttpGet]
+        public async Task<IActionResult> GetEmbalseConfigAll()
+        {
+            try
+            {
+                await EnsureEmbalseConfigTableAsync();
+                using var db = new SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<EmbalseConfigDto>(
+                    "SELECT Id, PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey FROM EmbalseConfig ORDER BY SortOrder");
+                return Json(new { success = true, data = configs });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // POST: /FunVasos/SaveEmbalseConfig
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveEmbalseConfig([FromBody] EmbalseConfigDto model)
+        {
+            if (model == null || string.IsNullOrWhiteSpace(model.PresaKey))
+                return Json(new { success = false, message = "PresaKey es requerido" });
+
+            try
+            {
+                await EnsureEmbalseConfigTableAsync();
+                using var db = new SqlConnection(_sqlConn);
+
+                if (model.Id > 0)
+                {
+                    await db.ExecuteAsync(@"
+                        UPDATE EmbalseConfig 
+                        SET NombreDisplay = @NombreDisplay, Namo = @Namo, Name = @Name, Namino = @Namino,
+                            IsActive = @IsActive, SortOrder = @SortOrder, Color = @Color,
+                            HydroKey = @HydroKey, CuencaCode = @CuencaCode,
+                            ExcelHeaderRow = @ExcelHeaderRow, ExcelDataStartRow = @ExcelDataStartRow,
+                            ExcelDataEndRow = @ExcelDataEndRow, IsTaponType = @IsTaponType,
+                            TotalUnits = @TotalUnits, BhgKey = @BhgKey,
+                            UsuarioModifica = @User, FechaModifica = GETDATE()
+                        WHERE Id = @Id",
+                        new { model.Id, model.NombreDisplay, model.Namo, model.Name, model.Namino,
+                              model.IsActive, model.SortOrder, model.Color, model.HydroKey, model.CuencaCode,
+                              model.ExcelHeaderRow, model.ExcelDataStartRow, model.ExcelDataEndRow,
+                              model.IsTaponType, model.TotalUnits, model.BhgKey,
+                              User = User.Identity?.Name ?? "Admin" });
+                }
+                else
+                {
+                    // Check duplicate PresaKey
+                    var exists = await db.ExecuteScalarAsync<int>(
+                        "SELECT COUNT(*) FROM EmbalseConfig WHERE PresaKey = @PresaKey", new { model.PresaKey });
+                    if (exists > 0)
+                        return Json(new { success = false, message = $"Ya existe configuración para '{model.PresaKey}'" });
+
+                    model.Id = await db.ExecuteScalarAsync<long>(@"
+                        INSERT INTO EmbalseConfig (PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder, Color, HydroKey, CuencaCode, ExcelHeaderRow, ExcelDataStartRow, ExcelDataEndRow, IsTaponType, TotalUnits, BhgKey, UsuarioModifica)
+                        OUTPUT INSERTED.Id
+                        VALUES (@PresaKey, @NombreDisplay, @Namo, @Name, @Namino, @IsActive, @SortOrder, @Color, @HydroKey, @CuencaCode, @ExcelHeaderRow, @ExcelDataStartRow, @ExcelDataEndRow, @IsTaponType, @TotalUnits, @BhgKey, @User)",
+                        new { model.PresaKey, model.NombreDisplay, model.Namo, model.Name, model.Namino,
+                              model.IsActive, model.SortOrder, model.Color, model.HydroKey, model.CuencaCode,
+                              model.ExcelHeaderRow, model.ExcelDataStartRow, model.ExcelDataEndRow,
+                              model.IsTaponType, model.TotalUnits, model.BhgKey,
+                              User = User.Identity?.Name ?? "Admin" });
+                }
+                return Json(new { success = true, config = model });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // POST: /FunVasos/ToggleEmbalse
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleEmbalse([FromBody] EmbalseConfigDto model)
+        {
+            if (model == null || model.Id <= 0)
+                return Json(new { success = false, message = "ID inválido" });
+
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                await db.ExecuteAsync(
+                    "UPDATE EmbalseConfig SET IsActive = @IsActive, FechaModifica = GETDATE() WHERE Id = @Id",
+                    new { model.Id, model.IsActive });
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
     }
 }

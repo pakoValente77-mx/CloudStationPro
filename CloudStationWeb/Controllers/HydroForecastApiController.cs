@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Dapper;
 using CloudStationWeb.Services;
 
 namespace CloudStationWeb.Controllers
@@ -20,10 +22,11 @@ namespace CloudStationWeb.Controllers
         private readonly HydroForecastService _hydroService;
         private readonly FunVasosService _funVasosService;
         private readonly string _apiKey;
+        private readonly string _sqlConn;
         private readonly ILogger<HydroForecastApiController> _logger;
 
-        // Metadatos de cada presa compatible con Dam.java del microservicio Spring Boot
-        private static readonly Dictionary<string, DamMeta> DamMetadata = new()
+        // Metadatos de cada presa compatible con Dam.java — FALLBACK si la BD no tiene EmbalseConfig
+        private static readonly Dictionary<string, DamMeta> DamMetadataFallback = new()
         {
             ["Angostura"] = new(1, 1, "ANG", "Angostura", 542.10f, 539.00f, 510, false, "HUI"),
             ["Chicoasen"] = new(2, 2, "CHI", "Chicoasén", 400.00f, 395.00f, 378, true, "HUI"),
@@ -41,7 +44,63 @@ namespace CloudStationWeb.Controllers
             _hydroService = hydroService;
             _funVasosService = funVasosService;
             _apiKey = config["ImageStore:ApiKey"] ?? "pih-default-key-change-me";
+            _sqlConn = config.GetConnectionString("SqlServer")!;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Load DamMeta from EmbalseConfig table, fallback to hardcoded if table doesn't exist.
+        /// </summary>
+        private async Task<Dictionary<string, DamMeta>> GetDamMetadataAsync()
+        {
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var exists = await db.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM sys.tables WHERE name = 'EmbalseConfig'");
+                if (exists == 0) return DamMetadataFallback;
+
+                var configs = await db.QueryAsync<dynamic>(
+                    "SELECT Id, PresaKey, NombreDisplay, Namo, Name, Namino, IsActive, SortOrder FROM EmbalseConfig ORDER BY SortOrder");
+
+                var result = new Dictionary<string, DamMeta>();
+                // Map PresaKey to hydro key
+                var keyMap = new Dictionary<string, string>
+                {
+                    ["Angostura"] = "Angostura", ["Chicoasen"] = "Chicoasen",
+                    ["Malpaso"] = "Malpaso", ["Tapon_Juan_Grijalva"] = "JGrijalva", ["Penitas"] = "Penitas"
+                };
+                var codeMap = new Dictionary<string, string>
+                {
+                    ["Angostura"] = "ANG", ["Chicoasen"] = "CHI",
+                    ["Malpaso"] = "MAL", ["Tapon_Juan_Grijalva"] = "JGR", ["Penitas"] = "PEN"
+                };
+                var hasPrev = new Dictionary<string, bool>
+                {
+                    ["Angostura"] = false, ["Chicoasen"] = true,
+                    ["Malpaso"] = true, ["Tapon_Juan_Grijalva"] = true, ["Penitas"] = true
+                };
+
+                foreach (var c in configs)
+                {
+                    string presaKey = c.PresaKey;
+                    var hydroKey = keyMap.GetValueOrDefault(presaKey, presaKey);
+                    var code = codeMap.GetValueOrDefault(presaKey, presaKey[..3].ToUpper());
+                    result[hydroKey] = new DamMeta(
+                        (int)c.Id, (int)c.Id, code,
+                        (string)c.NombreDisplay,
+                        c.Name != null ? (float)(decimal)c.Name : 0f,
+                        c.Namo != null ? (float)(decimal)c.Namo : 0f,
+                        c.Namino != null ? (int)(decimal)c.Namino : 0,
+                        hasPrev.GetValueOrDefault(presaKey, false), "HUI");
+                }
+                return result.Count > 0 ? result : DamMetadataFallback;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load EmbalseConfig, using fallback");
+                return DamMetadataFallback;
+            }
         }
 
         /// <summary>
@@ -83,9 +142,10 @@ namespace CloudStationWeb.Controllers
                 request?.CurveNumbers);
 
             // Formato compatible con HydroModel.java del microservicio Spring Boot
+            var damMetadata = await GetDamMetadataAsync();
             var hydroModels = result.DamSimulations.Select(d =>
             {
-                var meta = DamMetadata.GetValueOrDefault(d.DamName);
+                var meta = damMetadata.GetValueOrDefault(d.DamName);
                 var forecastDate = result.ForecastDate ?? DateTime.UtcNow.Date;
 
                 return new
@@ -155,10 +215,11 @@ namespace CloudStationWeb.Controllers
             };
 
             var hydroModels = new List<object>();
+            var damMetadataTrend = await GetDamMetadataAsync();
 
             foreach (var sim in forecast.DamSimulations)
             {
-                var meta = DamMetadata.GetValueOrDefault(sim.DamName);
+                var meta = damMetadataTrend.GetValueOrDefault(sim.DamName);
                 var forecastDate = forecast.ForecastDate ?? DateTime.UtcNow.Date;
 
                 // Buscar datos reales correspondientes
@@ -229,12 +290,13 @@ namespace CloudStationWeb.Controllers
         /// GET /api/hydro/dams
         /// </summary>
         [HttpGet("dams")]
-        public IActionResult GetDams()
+        public async Task<IActionResult> GetDams()
         {
             if (!ValidateAuth())
                 return Unauthorized(new { error = "API key inválida o usuario no autorizado" });
 
-            var dams = DamMetadata.Select(kv => new
+            var damMetadataDams = await GetDamMetadataAsync();
+            var dams = damMetadataDams.Select(kv => new
             {
                 id = kv.Value.Id,
                 centralId = kv.Value.CentralId,

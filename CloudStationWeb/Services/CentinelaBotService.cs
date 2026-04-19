@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CloudStationWeb.Data;
+using CloudStationWeb.Models;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace CloudStationWeb.Services
@@ -40,6 +43,13 @@ namespace CloudStationWeb.Services
         private readonly string _imageStorePath;
         private readonly string _imageStoreBaseUrl;
         private readonly ChartService? _chartService;
+        private readonly IServiceScopeFactory _scopeFactory;
+
+        // Cached report catalog from DB (refreshed periodically)
+        private Dictionary<string, ReportDefinition> _reportCatalog = new();
+        private Dictionary<string, string> _reportPrefixes = new();
+        private DateTime _catalogLastRefresh = DateTime.MinValue;
+        private static readonly TimeSpan CatalogRefreshInterval = TimeSpan.FromMinutes(5);
 
         // Track per-user Gemini AI mode: userName → active
         private static readonly ConcurrentDictionary<string, bool> _aiModeUsers = new();
@@ -48,25 +58,6 @@ namespace CloudStationWeb.Services
         public const string BotFullName = "Centinela IA";
         public const string BotUserId = "centinela-bot";
         public const string BotRoom = "centinela";
-
-        // Azure Blob image command mapping: command → (blobName, caption)
-        private static readonly Dictionary<string, (string BlobName, string Caption)> ImageCommands = new()
-        {
-            ["/1"] = ("9c8a7f42-3d91-4e01-a3fa-0d2e5b1c6f7d.png", "📊 Reporte de Unidades actualizado."),
-            ["/2"] = ("6f3b2c91-91df-41b6-9a1e-c3f0d0c8e24a.png", "📊 Captura del Power Monitoring."),
-            ["/3"] = ("b7e1f9c3-8a2d-4f5d-9c3a-7f1f6e7a2c01.png", "📊 Gráfica de potencia."),
-            ["/4"] = ("e1a5f734-9c2e-4b3b-8d5a-6f7e1d2c9b8f.png", "📊 Condición de embalses."),
-            ["/5"] = ("d42f3e19-b89c-4f02-90d4-3e7f4a6d2c01.png", "📊 Aportaciones por cuenca propia."),
-            ["/6"] = ("reporte_lluvia_1_1_638848218556433423.png", "📊 CFE SPH Grijalva - Reporte de lluvias 24 horas."),
-            ["/7"] = ("reporte_lluvia_1_2_638848218556433423.png", "📊 CFE SPH Grijalva - Reporte parcial de lluvias."),
-        };
-
-        // Rain report prefixes for dynamic lookup (fallback if exact name not found)
-        private static readonly Dictionary<string, string> RainPrefixes = new()
-        {
-            ["/6"] = "reporte_lluvia_1_1_",
-            ["/7"] = "reporte_lluvia_1_2_",
-        };
 
         private const string SystemPrompt = @"Eres Centinela, el asistente de inteligencia artificial de la Plataforma Integral Hidrometeorológica (PIH) de CFE Cuenca Grijalva.
 
@@ -100,12 +91,13 @@ Reglas:
 
 Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén/Mezcalapa (MMT - Río Grijalva-Tuxtla Gutiérrez), Malpaso (MPS - Río Grijalva-Villahermosa), Peñitas (PEA - Río Grijalva-Peñitas). El sistema opera en cascada: Angostura → Chicoasén → Malpaso → Peñitas.";
 
-        public CentinelaBotService(IConfiguration config, IHttpClientFactory httpClientFactory, ILogger<CentinelaBotService> logger, ChartService? chartService = null)
+        public CentinelaBotService(IConfiguration config, IHttpClientFactory httpClientFactory, ILogger<CentinelaBotService> logger, IServiceScopeFactory scopeFactory, ChartService? chartService = null)
         {
             _config = config;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _chartService = chartService;
+            _scopeFactory = scopeFactory;
             _sqlConn = config.GetConnectionString("SqlServer") ?? "";
             _pgConn = config.GetConnectionString("PostgreSQL") ?? "";
             _geminiApiKey = config["Gemini:ApiKey"];
@@ -122,6 +114,42 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
         }
 
         /// <summary>
+        /// Refresh the report catalog from the database (cached for 5 minutes).
+        /// </summary>
+        private async Task EnsureCatalogLoadedAsync()
+        {
+            if (DateTime.UtcNow - _catalogLastRefresh < CatalogRefreshInterval && _reportCatalog.Count > 0)
+                return;
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var reports = await db.ReportDefinitions
+                    .Where(r => r.IsActive)
+                    .ToListAsync();
+
+                var catalog = new Dictionary<string, ReportDefinition>(StringComparer.OrdinalIgnoreCase);
+                var prefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var r in reports)
+                {
+                    catalog[r.Command] = r;
+                    if (!string.IsNullOrEmpty(r.LatestPrefix))
+                        prefixes[r.Command] = r.LatestPrefix;
+                }
+
+                _reportCatalog = catalog;
+                _reportPrefixes = prefixes;
+                _catalogLastRefresh = DateTime.UtcNow;
+                _logger.LogInformation("Catálogo de reportes cargado: {Count} reportes activos", reports.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cargando catálogo de reportes desde BD");
+            }
+        }
+
+        /// <summary>
         /// Process a user message and return the bot's response.
         /// Supports image commands, DeepSeek AI mode, Gemini AI, and command fallback.
         /// </summary>
@@ -132,8 +160,11 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
                 var trimmed = userMessage.Trim();
                 var cmd = trimmed.ToLower().Split(' ', 2)[0];
 
-                // Image commands /1 - /7 ALWAYS work (even in AI mode)
-                if (ImageCommands.ContainsKey(cmd))
+                // Ensure catalog is loaded from DB
+                await EnsureCatalogLoadedAsync();
+
+                // Image commands from DB catalog ALWAYS work (even in AI mode)
+                if (_reportCatalog.ContainsKey(cmd))
                 {
                     return await GetImageCommandResponse(cmd);
                 }
@@ -777,7 +808,11 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
         {
             try
             {
-                var (blobName, caption) = ImageCommands[command];
+                if (!_reportCatalog.TryGetValue(command, out var report))
+                    return new BotResponse { Message = $"⚠️ Comando `{command}` no encontrado en el catálogo." };
+
+                var blobName = report.BlobName ?? "";
+                var caption = report.Caption ?? report.Title;
 
                 // 1) Buscar en ImageStore local (prioridad)
                 var localUrl = GetLocalImageUrl(blobName, command);
@@ -792,7 +827,7 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
                     };
                 }
 
-                return new BotResponse { Message = $"⚠️ No se encontró la imagen para el comando `{command}`. Verifique que exista en ImageStore/unidades/." };
+                return new BotResponse { Message = $"⚠️ No se encontró la imagen para el comando `{command}`. Verifique que exista en ImageStore/{report.Category}/." };
             }
             catch (Exception ex)
             {
@@ -802,22 +837,23 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
         }
 
         /// <summary>
-        /// Busca la imagen en el almacén local (ImageStore/unidades/).
+        /// Busca la imagen en el almacén local (ImageStore/{category}/).
         /// Soporta búsqueda por nombre exacto y por prefijo (reportes de lluvia).
         /// </summary>
         private string? GetLocalImageUrl(string fileName, string command)
         {
-            var categoryDir = Path.Combine(_imageStorePath, "unidades");
+            var category = _reportCatalog.TryGetValue(command, out var report) ? report.Category : "unidades";
+            var categoryDir = Path.Combine(_imageStorePath, category);
             if (!Directory.Exists(categoryDir))
                 return null;
 
             // Buscar por nombre exacto
             var exactPath = Path.Combine(categoryDir, fileName);
             if (File.Exists(exactPath))
-                return BuildLocalImageUrl("unidades", fileName);
+                return BuildLocalImageUrl(category, fileName);
 
-            // Para reportes de lluvia, buscar por prefijo (el timestamp cambia)
-            if (RainPrefixes.TryGetValue(command, out var prefix))
+            // Para reportes con prefijo, buscar por prefijo (el timestamp cambia)
+            if (_reportPrefixes.TryGetValue(command, out var prefix))
             {
                 var match = Directory.GetFiles(categoryDir)
                     .Where(f => Path.GetFileName(f).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -825,7 +861,7 @@ Contexto: Las cuencas son: Angostura (ANG - Río Grijalva-Concordia), Chicoasén
                     .FirstOrDefault();
 
                 if (match != null)
-                    return BuildLocalImageUrl("unidades", Path.GetFileName(match));
+                    return BuildLocalImageUrl(category, Path.GetFileName(match));
             }
 
             return null;

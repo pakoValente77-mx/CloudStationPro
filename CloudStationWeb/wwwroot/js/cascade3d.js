@@ -46,7 +46,7 @@
     var _introStartLookY = -1;
     var _introEndLookY = 0;
 
-    /* ====== DAM CONFIG ====== */
+    /* ====== DAM CONFIG (fallback – overridden by data from server) ====== */
     var DAM_REFS = {
         'Angostura':           { namo: 539.00, namin: 510.40 },
         'Chicoasen':           { namo: 395.00, namin: 378.50 },
@@ -72,10 +72,12 @@
     var GULF_COLOR = 0x01579b;
 
     /* ====== UTILITIES ====== */
-    function fillPct(key, elev) {
-        var r = DAM_REFS[key];
-        if (!r || elev == null) return 0.55;
-        return Math.max(0.05, Math.min(1.0, (elev - r.namin) / (r.namo - r.namin)));
+    function fillPct(key, elev, damData) {
+        // Prefer dynamic data from server, fall back to hardcoded DAM_REFS
+        var namo = (damData && damData.namo != null) ? damData.namo : (DAM_REFS[key] ? DAM_REFS[key].namo : null);
+        var namin = (damData && damData.namino != null) ? damData.namino : (DAM_REFS[key] ? DAM_REFS[key].namin : null);
+        if (namo == null || namin == null || elev == null) return 0.55;
+        return Math.max(0.05, Math.min(1.0, (elev - namin) / (namo - namin)));
     }
     function _smoothstep(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
     function _lerp(a, b, t) { return a + (b - a) * t; }
@@ -86,11 +88,15 @@
         if (typeof THREE === 'undefined') { console.warn('Three.js not loaded'); return; }
         if (_initialized && !_disposed) { _onResize(); return; }
 
-        damsData.sort(function (a, b) {
-            var ia = DAM_ORDER.indexOf(a.key), ib = DAM_ORDER.indexOf(b.key);
-            if (ia === -1) ia = 99; if (ib === -1) ib = 99;
-            return ia - ib;
-        });
+        // Use data order as-is (server sends sorted by SortOrder); fall back to DAM_ORDER for legacy data
+        if (damsData[0] && damsData[0].namo == null) {
+            // Legacy data without config — sort by DAM_ORDER
+            damsData.sort(function (a, b) {
+                var ia = DAM_ORDER.indexOf(a.key), ib = DAM_ORDER.indexOf(b.key);
+                if (ia === -1) ia = 99; if (ib === -1) ib = 99;
+                return ia - ib;
+            });
+        }
 
         _container = document.getElementById(containerId);
         _canvas = document.getElementById('cascade3d-canvas');
@@ -136,24 +142,24 @@
             var d = damsData[i];
             var x = sx + i * SPACING;
             var by = -i * STEP;
-            var fp = fillPct(d.key, d.currentElev);
-            var col = COLORS[i % COLORS.length];
+            var fp = fillPct(d.key, d.currentElev, d);
+            var col = (d.color ? parseInt(d.color.replace('#',''), 16) : COLORS[i % COLORS.length]);
             _buildDam(x, by, fp, col, d);
             _buildSparkles(x, by, fp, col);
 
-            var totalU = DAM_UNITS[d.key] || 0;
+            var totalU = (d.totalUnits != null) ? d.totalUnits : (DAM_UNITS[d.key] || 0);
             var activeU = d.activeUnits || 0;
             if (totalU > 0) {
                 _buildTurbines(x, by, totalU, activeU, col);
             }
-            if (d.key === 'Tapon_Juan_Grijalva') {
+            if (d.isTapon || d.key === 'Tapon_Juan_Grijalva') {
                 _buildTunnels(x, by, fp, col);
             }
 
             if (i < n - 1) {
                 var nextX = sx + (i + 1) * SPACING;
                 var nby = -(i + 1) * STEP;
-                var fp2 = fillPct(damsData[i + 1].key, damsData[i + 1].currentElev);
+                var fp2 = fillPct(damsData[i + 1].key, damsData[i + 1].currentElev, damsData[i + 1]);
                 _buildRiver(x, by, fp, nextX, nby, fp2, col);
             }
         }
@@ -161,7 +167,7 @@
         var lastI = n - 1;
         var lastX = sx + lastI * SPACING;
         var lastBy = -lastI * STEP;
-        var lastFp = fillPct(damsData[lastI].key, damsData[lastI].currentElev);
+        var lastFp = fillPct(damsData[lastI].key, damsData[lastI].currentElev, damsData[lastI]);
         var gulfX = sx + n * SPACING;
         var gulfBy = -n * STEP;
         _buildRiver(lastX, lastBy, lastFp, gulfX, gulfBy, 0.5, COLORS[lastI % COLORS.length]);

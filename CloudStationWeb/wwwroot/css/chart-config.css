@@ -1,0 +1,301 @@
+/* ===== CloudStation Chart Configuration System Styles ===== */
+
+/* ── Toolbar (appears on hover over chart parent) ── */
+.cs-chart-toolbar {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+*:hover > .cs-chart-toolbar,
+.cs-chart-toolbar:hover {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.cs-chart-toolbar-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(15,25,30,0.85);
+    color: #b0bec5;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+    padding: 0;
+}
+.cs-chart-toolbar-btn:hover {
+    background: rgba(0,230,118,0.2);
+    border-color: rgba(0,230,118,0.5);
+    color: #00e676;
+    transform: scale(1.08);
+}
+.cs-chart-toolbar-btn i.icon { margin: 0; }
+
+/* Light-theme overrides */
+body.bhg-light .cs-chart-toolbar-btn,
+body.rf-light .cs-chart-toolbar-btn {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(0,0,0,0.12);
+    color: #555;
+}
+body.bhg-light .cs-chart-toolbar-btn:hover,
+body.rf-light .cs-chart-toolbar-btn:hover {
+    background: rgba(33,133,208,0.15);
+    border-color: rgba(33,133,208,0.4);
+    color: #2185d0;
+}
+
+/* ── Fullscreen Overlay ── */
+.cs-chart-fs-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5,10,15,0.97);
+    z-index: 100000;
+    padding: 20px;
+    flex-direction: column;
+}
+.cs-chart-fs-overlay.active {
+    display: flex;
+}
+
+.cs-fs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+.cs-fs-title {
+    color: #00e676;
+    font-size: 16px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.cs-fs-actions {
+    display: flex;
+    gap: 8px;
+}
+.cs-fs-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #b0bec5;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+}
+.cs-fs-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+}
+.cs-fs-close {
+    background: rgba(239,83,80,0.15);
+    border-color: rgba(239,83,80,0.4);
+    color: #ef5350;
+}
+.cs-fs-close:hover {
+    background: rgba(239,83,80,0.35);
+    color: #fff;
+}
+.cs-fs-chart {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Configuration Panel ── */
+.cs-chart-config-panel {
+    position: fixed;
+    z-index: 100001;
+    width: 300px;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: rgba(15,25,30,0.97);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(0,230,118,0.2);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    color: #e8f5e9;
+    font-size: 13px;
+}
+
+.cs-cfg-section {
+    margin-bottom: 14px;
+}
+.cs-cfg-section:last-child {
+    margin-bottom: 0;
+}
+.cs-cfg-section > label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #78909c;
+    margin-bottom: 8px;
+}
+
+/* Theme buttons */
+.cs-cfg-themes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.cs-cfg-theme-btn {
+    flex: 1 1 calc(50% - 3px);
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: #b0bec5;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+.cs-cfg-theme-btn:hover {
+    background: rgba(0,230,118,0.1);
+    border-color: rgba(0,230,118,0.3);
+}
+.cs-cfg-theme-btn.active {
+    background: rgba(0,230,118,0.2);
+    border-color: #00e676;
+    color: #00e676;
+}
+.cs-cfg-theme-btn i.icon { margin: 0; font-size: 12px; }
+
+/* Palette buttons */
+.cs-cfg-palettes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.cs-cfg-palette-btn {
+    display: flex;
+    gap: 2px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.cs-cfg-palette-btn:hover {
+    border-color: rgba(0,230,118,0.3);
+}
+.cs-cfg-palette-btn.active {
+    border-color: #00e676;
+    box-shadow: 0 0 8px rgba(0,230,118,0.3);
+}
+.cs-cfg-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+/* Series config */
+.cs-cfg-series {
+    max-height: 200px;
+    overflow-y: auto;
+}
+.cs-cfg-series-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.cs-cfg-series-chk {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #00e676;
+}
+.cs-cfg-series-color {
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+.cs-cfg-series-color::-webkit-color-swatch-wrapper { padding: 1px; }
+.cs-cfg-series-color::-webkit-color-swatch { border-radius: 2px; border: none; }
+.cs-cfg-series-name {
+    flex: 1;
+    font-size: 12px;
+    color: #b0bec5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Footer buttons */
+.cs-cfg-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.cs-cfg-apply {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid #00e676;
+    background: rgba(0,230,118,0.2);
+    color: #00e676;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.cs-cfg-apply:hover {
+    background: rgba(0,230,118,0.35);
+}
+.cs-cfg-close {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.04);
+    color: #b0bec5;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.cs-cfg-close:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+/* ── Scrollbar for config panel ── */
+.cs-chart-config-panel::-webkit-scrollbar { width: 5px; }
+.cs-chart-config-panel::-webkit-scrollbar-track { background: transparent; }
+.cs-chart-config-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+.cs-cfg-series::-webkit-scrollbar { width: 4px; }
+.cs-cfg-series::-webkit-scrollbar-track { background: transparent; }
+.cs-cfg-series::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }

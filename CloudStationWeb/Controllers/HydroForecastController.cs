@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Dapper;
 using CloudStationWeb.Services;
 
 namespace CloudStationWeb.Controllers
@@ -10,9 +12,10 @@ namespace CloudStationWeb.Controllers
         private readonly HydroForecastService _hydroService;
         private readonly FunVasosService _funVasosService;
         private readonly ILogger<HydroForecastController> _logger;
+        private readonly string _sqlConn;
 
-        // NAMO / NAME / NAMINO de referencia
-        private static readonly Dictionary<string, (double namo, double name, double namino)> DamRefLevels = new()
+        // Fallback NAMO / NAME / NAMINO (used if EmbalseConfig table is unavailable)
+        private static readonly Dictionary<string, (double namo, double name, double namino)> FallbackDamRefLevels = new()
         {
             ["Angostura"] = (539.00, 542.10, 510.40),
             ["Chicoasen"] = (395.00, 400.00, 378.50),
@@ -21,7 +24,7 @@ namespace CloudStationWeb.Controllers
             ["Penitas"] = (95.10, 99.20, 84.50)
         };
 
-        private static readonly Dictionary<string, string> PresaToHydro = new()
+        private static readonly Dictionary<string, string> FallbackPresaToHydro = new()
         {
             ["Angostura"] = "Angostura",
             ["Chicoasén"] = "Chicoasen",
@@ -30,7 +33,7 @@ namespace CloudStationWeb.Controllers
             ["Peñitas"] = "Penitas"
         };
 
-        private static readonly Dictionary<string, string> DamDisplayNames = new()
+        private static readonly Dictionary<string, string> FallbackDamDisplayNames = new()
         {
             ["Angostura"] = "Angostura",
             ["Chicoasen"] = "Chicoasén",
@@ -39,11 +42,41 @@ namespace CloudStationWeb.Controllers
             ["Penitas"] = "Peñitas"
         };
 
-        public HydroForecastController(HydroForecastService hydroService, FunVasosService funVasosService, ILogger<HydroForecastController> logger)
+        public HydroForecastController(HydroForecastService hydroService, FunVasosService funVasosService, IConfiguration config, ILogger<HydroForecastController> logger)
         {
             _hydroService = hydroService;
             _funVasosService = funVasosService;
             _logger = logger;
+            _sqlConn = config.GetConnectionString("SqlServer") ?? "";
+        }
+
+        private async Task<(Dictionary<string, (double namo, double name, double namino)> refLevels, Dictionary<string, string> presaToHydro, Dictionary<string, string> displayNames)> LoadDamConfigAsync()
+        {
+            try
+            {
+                using var db = new SqlConnection(_sqlConn);
+                var configs = await db.QueryAsync<(string HydroKey, string NombreDisplay, decimal? Namo, decimal? Name, decimal? Namino)>(
+                    "SELECT HydroKey, NombreDisplay, Namo, Name, Namino FROM EmbalseConfig WHERE HydroKey IS NOT NULL ORDER BY SortOrder");
+
+                var refLevels = new Dictionary<string, (double, double, double)>();
+                var presaToHydro = new Dictionary<string, string>();
+                var displayNames = new Dictionary<string, string>();
+
+                foreach (var c in configs)
+                {
+                    refLevels[c.HydroKey] = ((double)(c.Namo ?? 0), (double)(c.Name ?? 0), (double)(c.Namino ?? 0));
+                    presaToHydro[c.NombreDisplay] = c.HydroKey;
+                    displayNames[c.HydroKey] = c.NombreDisplay;
+                }
+
+                if (refLevels.Count > 0)
+                    return (refLevels, presaToHydro, displayNames);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load EmbalseConfig, using fallback");
+            }
+            return (FallbackDamRefLevels, FallbackPresaToHydro, FallbackDamDisplayNames);
         }
 
         /// <summary>
@@ -152,15 +185,18 @@ namespace CloudStationWeb.Controllers
                 // 2. Pronóstico
                 var forecast = await _hydroService.RunSimulationAsync(forecastHours);
 
-                // 3. Combinar por presa
+                // 3. Load dam config from DB
+                var (damRefLevels, presaToHydro, damDisplayNames) = await LoadDamConfigAsync();
+
+                // 4. Combinar por presa
                 var dams = new List<object>();
                 foreach (var sim in forecast.DamSimulations)
                 {
-                    var levels = DamRefLevels.GetValueOrDefault(sim.DamName);
-                    var displayName = DamDisplayNames.GetValueOrDefault(sim.DamName, sim.DamName);
+                    var levels = damRefLevels.GetValueOrDefault(sim.DamName);
+                    var displayName = damDisplayNames.GetValueOrDefault(sim.DamName, sim.DamName);
 
                     var realPresa = realData.Presas.FirstOrDefault(p =>
-                        PresaToHydro.GetValueOrDefault(p.Presa) == sim.DamName);
+                        presaToHydro.GetValueOrDefault(p.Presa) == sim.DamName);
 
                     // Series reales
                     var realSeries = new List<object>();

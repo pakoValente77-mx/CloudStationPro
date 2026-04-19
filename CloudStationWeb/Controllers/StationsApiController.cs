@@ -1,8 +1,12 @@
 using System.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using CloudStationWeb.Services;
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 
 namespace CloudStationWeb.Controllers
@@ -40,95 +44,179 @@ namespace CloudStationWeb.Controllers
         private readonly string _sqlServerConn;
         private readonly string _pgConn;
         private readonly string _apiKey;
+        private readonly string _jwtKey;
+        private readonly string _jwtIssuer;
+        private readonly string _jwtAudience;
         private readonly ILogger<StationsApiController> _logger;
-
-        // Metadatos completos de las 5 centrales (cascada Grijalva)
-        private static readonly Dictionary<int, CentralMeta> Centrales = new()
-        {
-            [1] = new(1, null, 1, 1, "ANG", "K02", "ANG", "C.H. Angostura",
-                       5, 900, 4.1, 16.848, -93.535, 1),
-            [2] = new(2, 1, 1, 2, "CHI", "K03", "CHI", "C.H. Chicoasén",
-                       8, 2400, 3.25, 16.933, -93.148, 2),
-            [3] = new(3, 2, 1, 3, "MAL", "K05", "MAL", "C.H. Malpaso",
-                       6, 1080, 4.6, 17.163, -93.580, 3),
-            [4] = new(4, 3, 1, 4, "JGR", "K18", "JGR", "C.H. Juan Grijalva",
-                       0, 0, 0, 17.208, -93.510, 4),
-            [5] = new(5, 4, 1, 5, "PEN", "K04", "PEN", "C.H. Peñitas",
-                       4, 420, 4.8, 17.369, -93.530, 5)
-        };
-
-        // Dam metadata — id matches centralId for cascada Grijalva
-        private static readonly Dictionary<int, DamData> Dams = new()
-        {
-            [1] = new(1, 1, "ANG", "Angostura",     542.10f, 539.00f, 510, 11115f, 6554f, 17669f, 22000f, false, 1.0m, "daily"),
-            [2] = new(2, 2, "CHI", "Chicoasén",      400.00f, 395.00f, 378, 1194f,  383f,  1577f,  574f,  true,  1.0m, "hourly"),
-            [3] = new(3, 3, "MAL", "Malpaso",         192.00f, 189.70f, 163, 8641f,  4862f, 13503f, 32854f,true,  1.0m, "daily"),
-            [4] = new(4, 4, "JGR", "Tapón Juan Grijalva", 105.50f, 100.00f, 87, 0f, 0f, 1666f, 0f, true, 1.0m, "daily"),
-            [5] = new(5, 5, "PEN", "Peñitas",         99.20f,  95.10f,  84, 804f,   467f,  1271f,  1868f, true,  1.0m, "daily")
-        };
-
-        // SubBasin metadata
-        private static readonly Dictionary<int, SubBasinData> SubBasins = new()
-        {
-            [1] = new(1, 1, "ANG", "Angostura",         0.15m, 0, new[] { 6, 12, 18, 24 }),
-            [2] = new(2, 1, "MMT", "Medio Mezcalapa",   0.30m, 2, new[] { 6, 12, 18, 24 }),
-            [3] = new(3, 1, "MPS", "Medio-Bajo Grijalva", 0.15m, 4, new[] { 6, 12, 18, 24 }),
-            [4] = new(4, 1, "JGR", "Juan Grijalva",     0.10m, 2, new[] { 6, 12, 18, 24 }),
-            [5] = new(5, 1, "PEA", "Peñitas",           0.20m, 2, new[] { 6, 12, 18, 24 })
-        };
-
-        // Station IDs → centralId mapping (convencionales tipo 'E' embalse)
-        private static readonly Dictionary<int, StationMapping> StationsByCentralAndClass = new()
-        {
-            [1]  = new(1,  "ANG-E-C", "ANG-01", "Angostura Convencional",       'C', 'E', 1, 1, 0.15m, "16.848", "-93.535"),
-            [2]  = new(2,  "ANG-E-A", "ANG-02", "Angostura Automática",         'A', 'E', 1, 1, 0.15m, "16.848", "-93.535"),
-            [3]  = new(3,  "CHI-E-C", "CHI-01", "Chicoasén Convencional",       'C', 'E', 2, 2, 0.30m, "16.933", "-93.148"),
-            [4]  = new(4,  "CHI-E-A", "CHI-02", "Chicoasén Automática",         'A', 'E', 2, 2, 0.30m, "16.933", "-93.148"),
-            [5]  = new(5,  "MAL-E-C", "MAL-01", "Malpaso Convencional",         'C', 'E', 3, 3, 0.15m, "17.163", "-93.580"),
-            [6]  = new(6,  "MAL-E-A", "MAL-02", "Malpaso Automática",           'A', 'E', 3, 3, 0.15m, "17.163", "-93.580"),
-            [7]  = new(7,  "JGR-E-C", "JGR-01", "Juan Grijalva Convencional",   'C', 'E', 4, 4, 0.10m, "17.208", "-93.510"),
-            [8]  = new(8,  "JGR-E-A", "JGR-02", "Juan Grijalva Automática",     'A', 'E', 4, 4, 0.10m, "17.208", "-93.510"),
-            [9]  = new(9,  "PEN-E-C", "PEN-01", "Peñitas Convencional",         'C', 'E', 5, 5, 0.20m, "17.369", "-93.530"),
-            [10] = new(10, "PEN-E-A", "PEN-02", "Peñitas Automática",           'A', 'E', 5, 5, 0.20m, "17.369", "-93.530")
-        };
-
-        // Mapeo presa Spring Boot name → nombre en funvasos_horario
-        private static readonly Dictionary<int, string> CentralToPresaFunVasos = new()
-        {
-            [1] = "Angostura",
-            [2] = "Chicoasén",
-            [3] = "Malpaso",
-            [4] = "Tapón Juan Grijalva",
-            [5] = "Peñitas"
-        };
 
         public StationsApiController(IConfiguration config, ILogger<StationsApiController> logger)
         {
             _sqlServerConn = config.GetConnectionString("SqlServer") ?? "";
             _pgConn = config.GetConnectionString("PostgreSQL") ?? "";
             _apiKey = config["ImageStore:ApiKey"] ?? "pih-default-key-change-me";
+            _jwtKey = config["Jwt:Key"] ?? "";
+            _jwtIssuer = config["Jwt:Issuer"] ?? "CloudStationWeb";
+            _jwtAudience = config["Jwt:Audience"] ?? "CloudStationAPI";
             _logger = logger;
+        }
+
+        // =====================================================================
+        // DB Loaders — Centrales, Dams, SubBasins from PostgreSQL
+        // =====================================================================
+
+        private async Task<Dictionary<int, CentralMeta>> LoadCentralesAsync()
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            var rows = await db.QueryAsync<dynamic>(
+                @"SELECT id, previous_central_id, id_cuenca, id_subcuenca,
+                         clave20, clave_cenace, clave_sap, nombre,
+                         unidades, capacidad_instalada, consumo_especifico,
+                         latitud, longitud, orden
+                  FROM hydro_model.central_params ORDER BY orden");
+            return rows.ToDictionary(
+                r => (int)r.id,
+                r => new CentralMeta(
+                    (int)r.id, r.previous_central_id != null ? (int?)r.previous_central_id : null,
+                    (int)r.id_cuenca, (int)r.id_subcuenca,
+                    (string)r.clave20, (string)r.clave_cenace, (string)r.clave_sap, (string)r.nombre,
+                    (int)r.unidades, (int)r.capacidad_instalada, (double)r.consumo_especifico,
+                    (double)r.latitud, (double)r.longitud, (int)r.orden));
+        }
+
+        private async Task<Dictionary<int, DamData>> LoadDamsAsync()
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            var rows = await db.QueryAsync<dynamic>(
+                @"SELECT cascade_order, code, description,
+                         name_value, namo_value, namino_value,
+                         useful_volume, off_volume, total_volume, input_area,
+                         has_previous_dam, hui_factor, model_type
+                  FROM hydro_model.dam_params ORDER BY cascade_order");
+            return rows.ToDictionary(
+                r => (int)r.cascade_order,
+                r => new DamData(
+                    (int)r.cascade_order, (int)r.cascade_order,
+                    (string)(r.code ?? ""), (string)(r.description ?? ""),
+                    (float)(r.name_value ?? 0f), (float)(r.namo_value ?? 0f), (int)(r.namino_value ?? 0),
+                    (float)(r.useful_volume ?? 0f), (float)(r.off_volume ?? 0f),
+                    (float)(r.total_volume ?? 0f), (float)(r.input_area ?? 0f),
+                    (bool)(r.has_previous_dam ?? false),
+                    r.hui_factor != null ? (decimal)(float)r.hui_factor : 1.0m,
+                    (string)(r.model_type ?? "daily")));
+        }
+
+        private async Task<Dictionary<int, SubBasinData>> LoadSubBasinsAsync()
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            var rows = await db.QueryAsync<dynamic>(
+                @"SELECT cascade_order, sub_basin_code, sub_basin_name,
+                         input_factor, transfer_time_hours, hours_read
+                  FROM hydro_model.dam_params ORDER BY cascade_order");
+            return rows.ToDictionary(
+                r => (int)r.cascade_order,
+                r => new SubBasinData(
+                    (int)r.cascade_order, 1,
+                    (string)(r.sub_basin_code ?? ""),
+                    (string)(r.sub_basin_name ?? ""),
+                    r.input_factor != null ? (decimal)(float)r.input_factor : 0m,
+                    (int)(r.transfer_time_hours ?? 0),
+                    r.hours_read is int[] arr ? arr : new[] { 6, 12, 18, 24 }));
+        }
+
+        private async Task<string?> GetPresaNameByCentralAsync(int centralId)
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            return await db.QueryFirstOrDefaultAsync<string>(
+                "SELECT description FROM hydro_model.dam_params WHERE cascade_order = @Id",
+                new { Id = centralId });
+        }
+
+        private async Task<string?> GetDamNameByCentralAsync(int centralId)
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            return await db.QueryFirstOrDefaultAsync<string>(
+                "SELECT dam_name FROM hydro_model.dam_params WHERE cascade_order = @Id",
+                new { Id = centralId });
         }
 
         // =====================================================================
         // CORE-SERVICE: Station Endpoints
         // =====================================================================
 
+        /// <summary>GET /api/get/station/all — Todas las estaciones activas (de la base de datos).</summary>
+        [HttpGet("api/get/station/all")]
+        public async Task<IActionResult> GetAllStations()
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            var stations = await GetDbStationsAsync();
+            return Ok(stations);
+        }
+
+        /// <summary>GET /api/get/station/conventional/all — Estaciones sin telemetría GOES (convencionales).</summary>
+        [HttpGet("api/get/station/conventional/all")]
+        public async Task<IActionResult> GetConventionalStations()
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            var stations = await GetDbStationsAsync(goesFilter: false);
+            return Ok(stations);
+        }
+
+        /// <summary>GET /api/get/station/automatic/all — Estaciones con telemetría GOES (automáticas).</summary>
+        [HttpGet("api/get/station/automatic/all")]
+        public async Task<IActionResult> GetAutomaticStations()
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            var stations = await GetDbStationsAsync(goesFilter: true);
+            return Ok(stations);
+        }
+
+        /// <summary>GET /api/get/station/by/id/{stationId} — Estación por IdAsignado.</summary>
+        [HttpGet("api/get/station/by/id/{stationId}")]
+        public async Task<IActionResult> GetStationById(string stationId)
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            using var db = new SqlConnection(_sqlServerConn);
+            var row = await db.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT e.Id AS DatabaseId, e.IdAsignado, e.Nombre, e.Latitud, e.Longitud,
+                       e.IdCuenca, e.IdSubcuenca, e.Etiqueta, e.EsPresa,
+                       e.GOES, e.GPRS, e.RADIO,
+                       g.IdSatelital, o.Nombre AS Organismo
+                FROM Estacion e
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1 AND e.IdAsignado = @Id",
+                new { Id = stationId });
+            if (row == null) return NotFound();
+            return Ok(MapDbStation(row));
+        }
+
         /// <summary>
         /// GET /api/get/station/by/central-id/{centralId}/class/{clazz}/type/{type}
         /// Busca estación por centralId, clase (A=Automática, C=Convencional) y tipo (E=Embalse, H=Hidrométrica).
         /// </summary>
         [HttpGet("api/get/station/by/central-id/{centralId}/class/{clazz}/type/{stationType}")]
-        public IActionResult GetStationByCentralClassType(int centralId, char clazz, char stationType)
+        public async Task<IActionResult> GetStationByCentralClassType(int centralId, char clazz, char stationType)
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            var station = StationsByCentralAndClass.Values
-                .FirstOrDefault(s => s.CentralId == centralId && s.Clazz == clazz && s.Type == stationType);
-
+            // Buscar estaciones de presa por centralId en SQL Server
+            using var db = new SqlConnection(_sqlServerConn);
+            var goesFilter = clazz == 'A'; // A=Automática (GOES), C=Convencional
+            var rows = await db.QueryAsync<dynamic>(@"
+                SELECT e.Id AS DatabaseId, e.IdAsignado, e.Nombre, e.Latitud, e.Longitud,
+                       e.IdCuenca, e.IdSubcuenca, e.Etiqueta, e.EsPresa,
+                       e.GOES, e.GPRS, e.RADIO,
+                       g.IdSatelital, o.Nombre AS Organismo
+                FROM Estacion e
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1 AND e.EsPresa = 1
+                      AND e.IdSubcuenca = @SubId
+                      AND (@Goes IS NULL OR e.GOES = @Goes)",
+                new { SubId = centralId, Goes = goesFilter ? (bool?)true : false });
+            var station = rows.FirstOrDefault();
             if (station == null) return NotFound();
-
-            return Ok(MapStation(station));
+            return Ok(MapDbStation(station));
         }
 
         /// <summary>
@@ -136,30 +224,46 @@ namespace CloudStationWeb.Controllers
         /// Retorna todas las estaciones usadas por el modelo hidrológico de una subcuenca.
         /// </summary>
         [HttpGet("api/get/station/hydro-model/by/sub-basin/{subBasinId}")]
-        public IActionResult GetHydroModelStations(int subBasinId)
+        public async Task<IActionResult> GetHydroModelStations(int subBasinId)
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            var stations = StationsByCentralAndClass.Values
-                .Where(s => s.SubBasinId == subBasinId)
-                .Select(MapStation)
-                .ToList();
-
-            return Ok(stations);
+            using var db = new SqlConnection(_sqlServerConn);
+            var rows = await db.QueryAsync<dynamic>(@"
+                SELECT e.Id AS DatabaseId, e.IdAsignado, e.Nombre, e.Latitud, e.Longitud,
+                       e.IdCuenca, e.IdSubcuenca, e.Etiqueta, e.EsPresa,
+                       e.GOES, e.GPRS, e.RADIO,
+                       g.IdSatelital, o.Nombre AS Organismo
+                FROM Estacion e
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1 AND e.IdSubcuenca = @SubId",
+                new { SubId = subBasinId });
+            return Ok(rows.Select(r => MapDbStation(r)).ToList());
         }
 
         // =====================================================================
         // CORE-SERVICE: Dam Endpoints
         // =====================================================================
 
+        /// <summary>GET /api/get/dam/all — Todas las presas.</summary>
+        [HttpGet("api/get/dam/all")]
+        public async Task<IActionResult> GetAllDams()
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            var dams = await LoadDamsAsync();
+            return Ok(dams.Values.Select(MapDam));
+        }
+
         /// <summary>
         /// GET /api/get/dam/by/id/{damId}
         /// </summary>
         [HttpGet("api/get/dam/by/id/{damId}")]
-        public IActionResult GetDamById(int damId)
+        public async Task<IActionResult> GetDamById(int damId)
         {
             if (!ValidateAuth()) return Unauthorized();
-            if (!Dams.TryGetValue(damId, out var dam)) return NotFound();
+            var dams = await LoadDamsAsync();
+            if (!dams.TryGetValue(damId, out var dam)) return NotFound();
             return Ok(MapDam(dam));
         }
 
@@ -167,10 +271,11 @@ namespace CloudStationWeb.Controllers
         /// GET /api/get/dam/by/central/{centralId}
         /// </summary>
         [HttpGet("api/get/dam/by/central/{centralId}")]
-        public IActionResult GetDamByCentral(int centralId)
+        public async Task<IActionResult> GetDamByCentral(int centralId)
         {
             if (!ValidateAuth()) return Unauthorized();
-            var dam = Dams.Values.FirstOrDefault(d => d.CentralId == centralId);
+            var dams = await LoadDamsAsync();
+            var dam = dams.Values.FirstOrDefault(d => d.CentralId == centralId);
             if (dam == null) return NotFound();
             return Ok(MapDam(dam));
         }
@@ -187,7 +292,8 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> GetSubBasinById(int id)
         {
             if (!ValidateAuth()) return Unauthorized();
-            if (!SubBasins.TryGetValue(id, out var sb)) return NotFound();
+            var subBasins = await LoadSubBasinsAsync();
+            if (!subBasins.TryGetValue(id, out var sb)) return NotFound();
 
             // Cargar HUI coefficients desde PostgreSQL
             List<decimal> hui = new();
@@ -224,10 +330,11 @@ namespace CloudStationWeb.Controllers
         /// GET /api/get/central/by/id/{id}
         /// </summary>
         [HttpGet("api/get/central/by/id/{id}")]
-        public IActionResult GetCentralById(int id)
+        public async Task<IActionResult> GetCentralById(int id)
         {
             if (!ValidateAuth()) return Unauthorized();
-            if (!Centrales.TryGetValue(id, out var c)) return NotFound();
+            var centrales = await LoadCentralesAsync();
+            if (!centrales.TryGetValue(id, out var c)) return NotFound();
 
             return Ok(new
             {
@@ -261,13 +368,13 @@ namespace CloudStationWeb.Controllers
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            var damName = GetDamNameByCentral(centralId);
+            var damName = await GetDamNameByCentralAsync(centralId);
             if (damName == null) return NotFound();
 
             using var db = new NpgsqlConnection(_pgConn);
             // Interpolación: buscar los dos puntos más cercanos
             var points = (await db.QueryAsync<ElevCapRow>(
-                @"SELECT elevation, capacity_mm3, area_km2, specific_consumption
+                @"SELECT elevation AS Elevation, capacity_mm3 AS CapacityMm3, area_km2 AS AreaKm2, specific_consumption AS SpecificConsumption
                   FROM hydro_model.elevation_capacity
                   WHERE dam_name = @Dam ORDER BY elevation",
                 new { Dam = damName })).ToList();
@@ -287,12 +394,12 @@ namespace CloudStationWeb.Controllers
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            var damName = GetDamNameByCentral(centralId);
+            var damName = await GetDamNameByCentralAsync(centralId);
             if (damName == null) return NotFound();
 
             using var db = new NpgsqlConnection(_pgConn);
             var points = (await db.QueryAsync<ElevCapRow>(
-                @"SELECT elevation, capacity_mm3, area_km2, specific_consumption
+                @"SELECT elevation AS Elevation, capacity_mm3 AS CapacityMm3, area_km2 AS AreaKm2, specific_consumption AS SpecificConsumption
                   FROM hydro_model.elevation_capacity
                   WHERE dam_name = @Dam ORDER BY elevation",
                 new { Dam = damName })).ToList();
@@ -308,6 +415,53 @@ namespace CloudStationWeb.Controllers
         // =====================================================================
 
         /// <summary>
+        /// GET /api/get/station-report/records/by/station-id/{stationId}/date/{dateValue}
+        /// Retorna todos los registros horarios de un día para una estación (funvasos_horario).
+        /// stationId puede ser un centralId (1-5) para presas del modelo hidrológico.
+        /// </summary>
+        [HttpGet("api/get/station-report/records/by/station-id/{stationId}/date/{dateValue}")]
+        public async Task<IActionResult> GetStationReportAllHours(string stationId, string dateValue)
+        {
+            if (!ValidateAuth()) return Unauthorized();
+
+            // Try to map stationId as integer centralId for hydro-model presas
+            int centralId = 0;
+            if (int.TryParse(stationId, out var numId))
+                centralId = numId;
+
+            var presaName = await GetPresaNameByCentralAsync(centralId);
+            if (presaName == null)
+                return NotFound(new { error = "Solo se soportan estaciones de presas (centralId 1-5) para este endpoint." });
+
+            if (!DateTime.TryParse(dateValue, out var date))
+                return BadRequest(new { error = "Formato de fecha inválido. Use yyyy-MM-dd" });
+
+            using var db = new NpgsqlConnection(_pgConn);
+            var rows = await db.QueryAsync<dynamic>(
+                @"SELECT hora, elevacion, almacenamiento, aportaciones_q,
+                         extracciones_turb_q, extracciones_total_q, generacion, num_unidades
+                  FROM public.funvasos_horario
+                  WHERE presa = @Presa AND ts::date = @Date
+                  ORDER BY hora",
+                new { Presa = presaName, Date = date });
+
+            var records = rows.Select(r => new
+            {
+                id = stationId,
+                hour = (int)(short)r.hora,
+                elevation = SafeDecimal(r.elevacion),
+                scale = SafeDecimal(r.almacenamiento),
+                powerGeneration = SafeDecimal(r.generacion),
+                spent = SafeDecimal(r.extracciones_total_q),
+                turbineSpent = SafeDecimal(r.extracciones_turb_q),
+                input = SafeDecimal(r.aportaciones_q),
+                unitsWorking = r.num_unidades != null ? (int?)(short)r.num_unidades : null
+            });
+
+            return Ok(records);
+        }
+
+        /// <summary>
         /// GET /api/get/station-report/records/by/station/{stationId}/date/{dateValue}/hour/{hour}
         /// Retorna registro horario convencional (elevación, generación, gasto, precipitación).
         /// Datos de funvasos_horario.
@@ -317,11 +471,8 @@ namespace CloudStationWeb.Controllers
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            // Map stationId → presa name → funvasos_horario
-            var station = StationsByCentralAndClass.GetValueOrDefault(stationId);
-            var centralId = station?.CentralId ?? stationId;
-            if (!CentralToPresaFunVasos.TryGetValue(centralId, out var presaName))
-                return NotFound();
+            var presaName = await GetPresaNameByCentralAsync(stationId);
+            if (presaName == null) return NotFound();
 
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
@@ -361,8 +512,8 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> GetDamBehavior(int centralId, string dateValue)
         {
             if (!ValidateAuth()) return Unauthorized();
-            if (!CentralToPresaFunVasos.TryGetValue(centralId, out var presaName))
-                return NotFound();
+            var presaName = await GetPresaNameByCentralAsync(centralId);
+            if (presaName == null) return NotFound();
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
 
@@ -404,6 +555,16 @@ namespace CloudStationWeb.Controllers
         }
 
         /// <summary>
+        /// GET /api/get/dam-behavior/date/{dateValue}/central-id/{centralId}
+        /// Ruta alternativa de comportamiento de presa (parámetros en orden date, central-id).
+        /// </summary>
+        [HttpGet("api/get/dam-behavior/date/{dateValue}/central-id/{centralId}")]
+        public async Task<IActionResult> GetDamBehaviorAlt(string dateValue, int centralId)
+        {
+            return await GetDamBehavior(centralId, dateValue);
+        }
+
+        /// <summary>
         /// GET /api/get/dam-behavior/primary-flow-spending/by/central-id/{centralId}/date/{dateValue}/hour/{hour}
         /// Gasto de flujo primario (extracción total a una hora específica).
         /// </summary>
@@ -411,8 +572,8 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> GetPrimaryFlowSpending(int centralId, string dateValue, int hour)
         {
             if (!ValidateAuth()) return Unauthorized();
-            if (!CentralToPresaFunVasos.TryGetValue(centralId, out var presaName))
-                return NotFound();
+            var presaName = await GetPresaNameByCentralAsync(centralId);
+            if (presaName == null) return NotFound();
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
 
@@ -427,28 +588,129 @@ namespace CloudStationWeb.Controllers
         }
 
         // =====================================================================
+        // AUTOMATIC-STATIONS-CONNECTOR: Sensor Endpoints
+        // =====================================================================
+
+        /// <summary>
+        /// GET /automatic-station/api/get/sensor/by/station-id/{stationId}
+        /// Retorna los sensores (variables) disponibles para una estación automática.
+        /// stationId = IdAsignado de la estación.
+        /// </summary>
+        [HttpGet("automatic-station/api/get/sensor/by/station-id/{stationId}")]
+        public async Task<IActionResult> GetSensorsByStationId(string stationId)
+        {
+            if (!ValidateAuth()) return Unauthorized();
+
+            // Resolve station from SQL Server to get DCP ID
+            using var sqlDb = new SqlConnection(_sqlServerConn);
+            var stationRow = await sqlDb.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT e.IdAsignado, e.Nombre, g.IdSatelital
+                FROM Estacion e
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1 AND e.IdAsignado = @Id",
+                new { Id = stationId });
+            if (stationRow == null) return NotFound();
+
+            string assignedId = stationRow.IdAsignado ?? stationId;
+            string? dcpId = stationRow.IdSatelital;
+            string stationName = stationRow.Nombre ?? stationId;
+
+            using var db = new NpgsqlConnection(_pgConn);
+            // Try by id_asignado first, then by dcp_id
+            var variables = (await db.QueryAsync<(string variable, int cnt)>(
+                @"SELECT variable, COUNT(*)::int as cnt
+                  FROM public.resumen_horario
+                  WHERE id_asignado = @Id OR dcp_id = @Dcp
+                  GROUP BY variable ORDER BY variable",
+                new { Id = assignedId, Dcp = dcpId ?? assignedId })).ToList();
+
+            int sensorNumber = 1;
+            var sensors = variables.Select(v => new
+            {
+                sensorNumber = sensorNumber++,
+                variable = v.variable,
+                assignedId,
+                dcpId,
+                stationId,
+                stationName,
+                totalRecords = v.cnt
+            });
+
+            return Ok(sensors);
+        }
+
+        /// <summary>
+        /// GET /automatic-station/api/get/sensor-value/by/assigned-id/{assignedId}/sensor-number/{sensorNumber}/date/{dateValue}/hour/{hour}
+        /// Retorna el valor de un sensor específico para una estación, fecha y hora.
+        /// sensorNumber: 1=precipitación, 2=nivel/elevación, 3=temperatura, etc. según orden alfabético.
+        /// </summary>
+        [HttpGet("automatic-station/api/get/sensor-value/by/assigned-id/{assignedId}/sensor-number/{sensorNumber}/date/{dateValue}/hour/{hour}")]
+        public async Task<IActionResult> GetSensorValue(string assignedId, int sensorNumber, string dateValue, int hour)
+        {
+            if (!ValidateAuth()) return Unauthorized();
+            if (!DateTime.TryParse(dateValue, out var date))
+                return BadRequest(new { error = "Formato de fecha inválido. Use yyyy-MM-dd" });
+
+            using var db = new NpgsqlConnection(_pgConn);
+
+            // Obtener la variable que corresponde al sensorNumber (ordenado alfabéticamente)
+            var variables = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT variable FROM public.resumen_horario
+                  WHERE id_asignado = @Id ORDER BY variable",
+                new { Id = assignedId })).ToList();
+
+            if (sensorNumber < 1 || sensorNumber > variables.Count)
+                return NotFound(new { error = $"Sensor #{sensorNumber} no existe. Sensores disponibles: 1-{variables.Count}" });
+
+            var variable = variables[sensorNumber - 1];
+            var ts = new DateTimeOffset(date.Year, date.Month, date.Day, hour, 0, 0, TimeSpan.Zero);
+
+            var row = await db.QueryFirstOrDefaultAsync<dynamic>(
+                @"SELECT ts, variable, acumulado, suma, maximo, minimo, promedio
+                  FROM public.resumen_horario
+                  WHERE id_asignado = @Id AND variable = @Var AND ts = @Ts",
+                new { Id = assignedId, Var = variable, Ts = ts });
+
+            if (row == null) return NotFound();
+
+            return Ok(new
+            {
+                assignedId,
+                sensorNumber,
+                variable,
+                dateTime = ((DateTimeOffset)row.ts).ToString("yyyy-MM-dd'T'HH:mm:ss"),
+                value = SafeDecimal(row.acumulado) ?? SafeDecimal(row.suma) ?? SafeDecimal(row.promedio),
+                accumulated = SafeDecimal(row.acumulado),
+                sum = SafeDecimal(row.suma),
+                max = SafeDecimal(row.maximo),
+                min = SafeDecimal(row.minimo),
+                average = SafeDecimal(row.promedio)
+            });
+        }
+
+        // =====================================================================
         // AUTOMATIC-STATIONS-CONNECTOR: Accumulative Rain
         // =====================================================================
 
         /// <summary>
         /// GET /api/get/accumulative-rain/by/id/{stationId}/date/{dateValue}/hour/{hour}
-        /// Lluvia acumulada de estación automática por ID numérico.
+        /// Lluvia acumulada de estación automática por IdAsignado.
         /// </summary>
         [HttpGet("api/get/accumulative-rain/by/id/{stationId}/date/{dateValue}/hour/{hour}")]
-        public async Task<IActionResult> GetAccumRainById(int stationId, string dateValue, int hour)
+        public async Task<IActionResult> GetAccumRainById(string stationId, string dateValue, int hour)
         {
             if (!ValidateAuth()) return Unauthorized();
-
-            // map stationId to assignedId
-            var station = StationsByCentralAndClass.GetValueOrDefault(stationId);
-            var assignedId = station?.AssignedId;
-            if (string.IsNullOrEmpty(assignedId))
-                return NotFound();
 
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
 
-            return await GetAccumRainInternal(assignedId, null, date, hour);
+            // stationId is IdAsignado — resolve DCP ID from SQL Server if needed
+            using var sqlDb = new SqlConnection(_sqlServerConn);
+            var dcpId = await sqlDb.QueryFirstOrDefaultAsync<string>(
+                "SELECT g.IdSatelital FROM Estacion e LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id WHERE e.IdAsignado = @Id",
+                new { Id = stationId });
+
+            return await GetAccumRainInternal(stationId, dcpId, date, hour);
         }
 
         /// <summary>
@@ -481,7 +743,7 @@ namespace CloudStationWeb.Controllers
 
             using var db = new NpgsqlConnection(_pgConn);
             var row = await db.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT forecast_date, updated_at FROM rain_forecast.forecast ORDER BY forecast_date DESC LIMIT 1");
+                "SELECT id, forecast_date, last_update FROM rain_forecast.forecast ORDER BY forecast_date DESC LIMIT 1");
 
             if (row == null) return Ok(Array.Empty<object>());
 
@@ -489,10 +751,10 @@ namespace CloudStationWeb.Controllers
             {
                 new
                 {
-                    id = Guid.NewGuid(),
-                    date = ((DateTime)row.forecast_date).ToString("yyyy-MM-dd"),
-                    timestamp = row.updated_at != null ? ((DateTime)row.updated_at).ToString("o") : null,
-                    lastUpdate = row.updated_at != null ? ((DateTime)row.updated_at).ToString("o") : null
+                    id = (Guid)row.id,
+                    date = row.forecast_date.ToString("yyyy-MM-dd"),
+                    timestamp = row.last_update != null ? ((DateTime)row.last_update).ToString("o") : null,
+                    lastUpdate = row.last_update != null ? ((DateTime)row.last_update).ToString("o") : null
                 }
             });
         }
@@ -510,17 +772,17 @@ namespace CloudStationWeb.Controllers
 
             using var db = new NpgsqlConnection(_pgConn);
             var row = await db.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT forecast_date, updated_at FROM rain_forecast.forecast WHERE forecast_date::date = @D",
+                "SELECT id, forecast_date, last_update FROM rain_forecast.forecast WHERE forecast_date::date = @D",
                 new { D = date });
 
             if (row == null) return NotFound();
 
             return Ok(new
             {
-                id = Guid.NewGuid(),
-                date = ((DateTime)row.forecast_date).ToString("yyyy-MM-dd"),
-                timestamp = row.updated_at != null ? ((DateTime)row.updated_at).ToString("o") : null,
-                lastUpdate = row.updated_at != null ? ((DateTime)row.updated_at).ToString("o") : null
+                id = (Guid)row.id,
+                date = row.forecast_date.ToString("yyyy-MM-dd"),
+                timestamp = row.last_update != null ? ((DateTime)row.last_update).ToString("o") : null,
+                lastUpdate = row.last_update != null ? ((DateTime)row.last_update).ToString("o") : null
             });
         }
 
@@ -536,8 +798,9 @@ namespace CloudStationWeb.Controllers
             if (!DateTime.TryParse(strDate, out var forecastDate))
                 return BadRequest(new { error = "Invalid forecast date" });
 
-            // Map subBasinId → cuenca_code
-            var sb = SubBasins.GetValueOrDefault(subBasinId);
+            // Map subBasinId → cuenca_code from DB
+            var subBasins = await LoadSubBasinsAsync();
+            var sb = subBasins.GetValueOrDefault(subBasinId);
             if (sb == null) return NotFound();
 
             DateTimeOffset startDt, endDt;
@@ -618,34 +881,95 @@ namespace CloudStationWeb.Controllers
             });
         }
 
+        // =====================================================================
+        // DB Station queries
+        // =====================================================================
+
+        /// <summary>
+        /// Consulta estaciones reales desde SQL Server (tabla Estacion).
+        /// goesFilter: null = todas, true = solo GOES, false = sin GOES.
+        /// </summary>
+        private async Task<List<object>> GetDbStationsAsync(bool? goesFilter = null)
+        {
+            using var db = new SqlConnection(_sqlServerConn);
+            var sql = @"
+                SELECT e.Id AS DatabaseId, e.IdAsignado, e.Nombre, e.Latitud, e.Longitud,
+                       e.IdCuenca, e.IdSubcuenca, e.Etiqueta, e.EsPresa,
+                       e.GOES, e.GPRS, e.RADIO,
+                       g.IdSatelital, o.Nombre AS Organismo
+                FROM Estacion e
+                LEFT JOIN Organismo o ON e.IdOrganismo = o.Id
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1";
+            if (goesFilter == true)
+                sql += " AND e.GOES = 1";
+            else if (goesFilter == false)
+                sql += " AND (e.GOES = 0 OR e.GOES IS NULL)";
+            sql += " ORDER BY e.Nombre";
+
+            var rows = await db.QueryAsync<dynamic>(sql);
+            return rows.Select(r => MapDbStation(r)).ToList();
+        }
+
+        private static object MapDbStation(dynamic r) => new
+        {
+            id = (string?)(r.IdAsignado),
+            databaseId = ((Guid)r.DatabaseId).ToString(),
+            name = (string?)(r.Nombre),
+            latitude = (double?)r.Latitud,
+            longitude = (double?)r.Longitud,
+            dcpId = (string?)(r.IdSatelital),
+            organismo = (string?)(r.Organismo),
+            label = (string?)(r.Etiqueta),
+            isDam = (bool)(r.EsPresa ?? false),
+            goes = (bool)(r.GOES ?? false),
+            gprs = (bool)(r.GPRS ?? false),
+            radio = (bool)(r.RADIO ?? false),
+            type = (bool)(r.GOES ?? false) ? "automatic" : "conventional"
+        };
+
         private bool ValidateAuth()
         {
+            // 1. API Key
             if (Request.Headers.TryGetValue("X-Api-Key", out var key) &&
                 string.Equals(key, _apiKey, StringComparison.Ordinal))
                 return true;
 
+            // 2. Cookie/session auth
             if (User.Identity?.IsAuthenticated == true &&
                 (User.IsInRole("ApiConsumer") || User.IsInRole("SuperAdmin") || User.IsInRole("Administrador")))
                 return true;
 
+            // 3. JWT Bearer token (manual validation — controller has no [Authorize])
+            if (Request.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                var bearer = authHeader.ToString();
+                if (bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    var token = bearer["Bearer ".Length..].Trim();
+                    try
+                    {
+                        var handler = new JwtSecurityTokenHandler();
+                        var validationParams = new TokenValidationParameters
+                        {
+                            ValidateIssuer = true,
+                            ValidIssuer = _jwtIssuer,
+                            ValidateAudience = true,
+                            ValidAudience = _jwtAudience,
+                            ValidateLifetime = true,
+                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey)),
+                            ValidateIssuerSigningKey = true
+                        };
+                        var principal = handler.ValidateToken(token, validationParams, out _);
+                        if (principal.IsInRole("ApiConsumer") || principal.IsInRole("SuperAdmin") || principal.IsInRole("Administrador"))
+                            return true;
+                    }
+                    catch { /* token inválido o expirado */ }
+                }
+            }
+
             return false;
         }
-
-        private static object MapStation(StationMapping s) => new
-        {
-            id = s.Id,
-            vendorId = s.VendorId,
-            centralId = s.CentralId,
-            code = s.Code,
-            assignedId = s.AssignedId,
-            name = s.Name,
-            clazz = s.Clazz,
-            type = s.Type,
-            subBasinId = s.SubBasinId,
-            weighingInput = s.WeighingInput,
-            latitude = s.Latitude,
-            longitude = s.Longitude
-        };
 
         private static object MapDam(DamData d) => new
         {
@@ -664,19 +988,6 @@ namespace CloudStationWeb.Controllers
             huiFactor = d.HuiFactor,
             modelType = d.ModelType
         };
-
-        private static string? GetDamNameByCentral(int centralId)
-        {
-            return centralId switch
-            {
-                1 => "Angostura",
-                2 => "Chicoasen",
-                3 => "Malpaso",
-                4 => "JGrijalva",
-                5 => "Penitas",
-                _ => null
-            };
-        }
 
         private static object InterpolateByElevation(List<ElevCapRow> points, float elevation, int centralId)
         {
@@ -769,16 +1080,19 @@ namespace CloudStationWeb.Controllers
         {
             if (!ValidateAuth()) return Unauthorized();
 
-            // 1. Resolve Dam
-            if (!Dams.TryGetValue(request.DamId, out var dam))
+            // 1. Resolve Dam from DB
+            var dams = await LoadDamsAsync();
+            if (!dams.TryGetValue(request.DamId, out var dam))
                 return StatusCode(502, new { error = $"There is no Dam with id: [{request.DamId}]", code = 502 });
 
-            // 2. Resolve Central
-            if (!Centrales.TryGetValue(dam.CentralId, out var central))
+            // 2. Resolve Central from DB
+            var centrales = await LoadCentralesAsync();
+            if (!centrales.TryGetValue(dam.CentralId, out var central))
                 return StatusCode(502, new { error = $"There is no Central with id: [{dam.CentralId}]", code = 502 });
 
-            // 3. Resolve SubBasin
-            if (!SubBasins.TryGetValue(central.IdSubcuenca, out var subBasin))
+            // 3. Resolve SubBasin from DB
+            var subBasins = await LoadSubBasinsAsync();
+            if (!subBasins.TryGetValue(central.IdSubcuenca, out var subBasin))
                 return StatusCode(502, new { error = $"There is no sub-basin with id: [{central.IdSubcuenca}]", code = 502 });
 
             // 4. Load HUI coefficients from PostgreSQL
@@ -805,10 +1119,10 @@ namespace CloudStationWeb.Controllers
             List<ElevCapRow> elevCapCurve;
             try
             {
-                var damName = GetDamNameByCentral(dam.CentralId);
+                var damName = await GetDamNameByCentralAsync(dam.CentralId);
                 using var db = new NpgsqlConnection(_pgConn);
                 elevCapCurve = (await db.QueryAsync<ElevCapRow>(
-                    @"SELECT elevation, capacity_mm3, area_km2, specific_consumption
+                    @"SELECT elevation AS Elevation, capacity_mm3 AS CapacityMm3, area_km2 AS AreaKm2, specific_consumption AS SpecificConsumption
                       FROM hydro_model.elevation_capacity WHERE dam_name = @Dam ORDER BY elevation",
                     new { Dam = damName })).ToList();
             }
@@ -856,8 +1170,8 @@ namespace CloudStationWeb.Controllers
                 records.Add(new HydroRecord { Date = d, Hour = 0 });
 
             // Populate real data (days before zeroDate)
-            var stations = StationsByCentralAndClass.Values
-                .Where(s => s.SubBasinId == subBasin.Id).ToList();
+            // Cargar estaciones reales de la subcuenca desde SQL Server
+            var stationInfos = await LoadRainStationsAsync(subBasin.Id);
 
             using var db = new NpgsqlConnection(_pgConn);
             await db.OpenAsync();
@@ -870,7 +1184,7 @@ namespace CloudStationWeb.Controllers
                 if (isReal)
                 {
                     // Get rain: sum weighted precipitation from stations
-                    rec.Rain = await GetDailyWeightedRain(db, stations, rec.Date);
+                    rec.Rain = await GetDailyWeightedRain(db, stationInfos, rec.Date);
                     // Get elevation from funvasos at hour 6
                     rec.Elevation = await GetElevationFromFunvasos(db, dam.CentralId, rec.Date, 6);
                     // Get total capacity from elevation
@@ -992,8 +1306,7 @@ namespace CloudStationWeb.Controllers
             for (var dt = startDate; dt < endDate; dt = dt.AddHours(1))
                 records.Add(new HydroRecord { Date = dt.Date, Hour = dt.Hour });
 
-            var stations = StationsByCentralAndClass.Values
-                .Where(s => s.SubBasinId == subBasin.Id).ToList();
+            var stationInfos = await LoadRainStationsAsync(subBasin.Id);
 
             // Load forecast rain points
             List<RainPointRow> forecastPoints;
@@ -1019,7 +1332,7 @@ namespace CloudStationWeb.Controllers
                 if (isReal)
                 {
                     // Accumulative rain average from automatic stations
-                    rec.Rain = await GetHourlyRainAverage(dbConn, stations, rec.Date, rec.Hour);
+                    rec.Rain = await GetHourlyRainAverage(dbConn, stationInfos, rec.Date, rec.Hour);
 
                     // Elevation from funvasos at hour+1
                     rec.Elevation = await GetElevationFromFunvasos(dbConn, dam.CentralId, rec.Date, rec.Hour + 1);
@@ -1189,23 +1502,41 @@ namespace CloudStationWeb.Controllers
             return 0;
         }
 
-        private async Task<decimal> GetDailyWeightedRain(NpgsqlConnection db, List<StationMapping> stations, DateTime date)
+        private async Task<List<RainStationInfo>> LoadRainStationsAsync(int subBasinId)
         {
+            using var db = new SqlConnection(_sqlServerConn);
+            var rows = await db.QueryAsync<dynamic>(@"
+                SELECT g.IdSatelital, e.IdAsignado
+                FROM Estacion e
+                LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
+                WHERE e.Visible = 1 AND e.Activo = 1 AND e.GOES = 1
+                      AND e.IdSubcuenca = @SubId",
+                new { SubId = subBasinId });
+            return rows.Select(r => new RainStationInfo
+            {
+                DcpId = (string?)(r.IdSatelital) ?? (string)(r.IdAsignado),
+                IdAsignado = (string)(r.IdAsignado)
+            }).ToList();
+        }
+
+        private async Task<decimal> GetDailyWeightedRain(NpgsqlConnection db, List<RainStationInfo> stations, DateTime date)
+        {
+            if (stations.Count == 0) return 0;
             decimal totalRain = 0;
             foreach (var st in stations)
             {
                 var precip = await db.QueryFirstOrDefaultAsync<decimal?>(
                     @"SELECT SUM(COALESCE(acumulado, suma, 0))
                       FROM public.resumen_horario
-                      WHERE dcp_id = @Dcp AND variable = 'precipitación'
+                      WHERE (dcp_id = @Dcp OR id_asignado = @Asig) AND variable = 'precipitación'
                         AND ts::date = @D AND EXTRACT(HOUR FROM ts) <= 6",
-                    new { Dcp = st.VendorId, D = date });
-                totalRain += (precip ?? 0) * st.WeighingInput;
+                    new { Dcp = st.DcpId, Asig = st.IdAsignado, D = date });
+                totalRain += precip ?? 0;
             }
-            return totalRain;
+            return totalRain / stations.Count;
         }
 
-        private async Task<decimal> GetHourlyRainAverage(NpgsqlConnection db, List<StationMapping> stations, DateTime date, int hour)
+        private async Task<decimal> GetHourlyRainAverage(NpgsqlConnection db, List<RainStationInfo> stations, DateTime date, int hour)
         {
             if (stations.Count == 0) return 0;
             decimal sum = 0;
@@ -1215,9 +1546,9 @@ namespace CloudStationWeb.Controllers
                 var rain = await db.QueryFirstOrDefaultAsync<decimal?>(
                     @"SELECT SUM(COALESCE(acumulado, suma, 0))
                       FROM public.resumen_horario
-                      WHERE dcp_id = @Dcp AND variable = 'precipitación'
+                      WHERE (dcp_id = @Dcp OR id_asignado = @Asig) AND variable = 'precipitación'
                         AND ts >= @St AND ts < @En",
-                    new { Dcp = st.VendorId, St = date, En = endTs });
+                    new { Dcp = st.DcpId, Asig = st.IdAsignado, St = date, En = endTs });
                 sum += rain ?? 0;
             }
             return sum / stations.Count;
@@ -1225,7 +1556,8 @@ namespace CloudStationWeb.Controllers
 
         private async Task<decimal?> GetElevationFromFunvasos(NpgsqlConnection db, int centralId, DateTime date, int hour)
         {
-            if (!CentralToPresaFunVasos.TryGetValue(centralId, out var presa)) return null;
+            var presa = await GetPresaNameByCentralIdAsync(db, centralId);
+            if (presa == null) return null;
             return await db.QueryFirstOrDefaultAsync<decimal?>(
                 @"SELECT elevacion FROM public.funvasos_horario
                   WHERE presa = @P AND ts::date = @D AND hora = @H",
@@ -1234,11 +1566,19 @@ namespace CloudStationWeb.Controllers
 
         private async Task<decimal> GetPrimaryFlow(NpgsqlConnection db, int centralId, DateTime date, int hour)
         {
-            if (!CentralToPresaFunVasos.TryGetValue(centralId, out var presa)) return 0;
+            var presa = await GetPresaNameByCentralIdAsync(db, centralId);
+            if (presa == null) return 0;
             return await db.QueryFirstOrDefaultAsync<decimal?>(
                 @"SELECT extracciones_total_q FROM public.funvasos_horario
                   WHERE presa = @P AND ts::date = @D AND hora = @H",
                 new { P = presa, D = date, H = (short)hour }) ?? 0;
+        }
+
+        private static async Task<string?> GetPresaNameByCentralIdAsync(NpgsqlConnection db, int centralId)
+        {
+            return await db.QueryFirstOrDefaultAsync<string>(
+                "SELECT description FROM hydro_model.dam_params WHERE cascade_order = @Id",
+                new { Id = centralId });
         }
 
         private async Task<decimal> GetDailyForecastRainAverage(NpgsqlConnection db, string cuencaCode, DateTime forecastDate, DateTime targetDate)
@@ -1287,12 +1627,11 @@ namespace CloudStationWeb.Controllers
         private record SubBasinData(int Id, int IdCuenca, string Clave, string Nombre,
             decimal InputFactor, int TransferTime, int[] HoursRead);
 
-        private record StationMapping(int Id, string VendorId, string AssignedId, string Name,
-            char Clazz, char Type, int CentralId, int SubBasinId, decimal WeighingInput,
-            string Latitude, string Longitude)
+        private class RainStationInfo
         {
-            public string Code => VendorId;
-        };
+            public string DcpId { get; set; } = "";
+            public string IdAsignado { get; set; } = "";
+        }
 
         private class ElevCapRow
         {

@@ -1,14 +1,31 @@
 @model CloudStationWeb.Services.BhgViewModel
 @{
     ViewData["Title"] = "Boletín Hidrológico Grijalva";
-    var presas = new[] { "ANGOSTURA", "CHICOASEN", "MALPASO", "CANAL_JG", "PEÑITAS" };
-    var presaLabels = new Dictionary<string, string> {
-        {"ANGOSTURA","Angostura"}, {"CHICOASEN","Chicoasén"}, {"MALPASO","Malpaso"},
-        {"CANAL_JG","Canal J.G."}, {"PEÑITAS","Peñitas"}
-    };
+    var embalseConfigs = (ViewBag.EmbalseConfigs as List<CloudStationWeb.Controllers.EmbalseConfigDto>) ?? new List<CloudStationWeb.Controllers.EmbalseConfigDto>();
+    // Build presas and labels from EmbalseConfig (fallback to hardcoded if no config)
+    string[] presas;
+    Dictionary<string, string> presaLabels;
+    Dictionary<string, string> presaColorMap;
+    if (embalseConfigs.Any())
+    {
+        presas = embalseConfigs.Where(c => !string.IsNullOrEmpty(c.BhgKey)).Select(c => c.BhgKey!).ToArray();
+        presaLabels = embalseConfigs.Where(c => !string.IsNullOrEmpty(c.BhgKey)).ToDictionary(c => c.BhgKey!, c => c.NombreDisplay);
+        presaColorMap = embalseConfigs.Where(c => !string.IsNullOrEmpty(c.BhgKey) && !string.IsNullOrEmpty(c.Color)).ToDictionary(c => c.BhgKey!, c => c.Color!);
+    }
+    else
+    {
+        presas = new[] { "ANGOSTURA", "CHICOASEN", "MALPASO", "CANAL_JG", "PEÑITAS" };
+        presaLabels = new Dictionary<string, string> {
+            {"ANGOSTURA","Angostura"}, {"CHICOASEN","Chicoasén"}, {"MALPASO","Malpaso"},
+            {"CANAL_JG","Canal J.G."}, {"PEÑITAS","Peñitas"}
+        };
+        presaColorMap = new Dictionary<string, string> {
+            {"ANGOSTURA","#2185d0"}, {"CHICOASEN","#21ba45"}, {"MALPASO","#fbbd08"},
+            {"CANAL_JG","#f2711c"}, {"PEÑITAS","#db2828"}
+        };
+    }
     var jOpt = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
 }
-
 @section Styles {
 <style>
     .bhg-container { padding: 1em; }
@@ -32,7 +49,6 @@
     .summary-card.mps { border-color: #fbbd08; }
     .summary-card.cjg { border-color: #f2711c; }
     .summary-card.pen { border-color: #db2828; }
-
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
     .data-table th, .data-table td {
         padding: 0.4em 0.6em; border: 1px solid rgba(255,255,255,0.1);
@@ -42,7 +58,6 @@
     .data-table td:first-child, .data-table th:first-child { text-align: left; }
     .data-table tbody tr:hover { background: rgba(255,255,255,0.05); }
     .table-scroll { max-height: 500px; overflow-y: auto; border-radius: 6px; }
-
     .chart-container { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 0.5em; margin-bottom: 1em; min-height: 350px; transition: background 0.3s; }
     body.bhg-light .chart-container { background: rgba(0,0,0,0.04); }
     body.bhg-light .bhg-header h2 { color: #333; }
@@ -57,16 +72,14 @@
     .theme-toggle-btn { cursor: pointer; }
     .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-bottom: 1em; }
     @@media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } }
-
     .est-filters { display: flex; gap: 1em; flex-wrap: wrap; margin-bottom: 1em; }
     .archivos-list .item { padding: 0.5em 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
 </style>
 }
-
 <div class="bhg-container">
     @* Header con navegación de mes *@
     <div class="bhg-header">
-        <h2><i class="chart bar icon"></i> Boletín Hidrológico Grijalva — @Model.MesNombre @Model.Anio</h2>
+        <h2><i class="chart bar icon"></i> Boletín Hidrológico Grijalva â€” @Model.MesNombre @Model.Anio</h2>
         <div class="mes-nav">
             <a class="ui tiny inverted purple button" href="@Url.Action("Index", "Bhg", new { mes = Model.Mes == 1 ? 12 : Model.Mes - 1, anio = Model.Mes == 1 ? Model.Anio - 1 : Model.Anio })">
                 <i class="chevron left icon"></i>
@@ -80,7 +93,6 @@
             <i class="sun icon" id="themeIcon"></i> <span id="themeLabel">Tema Claro</span>
         </button>
     </div>
-
     @* Tabs *@
     <div class="ui top attached inverted tabular menu bhg-tabs">
         <a class="item active" data-tab="resumen"><i class="dashboard icon"></i> Resumen</a>
@@ -91,7 +103,6 @@
         <a class="item" data-tab="estaciones"><i class="map marker icon"></i> Estaciones</a>
         <a class="item" data-tab="archivos"><i class="file icon"></i> Archivos</a>
     </div>
-
     @* Tab: Resumen *@
     <div class="bhg-tab-content active" id="tab-resumen">
         @if (!Model.Presas.Any())
@@ -108,29 +119,27 @@
                 @foreach (var pn in presas)
                 {
                     var last = Model.Presas.Where(p => p.Presa == pn && p.Ts == lastDay).FirstOrDefault();
-                    var cssClass = pn switch { "ANGOSTURA" => "ang", "CHICOASEN" => "chic", "MALPASO" => "mps", "CANAL_JG" => "cjg", _ => "pen" };
-                    <div class="summary-card @cssClass">
+                    var borderColor = presaColorMap.ContainsKey(pn) ? presaColorMap[pn] : "#6435c9";
+                    <div class="summary-card" style="border-left-color: @borderColor;">
                         <h4>@(presaLabels.ContainsKey(pn) ? presaLabels[pn] : pn)</h4>
-                        <div class="value">@(last?.Nivel?.ToString("F2") ?? "—") msnm</div>
+                        <div class="value">@(last?.Nivel?.ToString("F2") ?? "â€”") msnm</div>
                         <div class="sub">
                             @if (last?.PctLlenadoNamo != null) { <span>NAMO: @(last.PctLlenadoNamo?.ToString("F1"))%</span> }
-                            @if (last?.VolAlmacenado != null) { <span> | Vol: @(last.VolAlmacenado?.ToString("F1")) hm³</span> }
+                            @if (last?.VolAlmacenado != null) { <span> | Vol: @(last.VolAlmacenado?.ToString("F1")) hmÂ³</span> }
                         </div>
                         <div class="sub">
-                            @if (last?.AportacionQ != null) { <span>Aport: @(last.AportacionQ?.ToString("F0")) m³/s</span> }
-                            @if (last?.ExtraccionQ != null) { <span> | Extr: @(last.ExtraccionQ?.ToString("F0")) m³/s</span> }
+                            @if (last?.AportacionQ != null) { <span>Aport: @(last.AportacionQ?.ToString("F0")) mÂ³/s</span> }
+                            @if (last?.ExtraccionQ != null) { <span> | Extr: @(last.ExtraccionQ?.ToString("F0")) mÂ³/s</span> }
                         </div>
                     </div>
                 }
             </div>
-
             <div class="chart-row">
                 <div class="chart-container" id="chartNivelesResumen" style="min-height:380px;"></div>
                 <div class="chart-container" id="chartAportExtResumen" style="min-height:380px;"></div>
             </div>
         }
     </div>
-
     @* Tab: Niveles *@
     <div class="bhg-tab-content" id="tab-niveles">
         <div class="chart-container" id="chartNiveles" style="min-height:400px;"></div>
@@ -146,7 +155,6 @@
             </table>
         </div>
     </div>
-
     @* Tab: Aportaciones *@
     <div class="bhg-tab-content" id="tab-aportaciones">
         <div class="chart-row">
@@ -165,7 +173,6 @@
             </table>
         </div>
     </div>
-
     @* Tab: Extracción *@
     <div class="bhg-tab-content" id="tab-extraccion">
         <div class="chart-row">
@@ -173,7 +180,6 @@
             <div class="chart-container" id="chartExtQ" style="min-height:380px;"></div>
         </div>
     </div>
-
     @* Tab: Generación *@
     <div class="bhg-tab-content" id="tab-generacion">
         <div class="chart-container" id="chartGeneracion" style="min-height:400px;"></div>
@@ -189,7 +195,6 @@
             </table>
         </div>
     </div>
-
     @* Tab: Estaciones *@
     <div class="bhg-tab-content" id="tab-estaciones">
         <div class="est-filters">
@@ -217,27 +222,25 @@
                             <td>@e.Ts.ToString("dd/MM")</td>
                             <td style="text-align:left;">@e.Estacion</td>
                             <td>@e.Subcuenca</td>
-                            <td>@(e.Precip24h?.ToString("F1") ?? "—")</td>
-                            <td>@(e.PrecipAcumMensual?.ToString("F1") ?? "—")</td>
-                            <td>@(e.Escala?.ToString("F2") ?? "—")</td>
-                            <td>@(e.Gasto?.ToString("F1") ?? "—")</td>
-                            <td>@(e.Evaporacion?.ToString("F1") ?? "—")</td>
-                            <td>@(e.TempMax?.ToString("F1") ?? "—")</td>
-                            <td>@(e.TempMin?.ToString("F1") ?? "—")</td>
-                            <td>@(e.TempAmb?.ToString("F1") ?? "—")</td>
+                            <td>@(e.Precip24h?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.PrecipAcumMensual?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.Escala?.ToString("F2") ?? "â€”")</td>
+                            <td>@(e.Gasto?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.Evaporacion?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.TempMax?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.TempMin?.ToString("F1") ?? "â€”")</td>
+                            <td>@(e.TempAmb?.ToString("F1") ?? "â€”")</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
     </div>
-
     @* Tab: Archivos *@
     <div class="bhg-tab-content" id="tab-archivos">
         <div class="ui inverted info message" style="margin-bottom:1em;">
             <i class="info circle icon"></i> Para subir archivos BHG, use el <a href="/Documents" style="color:#90caf9;"><strong>Repositorio de Documentos</strong></a> o deposítelos en la carpeta de entrada automática.
         </div>
-
         <h3 style="color:#ccc;"><i class="history icon"></i> Archivos Procesados</h3>
         <div class="table-scroll">
             <table class="data-table">
@@ -260,9 +263,10 @@
         </div>
     </div>
 </div>
-
 @section Scripts {
 <script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="~/lib/highcharts/modules/exporting.js"></script>
+<script src="~/js/chart-config.js"></script>
 <script>
 $(function() {
     // Tab switching
@@ -277,7 +281,6 @@ $(function() {
             Highcharts.charts.forEach(c => { if (c) c.reflow(); });
         }, 100);
     });
-
     // Estaciones filter
     $('#estSearch').on('input', filterEstaciones);
     $('#estSubcuenca').on('change', filterEstaciones);
@@ -292,15 +295,17 @@ $(function() {
             $(this).toggle(show);
         });
     }
-
     // === Build data from Model ===
     var presaNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(presas, jOpt));
     var presaLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(presaLabels, jOpt));
-    var presaColors = {
-        'ANGOSTURA': '#2185d0', 'CHICOASEN': '#21ba45', 'MALPASO': '#fbbd08',
-        'CANAL_JG': '#f2711c', 'PEÑITAS': '#db2828'
-    };
-
+    var presaColors = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(presaColorMap, jOpt));
+    // Tapón-type embalses (excluded from aportacion/extraccion/generacion charts)
+    @{
+        var taponKeys = embalseConfigs.Where(c => c.IsTaponType && !string.IsNullOrEmpty(c.BhgKey)).Select(c => c.BhgKey!).ToArray();
+        if (!taponKeys.Any()) taponKeys = new[] { "CANAL_JG" }; // fallback
+    }
+    var taponKeys = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(taponKeys, jOpt));
+    function isNotTapon(pn) { return taponKeys.indexOf(pn) < 0; }
     // Organize data by day and presa
     var presasRaw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Presas, jOpt));
     var byDay = {};
@@ -309,10 +314,8 @@ $(function() {
         if (!byDay[d]) byDay[d] = {};
         byDay[d][p.presa] = p;
     });
-
     var days = Object.keys(byDay).map(Number).sort((a,b) => a-b);
     var mesAnio = '@Model.MesNombre @Model.Anio';
-
     // === Theme definitions ===
     var darkTheme = {
         chart: { backgroundColor: 'transparent', style: { fontFamily: "'Lato',sans-serif" } },
@@ -332,7 +335,6 @@ $(function() {
         tooltip: { shared: true, crosshairs: true, backgroundColor: 'rgba(255,255,255,0.96)', style: { color: '#333' }, borderColor: '#ccc' },
         plotOptions: { series: { animation: { duration: 600 } } }
     };
-
     var savedTheme = localStorage.getItem('bhgChartTheme') || 'dark';
     Highcharts.setOptions(savedTheme === 'light' ? lightTheme : darkTheme);
     if (savedTheme === 'light') {
@@ -340,7 +342,6 @@ $(function() {
         $('#themeIcon').removeClass('sun').addClass('moon');
         $('#themeLabel').text('Tema Oscuro');
     }
-
     // Theme toggle handler
     $('#btnThemeToggle').on('click', function() {
         var isLight = document.body.classList.toggle('bhg-light');
@@ -361,9 +362,7 @@ $(function() {
             }, true, false);
         });
     });
-
     if (days.length === 0) return;
-
     // === Tab Resumen: Niveles ===
     var nivelesSeriesR = presaNames.map(function(pn) {
         return {
@@ -374,22 +373,21 @@ $(function() {
     });
     Highcharts.chart('chartNivelesResumen', {
         chart: { type: 'line' },
-        title: { text: 'Niveles Diarios — ' + mesAnio },
+        title: { text: 'Niveles Diarios â€” ' + mesAnio },
         xAxis: { categories: days.map(d => d.toString()), title: { text: 'Día' } },
         yAxis: { title: { text: 'msnm' } },
         series: nivelesSeriesR,
         credits: { enabled: false }
     });
-
     // === Tab Resumen: Aport vs Extrac (stacked) ===
-    var aportSeries = presaNames.filter(p => p !== 'CANAL_JG').map(function(pn) {
+    var aportSeries = presaNames.filter(isNotTapon).map(function(pn) {
         return {
             name: (presaLabels[pn] || pn) + ' Aport',
             color: presaColors[pn],
             data: days.map(function(d) { return byDay[d][pn] ? byDay[d][pn].aportacionQ : null; })
         };
     });
-    var extSeries = presaNames.filter(p => p !== 'CANAL_JG').map(function(pn) {
+    var extSeries = presaNames.filter(isNotTapon).map(function(pn) {
         return {
             name: (presaLabels[pn] || pn) + ' Extr',
             color: presaColors[pn],
@@ -399,16 +397,16 @@ $(function() {
     });
     Highcharts.chart('chartAportExtResumen', {
         chart: { type: 'line' },
-        title: { text: 'Aportaciones vs Extracciones (Q) — ' + mesAnio },
+        title: { text: 'Aportaciones vs Extracciones (Q) â€” ' + mesAnio },
         xAxis: { categories: days.map(d => d.toString()), title: { text: 'Día' } },
-        yAxis: { title: { text: 'm³/s' } },
+        yAxis: { title: { text: 'mÂ³/s' } },
         series: aportSeries.concat(extSeries),
         credits: { enabled: false }
     });
-
     // === Tab Niveles: chart + table ===
     var nivCGSeriesA = [];
-    ['ANGOSTURA','MALPASO'].forEach(function(pn) {
+    // Show curva guía for any presa that has curvaGuia data
+    presaNames.forEach(function(pn) {
         var cg = days.map(function(d) { return byDay[d][pn] ? byDay[d][pn].curvaGuia : null; });
         if (cg.some(v => v !== null)) {
             nivCGSeriesA.push({
@@ -421,7 +419,7 @@ $(function() {
     });
     Highcharts.chart('chartNiveles', {
         chart: { type: 'spline' },
-        title: { text: 'Niveles y Curva Guía — ' + mesAnio },
+        title: { text: 'Niveles y Curva Guía â€” ' + mesAnio },
         xAxis: { categories: days.map(d => d.toString()), title: { text: 'Día' } },
         yAxis: { title: { text: 'msnm' } },
         series: nivelesSeriesR.concat(nivCGSeriesA),
@@ -433,34 +431,33 @@ $(function() {
         tbNiv += '<tr><td>' + d + '</td>';
         presaNames.forEach(function(pn) {
             var v = byDay[d][pn] ? byDay[d][pn].nivel : null;
-            tbNiv += '<td>' + (v !== null ? v.toFixed(2) : '—') + '</td>';
+            tbNiv += '<td>' + (v !== null ? v.toFixed(2) : 'â€”') + '</td>';
         });
         tbNiv += '</tr>';
     });
     $('#tablaNiveles tbody').html(tbNiv);
-
     // === Tab Aportaciones ===
-    var asVol = presaNames.filter(p => p !== 'CANAL_JG').map(pn => ({
+    var asVol = presaNames.filter(isNotTapon).map(pn => ({
         name: presaLabels[pn]||pn, color: presaColors[pn],
         data: days.map(d => byDay[d][pn] ? byDay[d][pn].aportacionVol : null)
     }));
-    var asQ = presaNames.filter(p => p !== 'CANAL_JG').map(pn => ({
+    var asQ = presaNames.filter(isNotTapon).map(pn => ({
         name: presaLabels[pn]||pn, color: presaColors[pn],
         data: days.map(d => byDay[d][pn] ? byDay[d][pn].aportacionQ : null)
     }));
     Highcharts.chart('chartAportVol', {
         chart: { type: 'column' },
-        title: { text: 'Aportaciones Volumen (hm³) — ' + mesAnio },
+        title: { text: 'Aportaciones Volumen (hmÂ³) â€” ' + mesAnio },
         xAxis: { categories: days.map(d=>d.toString()) },
-        yAxis: { title: { text: 'hm³' } },
+        yAxis: { title: { text: 'hmÂ³' } },
         plotOptions: { column: { grouping: true } },
         series: asVol, credits: { enabled: false }
     });
     Highcharts.chart('chartAportQ', {
         chart: { type: 'spline' },
-        title: { text: 'Aportaciones Gasto (m³/s) — ' + mesAnio },
+        title: { text: 'Aportaciones Gasto (mÂ³/s) â€” ' + mesAnio },
         xAxis: { categories: days.map(d=>d.toString()) },
-        yAxis: { title: { text: 'm³/s' } },
+        yAxis: { title: { text: 'mÂ³/s' } },
         series: asQ, credits: { enabled: false }
     });
     // Aportaciones table
@@ -469,45 +466,43 @@ $(function() {
         tbA += '<tr><td>' + d + '</td>';
         presaNames.forEach(function(pn) {
             var p = byDay[d][pn];
-            tbA += '<td>' + (p && p.aportacionVol !== null ? p.aportacionVol.toFixed(1) : '—') + '</td>';
-            tbA += '<td>' + (p && p.aportacionQ !== null ? p.aportacionQ.toFixed(0) : '—') + '</td>';
+            tbA += '<td>' + (p && p.aportacionVol !== null ? p.aportacionVol.toFixed(1) : 'â€”') + '</td>';
+            tbA += '<td>' + (p && p.aportacionQ !== null ? p.aportacionQ.toFixed(0) : 'â€”') + '</td>';
         });
         tbA += '</tr>';
     });
     $('#tablaAportaciones tbody').html(tbA);
-
     // === Tab Extracción ===
-    var exVol = presaNames.filter(p => p !== 'CANAL_JG').map(pn => ({
+    var exVol = presaNames.filter(isNotTapon).map(pn => ({
         name: presaLabels[pn]||pn, color: presaColors[pn],
         data: days.map(d => byDay[d][pn] ? byDay[d][pn].extraccionVol : null)
     }));
-    var exQ = presaNames.filter(p => p !== 'CANAL_JG').map(pn => ({
+    var exQ = presaNames.filter(isNotTapon).map(pn => ({
         name: presaLabels[pn]||pn, color: presaColors[pn],
         data: days.map(d => byDay[d][pn] ? byDay[d][pn].extraccionQ : null)
     }));
     Highcharts.chart('chartExtVol', {
         chart: { type: 'column' },
-        title: { text: 'Extracción Volumen (hm³) — ' + mesAnio },
+        title: { text: 'Extracción Volumen (hmÂ³) â€” ' + mesAnio },
         xAxis: { categories: days.map(d=>d.toString()) },
-        yAxis: { title: { text: 'hm³' } },
+        yAxis: { title: { text: 'hmÂ³' } },
         series: exVol, credits: { enabled: false }
     });
     Highcharts.chart('chartExtQ', {
         chart: { type: 'spline' },
-        title: { text: 'Extracción Gasto (m³/s) — ' + mesAnio },
+        title: { text: 'Extracción Gasto (mÂ³/s) â€” ' + mesAnio },
         xAxis: { categories: days.map(d=>d.toString()) },
-        yAxis: { title: { text: 'm³/s' } },
+        yAxis: { title: { text: 'mÂ³/s' } },
         series: exQ, credits: { enabled: false }
     });
-
     // === Tab Generación ===
-    var genSeries = presaNames.filter(p => p !== 'CANAL_JG').map(pn => ({
+    var genSeries = presaNames.filter(isNotTapon).map(pn => ({
         name: presaLabels[pn]||pn, color: presaColors[pn],
         data: days.map(d => byDay[d][pn] ? byDay[d][pn].generacionGwh : null)
     }));
     Highcharts.chart('chartGeneracion', {
         chart: { type: 'column' },
-        title: { text: 'Generación Diaria (GWh) — ' + mesAnio },
+        title: { text: 'Generación Diaria (GWh) â€” ' + mesAnio },
         xAxis: { categories: days.map(d=>d.toString()) },
         yAxis: { title: { text: 'GWh' } },
         plotOptions: { column: { stacking: 'normal' } },
@@ -519,8 +514,8 @@ $(function() {
         tbG += '<tr><td>' + d + '</td>';
         presaNames.forEach(function(pn) {
             var p = byDay[d][pn];
-            tbG += '<td>' + (p && p.generacionGwh !== null ? p.generacionGwh.toFixed(2) : '—') + '</td>';
-            tbG += '<td>' + (p && p.factorPlanta !== null ? (p.factorPlanta * 100).toFixed(1) + '%' : '—') + '</td>';
+            tbG += '<td>' + (p && p.generacionGwh !== null ? p.generacionGwh.toFixed(2) : 'â€”') + '</td>';
+            tbG += '<td>' + (p && p.factorPlanta !== null ? (p.factorPlanta * 100).toFixed(1) + '%' : 'â€”') + '</td>';
         });
         tbG += '</tr>';
     });

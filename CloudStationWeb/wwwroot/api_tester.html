@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudStation PIH — API Tester CENACE</title>
+    <style>
+        :root {
+            --primary: #1a5276;
+            --primary-light: #2980b9;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --bg: #f5f6fa;
+            --card: #ffffff;
+            --border: #dcdde1;
+            --text: #2c3e50;
+            --text-light: #7f8c8d;
+            --mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+        }
+        header h1 { font-size: 1.3rem; font-weight: 600; }
+        header small { opacity: .8; font-size: .8rem; }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: .85rem;
+        }
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--danger);
+            display: inline-block;
+        }
+        .status-dot.connected { background: var(--success); }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 1rem; display: flex; gap: 1rem; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            flex-shrink: 0;
+        }
+        .config-card, .endpoint-card {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+        .config-card h3, .endpoint-card h3 {
+            font-size: .85rem;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: var(--text-light);
+            margin-bottom: .75rem;
+        }
+        .config-card label {
+            display: block;
+            font-size: .8rem;
+            font-weight: 600;
+            margin-bottom: .2rem;
+            color: var(--text-light);
+        }
+        .config-card input, .config-card select {
+            width: 100%;
+            padding: .4rem .6rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: .85rem;
+            margin-bottom: .6rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: .45rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: .85rem;
+            font-weight: 600;
+            transition: .2s;
+        }
+        .btn:hover { filter: brightness(1.1); }
+        .btn-primary { background: var(--primary-light); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-sm { padding: .3rem .6rem; font-size: .78rem; }
+        .btn-block { width: 100%; text-align: center; }
+
+        /* Endpoint list */
+        .ep-list { list-style: none; }
+        .ep-list li {
+            padding: .5rem .6rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: .82rem;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            transition: .15s;
+        }
+        .ep-list li:hover { background: #ebf5fb; }
+        .ep-list li.active { background: #d4effc; font-weight: 600; }
+        .ep-method {
+            font-size: .7rem;
+            font-weight: 700;
+            padding: .1rem .35rem;
+            border-radius: 3px;
+            min-width: 36px;
+            text-align: center;
+        }
+        .ep-method.GET { background: #d5f5e3; color: #1e8449; }
+        .ep-method.POST { background: #fdebd0; color: #ca6f1e; }
+
+        /* Main content */
+        .main { flex: 1; min-width: 0; }
+        .request-panel {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+        .request-panel h2 {
+            font-size: 1rem;
+            margin-bottom: .8rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+        .request-url {
+            display: flex;
+            gap: .5rem;
+            margin-bottom: 1rem;
+        }
+        .request-url input {
+            flex: 1;
+            padding: .5rem .8rem;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-family: var(--mono);
+            font-size: .85rem;
+        }
+        .request-url input:focus { border-color: var(--primary-light); outline: none; }
+
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: .5rem;
+            margin-bottom: 1rem;
+        }
+        .param-group label {
+            font-size: .75rem;
+            font-weight: 600;
+            color: var(--text-light);
+            display: block;
+        }
+        .param-group input, .param-group select {
+            width: 100%;
+            padding: .35rem .5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: .85rem;
+        }
+
+        /* Response */
+        .response-panel {
+            background: var(--card);
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+            overflow: hidden;
+        }
+        .response-header {
+            padding: .6rem 1.2rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: .85rem;
+        }
+        .response-status { font-weight: 700; }
+        .response-status.s200 { color: var(--success); }
+        .response-status.s400, .response-status.s401, .response-status.s404 { color: var(--danger); }
+        .response-time { color: var(--text-light); font-size: .8rem; }
+        .response-body {
+            padding: 1rem 1.2rem;
+            max-height: 500px;
+            overflow: auto;
+            font-family: var(--mono);
+            font-size: .82rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #1e272e;
+            color: #dfe6e9;
+        }
+        .response-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .82rem;
+        }
+        .response-table th {
+            background: var(--primary);
+            color: white;
+            padding: .4rem .6rem;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        .response-table td {
+            padding: .35rem .6rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .response-table tr:hover td { background: #eaf2f8; }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 0;
+        }
+        .tab {
+            padding: .45rem 1rem;
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 600;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab.active { color: var(--primary-light); border-bottom-color: var(--primary-light); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .badge { font-size: .7rem; padding: .15rem .4rem; border-radius: 3px; font-weight: 600; }
+        .badge-info { background: #d6eaf8; color: #2471a3; }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-light);
+        }
+        .empty-state p { font-size: 1.5rem; margin-bottom: .5rem; }
+
+        .history-item {
+            padding: .4rem .6rem;
+            font-size: .78rem;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .history-item:hover { background: #ebf5fb; }
+        .history-list { max-height: 200px; overflow-y: auto; }
+
+        @media (max-width: 900px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>CloudStation PIH — API Tester</h1>
+        <small>Cliente de prueba para CENACE</small>
+    </div>
+    <div class="status-bar">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">Desconectado</span>
+    </div>
+</header>
+
+<div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="config-card">
+            <h3>Conexión</h3>
+            <label>Servidor</label>
+            <input id="cfgServer" type="text" value="https://cloudstation.cfe.mx" placeholder="https://servidor:puerto">
+            <label>Autenticación</label>
+            <select id="cfgAuthMode" onchange="toggleAuthFields()">
+                <option value="apikey">API Key</option>
+                <option value="jwt">JWT Token</option>
+            </select>
+            <div id="authApiKey">
+                <label>API Key</label>
+                <input id="cfgApiKey" type="text" value="***REDACTED-API-KEY***">
+            </div>
+            <div id="authJwt" style="display:none">
+                <label>Usuario</label>
+                <input id="cfgUser" type="text" value="cenace">
+                <label>Contraseña</label>
+                <input id="cfgPass" type="password" value="Cfe900##">
+                <button class="btn btn-warning btn-block btn-sm" onclick="doLogin()" style="margin-top:.3rem">
+                    Obtener Token
+                </button>
+                <label style="margin-top:.4rem">Token</label>
+                <input id="cfgToken" type="text" readonly placeholder="(Se obtiene al autenticar)">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="testConnection()" style="margin-top:.5rem">
+                Probar Conexión
+            </button>
+        </div>
+
+        <div class="endpoint-card">
+            <h3>Endpoints</h3>
+            <ul class="ep-list" id="epList"></ul>
+        </div>
+
+        <div class="endpoint-card">
+            <h3>Historial</h3>
+            <div class="history-list" id="historyList">
+                <div class="empty-state" style="padding:.5rem"><small>Sin consultas aún</small></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <div class="request-panel">
+            <h2>
+                <span class="ep-method GET" id="reqMethod">GET</span>
+                <span id="reqTitle">Seleccione un endpoint</span>
+            </h2>
+            <p id="reqDesc" style="font-size:.82rem; color:var(--text-light); margin-bottom:.8rem;"></p>
+            <div class="request-url">
+                <input id="reqUrl" type="text" placeholder="/api/get/station/all" readonly>
+                <button class="btn btn-success" onclick="sendRequest()" id="btnSend">Enviar</button>
+            </div>
+            <div class="params-grid" id="paramsGrid"></div>
+        </div>
+
+        <div class="response-panel">
+            <div class="tabs" id="respTabs">
+                <div class="tab active" onclick="switchTab('table')">Tabla</div>
+                <div class="tab" onclick="switchTab('json')">JSON</div>
+            </div>
+            <div class="response-header" id="respHeader" style="display:none">
+                <span>
+                    Status: <span class="response-status" id="respStatus"></span>
+                    <span class="badge badge-info" id="respCount"></span>
+                </span>
+                <span class="response-time" id="respTime"></span>
+            </div>
+            <div id="tabTable" class="tab-content active">
+                <div style="max-height:500px; overflow:auto;" id="tableContainer">
+                    <div class="empty-state">
+                        <p>📡</p>
+                        Seleccione un endpoint y presione Enviar
+                    </div>
+                </div>
+            </div>
+            <div id="tabJson" class="tab-content">
+                <div class="response-body" id="jsonContainer">// Respuesta JSON aparecerá aquí</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+// Endpoint Definitions
+// =====================================================================
+const ENDPOINTS = [
+    {
+        id: 'station_all', method: 'GET',
+        path: '/api/get/station/all',
+        name: 'Todas las estaciones',
+        desc: 'Retorna las 10 estaciones de la cascada Grijalva (5 convencionales + 5 automáticas).',
+        params: [],
+        columns: ['id','assignedId','name','clazz','type','centralId','subBasinId','latitude','longitude']
+    },
+    {
+        id: 'station_conv', method: 'GET',
+        path: '/api/get/station/conventional/all',
+        name: 'Estaciones convencionales',
+        desc: 'Solo estaciones de captura manual (clase C).',
+        params: [],
+        columns: ['id','assignedId','name','centralId','subBasinId']
+    },
+    {
+        id: 'station_auto', method: 'GET',
+        path: '/api/get/station/automatic/all',
+        name: 'Estaciones automáticas',
+        desc: 'Solo estaciones con transmisión GOES (clase A).',
+        params: [],
+        columns: ['id','assignedId','name','centralId','subBasinId']
+    },
+    {
+        id: 'station_byid', method: 'GET',
+        path: '/api/get/station/by/id/{stationId}',
+        name: 'Estación por ID',
+        desc: 'Detalle de una estación específica.',
+        params: [{ key: 'stationId', label: 'Station ID', type: 'select',
+                   options: [{v:'1',t:'1 - Angostura Conv.'},{v:'2',t:'2 - Angostura Auto.'},{v:'3',t:'3 - Chicoasén Conv.'},
+                             {v:'4',t:'4 - Chicoasén Auto.'},{v:'5',t:'5 - Malpaso Conv.'},{v:'6',t:'6 - Malpaso Auto.'},
+                             {v:'7',t:'7 - J.Grijalva Conv.'},{v:'8',t:'8 - J.Grijalva Auto.'},
+                             {v:'9',t:'9 - Peñitas Conv.'},{v:'10',t:'10 - Peñitas Auto.'}] }],
+        columns: null // single object
+    },
+    {
+        id: 'report_day', method: 'GET',
+        path: '/api/get/station-report/records/by/station-id/{stationId}/date/{date}',
+        name: 'Reporte horario estación',
+        desc: 'Datos de FunVasos: elevación, almacenamiento, aportaciones, extracciones, generación para cada hora del día.',
+        params: [
+            { key: 'stationId', label: 'Station ID', type: 'select',
+              options: [{v:'1',t:'1 - Angostura'},{v:'3',t:'3 - Chicoasén'},{v:'5',t:'5 - Malpaso'},
+                        {v:'7',t:'7 - J.Grijalva'},{v:'9',t:'9 - Peñitas'}] },
+            { key: 'date', label: 'Fecha', type: 'date' }
+        ],
+        columns: ['hour','elevation','scale','input','spent','turbineSpent','powerGeneration','unitsWorking']
+    },
+    {
+        id: 'dam_all', method: 'GET',
+        path: '/api/get/dam/all',
+        name: 'Todas las presas',
+        desc: 'Catálogo de las 5 presas de la cascada Grijalva con niveles NAME, NAMO, NAMINO y volúmenes.',
+        params: [],
+        columns: ['id','code','description','nameValue','namoValue','naminoValue','usefulVolume','offVolume','totalVolume']
+    },
+    {
+        id: 'dam_behavior', method: 'GET',
+        path: '/api/get/dam-behavior/date/{date}/central-id/{centralId}',
+        name: 'Comportamiento de presa',
+        desc: 'Comportamiento horario: elevación, aportaciones, extracciones (turbinas + vertedores), generación.',
+        params: [
+            { key: 'date', label: 'Fecha', type: 'date' },
+            { key: 'centralId', label: 'Central', type: 'select',
+              options: [{v:'1',t:'1 - Angostura'},{v:'2',t:'2 - Chicoasén'},{v:'3',t:'3 - Malpaso'},
+                        {v:'4',t:'4 - Juan Grijalva'},{v:'5',t:'5 - Peñitas'}] }
+        ],
+        columns: ['hour','elevation','utilCapacity','inputSpending','inputVolume','turbineSpending',
+                  'chuteSpending','totalSpending','generation','unitsWorking','inputAverage']
+    },
+    {
+        id: 'sensor_list', method: 'GET',
+        path: '/automatic-station/api/get/sensor/by/station-id/{stationId}',
+        name: 'Sensores de estación',
+        desc: 'Lista las variables (sensores) disponibles para una estación automática.',
+        params: [
+            { key: 'stationId', label: 'Estación automática', type: 'select',
+              options: [{v:'2',t:'2 - Angostura Auto.'},{v:'4',t:'4 - Chicoasén Auto.'},
+                        {v:'6',t:'6 - Malpaso Auto.'},{v:'8',t:'8 - J.Grijalva Auto.'},
+                        {v:'10',t:'10 - Peñitas Auto.'}] }
+        ],
+        columns: ['sensorNumber','variable','assignedId','stationName','totalRecords']
+    },
+    {
+        id: 'sensor_value', method: 'GET',
+        path: '/automatic-station/api/get/sensor-value/by/assigned-id/{assignedId}/sensor-number/{sensorNumber}/date/{date}/hour/{hour}',
+        name: 'Valor de sensor',
+        desc: 'Valor específico de un sensor en fecha y hora UTC. Primero consulte "Sensores de estación" para obtener el sensorNumber.',
+        params: [
+            { key: 'assignedId', label: 'Assigned ID', type: 'select',
+              options: [{v:'ANG-02',t:'ANG-02 Angostura'},{v:'CHI-02',t:'CHI-02 Chicoasén'},
+                        {v:'MAL-02',t:'MAL-02 Malpaso'},{v:'JGR-02',t:'JGR-02 J.Grijalva'},
+                        {v:'PEN-02',t:'PEN-02 Peñitas'}] },
+            { key: 'sensorNumber', label: 'Sensor #', type: 'number', default: '1' },
+            { key: 'date', label: 'Fecha', type: 'date' },
+            { key: 'hour', label: 'Hora UTC (0-23)', type: 'number', default: '12' }
+        ],
+        columns: null
+    },
+    {
+        id: 'auth_login', method: 'POST',
+        path: '/api/auth/login',
+        name: 'Login (JWT)',
+        desc: 'Autenticarse y obtener un token JWT. Alternativa al API Key.',
+        params: [],
+        columns: null,
+        isLogin: true
+    }
+];
+
+// =====================================================================
+// State
+// =====================================================================
+let currentEndpoint = null;
+let history = [];
+let activeTab = 'table';
+
+// =====================================================================
+// Init
+// =====================================================================
+window.addEventListener('DOMContentLoaded', () => {
+    renderEndpointList();
+    // Default date = yesterday
+    document.querySelectorAll('input[type="date"]').forEach(el => {
+        const d = new Date(); d.setDate(d.getDate() - 1);
+        el.value = d.toISOString().split('T')[0];
+    });
+});
+
+function renderEndpointList() {
+    const ul = document.getElementById('epList');
+    ul.innerHTML = ENDPOINTS.map(ep => `
+        <li onclick="selectEndpoint('${ep.id}')" id="ep-${ep.id}">
+            <span class="ep-method ${ep.method}">${ep.method}</span>
+            <span>${ep.name}</span>
+        </li>
+    `).join('');
+}
+
+// =====================================================================
+// Endpoint Selection
+// =====================================================================
+function selectEndpoint(id) {
+    const ep = ENDPOINTS.find(e => e.id === id);
+    if (!ep) return;
+    currentEndpoint = ep;
+
+    // Highlight
+    document.querySelectorAll('.ep-list li').forEach(li => li.classList.remove('active'));
+    document.getElementById('ep-' + id).classList.add('active');
+
+    // Update request panel
+    document.getElementById('reqMethod').textContent = ep.method;
+    document.getElementById('reqMethod').className = 'ep-method ' + ep.method;
+    document.getElementById('reqTitle').textContent = ep.name;
+    document.getElementById('reqDesc').textContent = ep.desc;
+    document.getElementById('reqUrl').value = ep.path;
+
+    // Render params
+    const grid = document.getElementById('paramsGrid');
+    if (ep.isLogin) {
+        grid.innerHTML = `
+            <div class="param-group">
+                <label>Usuario</label>
+                <input id="p_username" type="text" value="${document.getElementById('cfgUser').value}">
+            </div>
+            <div class="param-group">
+                <label>Contraseña</label>
+                <input id="p_password" type="password" value="${document.getElementById('cfgPass').value}">
+            </div>`;
+    } else if (ep.params.length === 0) {
+        grid.innerHTML = '<small style="color:var(--text-light)">Sin parámetros requeridos</small>';
+    } else {
+        const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+        const yStr = yesterday.toISOString().split('T')[0];
+        grid.innerHTML = ep.params.map(p => {
+            if (p.type === 'select') {
+                const opts = p.options.map(o => `<option value="${o.v}">${o.t}</option>`).join('');
+                return `<div class="param-group">
+                    <label>${p.label}</label>
+                    <select id="p_${p.key}" onchange="updateUrl()">${opts}</select>
+                </div>`;
+            } else if (p.type === 'date') {
+                return `<div class="param-group">
+                    <label>${p.label}</label>
+                    <input id="p_${p.key}" type="date" value="${yStr}" onchange="updateUrl()">
+                </div>`;
+            } else {
+                return `<div class="param-group">
+                    <label>${p.label}</label>
+                    <input id="p_${p.key}" type="${p.type || 'text'}" value="${p.default || ''}" onchange="updateUrl()">
+                </div>`;
+            }
+        }).join('');
+    }
+
+    updateUrl();
+}
+
+function updateUrl() {
+    if (!currentEndpoint) return;
+    let url = currentEndpoint.path;
+    for (const p of currentEndpoint.params) {
+        const el = document.getElementById('p_' + p.key);
+        if (el) url = url.replace('{' + p.key + '}', el.value);
+    }
+    document.getElementById('reqUrl').value = url;
+}
+
+// =====================================================================
+// Auth
+// =====================================================================
+function toggleAuthFields() {
+    const mode = document.getElementById('cfgAuthMode').value;
+    document.getElementById('authApiKey').style.display = mode === 'apikey' ? 'block' : 'none';
+    document.getElementById('authJwt').style.display = mode === 'jwt' ? 'block' : 'none';
+}
+
+function getHeaders() {
+    const mode = document.getElementById('cfgAuthMode').value;
+    const h = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
+    if (mode === 'apikey') {
+        h['X-Api-Key'] = document.getElementById('cfgApiKey').value;
+    } else {
+        const token = document.getElementById('cfgToken').value;
+        if (token) h['Authorization'] = 'Bearer ' + token;
+    }
+    return h;
+}
+
+async function doLogin() {
+    const server = document.getElementById('cfgServer').value.replace(/\/+$/, '');
+    const body = {
+        username: document.getElementById('cfgUser').value,
+        password: document.getElementById('cfgPass').value
+    };
+    try {
+        const r = await fetch(server + '/api/auth/login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (r.ok && data.token) {
+            document.getElementById('cfgToken').value = data.token;
+            setConnected(true, `JWT OK — expira ${data.expira}`);
+            alert('Login exitoso. Token guardado.');
+        } else {
+            alert('Error: ' + (data.error || JSON.stringify(data)));
+        }
+    } catch (e) {
+        alert('Error de conexión: ' + e.message);
+    }
+}
+
+// =====================================================================
+// Connection Test
+// =====================================================================
+async function testConnection() {
+    const server = document.getElementById('cfgServer').value.replace(/\/+$/, '');
+    try {
+        const r = await fetch(server + '/api/get/dam/all', { headers: getHeaders() });
+        if (r.ok) {
+            const data = await r.json();
+            setConnected(true, `Conectado — ${data.length} presas`);
+        } else {
+            setConnected(false, `HTTP ${r.status}`);
+        }
+    } catch (e) {
+        setConnected(false, e.message);
+    }
+}
+
+function setConnected(ok, msg) {
+    document.getElementById('statusDot').className = 'status-dot' + (ok ? ' connected' : '');
+    document.getElementById('statusText').textContent = msg || (ok ? 'Conectado' : 'Desconectado');
+}
+
+// =====================================================================
+// Send Request
+// =====================================================================
+async function sendRequest() {
+    if (!currentEndpoint) { alert('Seleccione un endpoint primero'); return; }
+    const server = document.getElementById('cfgServer').value.replace(/\/+$/, '');
+    const url = document.getElementById('reqUrl').value;
+    const fullUrl = server + url;
+
+    const btn = document.getElementById('btnSend');
+    btn.textContent = '⏳';
+    btn.disabled = true;
+
+    const start = performance.now();
+    try {
+        let r;
+        if (currentEndpoint.isLogin) {
+            r = await fetch(fullUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                    username: document.getElementById('p_username').value,
+                    password: document.getElementById('p_password').value
+                })
+            });
+        } else {
+            r = await fetch(fullUrl, { headers: getHeaders() });
+        }
+
+        const elapsed = Math.round(performance.now() - start);
+        const data = await r.json();
+
+        // If login, save token
+        if (currentEndpoint.isLogin && r.ok && data.token) {
+            document.getElementById('cfgToken').value = data.token;
+            document.getElementById('cfgAuthMode').value = 'jwt';
+            toggleAuthFields();
+            setConnected(true, `JWT OK — ${data.usuario}`);
+        }
+
+        if (r.ok) setConnected(true);
+
+        showResponse(r.status, data, elapsed, currentEndpoint);
+        addHistory(currentEndpoint.method, url, r.status, elapsed);
+    } catch (e) {
+        showError(e.message);
+        setConnected(false, e.message);
+    } finally {
+        btn.textContent = 'Enviar';
+        btn.disabled = false;
+    }
+}
+
+// =====================================================================
+// Render Response
+// =====================================================================
+function showResponse(status, data, elapsed, ep) {
+    // Header
+    const hdr = document.getElementById('respHeader');
+    hdr.style.display = 'flex';
+    const statusEl = document.getElementById('respStatus');
+    statusEl.textContent = status;
+    statusEl.className = 'response-status s' + status;
+
+    const isArray = Array.isArray(data);
+    const count = isArray ? data.length : 1;
+    document.getElementById('respCount').textContent = count + (count === 1 ? ' registro' : ' registros');
+    document.getElementById('respTime').textContent = elapsed + ' ms';
+
+    // JSON tab
+    document.getElementById('jsonContainer').textContent = JSON.stringify(data, null, 2);
+
+    // Table tab
+    const container = document.getElementById('tableContainer');
+    if (isArray && data.length > 0 && ep.columns) {
+        const cols = ep.columns;
+        const thRow = cols.map(c => `<th>${c}</th>`).join('');
+        const rows = data.map(r => {
+            const tds = cols.map(c => {
+                let v = r[c];
+                if (v === null || v === undefined) return '<td style="color:#bdc3c7">—</td>';
+                if (typeof v === 'number') v = Number.isInteger(v) ? v : v.toFixed(2);
+                return `<td>${v}</td>`;
+            }).join('');
+            return `<tr>${tds}</tr>`;
+        }).join('');
+        container.innerHTML = `<table class="response-table"><thead><tr>${thRow}</tr></thead><tbody>${rows}</tbody></table>`;
+    } else if (isArray && data.length > 0) {
+        // Auto-detect columns
+        const cols = Object.keys(data[0]);
+        const thRow = cols.map(c => `<th>${c}</th>`).join('');
+        const rows = data.map(r => {
+            const tds = cols.map(c => {
+                let v = r[c];
+                if (v === null || v === undefined) return '<td style="color:#bdc3c7">—</td>';
+                if (typeof v === 'number') v = Number.isInteger(v) ? v : v.toFixed(2);
+                return `<td>${v}</td>`;
+            }).join('');
+            return `<tr>${tds}</tr>`;
+        }).join('');
+        container.innerHTML = `<table class="response-table"><thead><tr>${thRow}</tr></thead><tbody>${rows}</tbody></table>`;
+    } else if (!isArray && typeof data === 'object') {
+        // Single object → key-value table
+        const rows = Object.entries(data).map(([k, v]) => {
+            if (v === null) v = '—';
+            if (typeof v === 'object') v = JSON.stringify(v);
+            return `<tr><td style="font-weight:600;width:200px">${k}</td><td>${v}</td></tr>`;
+        }).join('');
+        container.innerHTML = `<table class="response-table"><tbody>${rows}</tbody></table>`;
+    } else {
+        container.innerHTML = `<div class="empty-state"><p>📭</p>Sin datos</div>`;
+    }
+}
+
+function showError(msg) {
+    document.getElementById('respHeader').style.display = 'flex';
+    document.getElementById('respStatus').textContent = 'ERROR';
+    document.getElementById('respStatus').className = 'response-status s400';
+    document.getElementById('respCount').textContent = '';
+    document.getElementById('respTime').textContent = '';
+    document.getElementById('tableContainer').innerHTML =
+        `<div class="empty-state" style="color:var(--danger)"><p>⚠️</p>${msg}</div>`;
+    document.getElementById('jsonContainer').textContent = msg;
+}
+
+// =====================================================================
+// Tabs
+// =====================================================================
+function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('#respTabs .tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    if (tab === 'table') {
+        document.querySelector('#respTabs .tab:first-child').classList.add('active');
+        document.getElementById('tabTable').classList.add('active');
+    } else {
+        document.querySelector('#respTabs .tab:last-child').classList.add('active');
+        document.getElementById('tabJson').classList.add('active');
+    }
+}
+
+// =====================================================================
+// History
+// =====================================================================
+function addHistory(method, url, status, time) {
+    history.unshift({ method, url, status, time, ts: new Date().toLocaleTimeString() });
+    if (history.length > 20) history.pop();
+    const el = document.getElementById('historyList');
+    el.innerHTML = history.map((h, i) => `
+        <div class="history-item" onclick="replayHistory(${i})">
+            <span><span class="ep-method ${h.method}" style="font-size:.65rem">${h.method}</span> ${h.url.substring(0,40)}${h.url.length>40?'...':''}</span>
+            <span class="response-status s${h.status}" style="font-size:.75rem">${h.status} · ${h.time}ms</span>
+        </div>
+    `).join('');
+}
+
+function replayHistory(idx) {
+    const h = history[idx];
+    // Find matching endpoint
+    const ep = ENDPOINTS.find(e => h.url.startsWith(e.path.split('{')[0]));
+    if (ep) selectEndpoint(ep.id);
+    document.getElementById('reqUrl').value = h.url;
+}
+</script>
+
+</body>
+</html>
