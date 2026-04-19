@@ -23,6 +23,14 @@ from datetime import timedelta
 import pyodbc
 import collections
 import json as json_module
+import sys
+import io
+# Forzar salida en UTF-8 para evitar UnicodeEncodeError en consola Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from flask import Flask, jsonify, request, Response
 
 # ==================== LOG RING BUFFER ====================
@@ -1672,12 +1680,12 @@ def load_estaciones_from_sql():
         cursor = conn.cursor()
         
         query = """
-        SELECT [IdSatelital], [Minuto], [Nombre], [IdAsignado], [RangoTransmision]
+        SELECT [IdSatelital], [Minuto], [Nombre], [IdAsignado], [RangoTransmision], [Decodificador]
         FROM [dbo].[NV_GoesSGD]
         WHERE [Minuto] IS NOT NULL 
           AND [Minuto] BETWEEN 0 AND 59
           AND [IdEstacion] IS NOT NULL
-          AND [Decodificador] = 'GS300'          
+          AND [Decodificador] IN ('GS300', 'OTTBinario')
         """
         cursor.execute(query)
         rows = cursor.fetchall()
@@ -1688,6 +1696,7 @@ def load_estaciones_from_sql():
             minuto = int(row.Minuto)
             nombre = str(row.Nombre or "Sin nombre").strip()
             id_asignado = str(row.IdAsignado or "").strip()
+            decoder = str(row.Decodificador or "GS300").strip()
             
             # Parsear RangoTransmision de HH:MM:SS a minutos totales
             rango_transmision = 60  # Default: 1 hora
@@ -1705,11 +1714,12 @@ def load_estaciones_from_sql():
                 "minuto": minuto,
                 "nombre": nombre,
                 "id_asignado": id_asignado,
-                "rango_transmision": rango_transmision
+                "rango_transmision": rango_transmision,
+                "decoder": decoder
             }
         
         conn.close()
-        print(f"[DB] {len(estaciones)} estaciones GS300 cargadas")
+        print(f"[DB] {len(estaciones)} estaciones (GS300/OTTBinario) cargadas")
         return estaciones
 
     except Exception as e:
@@ -2888,7 +2898,7 @@ def log_to_pg(dcp_id: str, success: bool, timestamp: datetime.datetime | None, h
         conn.commit()
         cur.close()
         
-        print(f"[LOG] {dcp_id} {'✅' if success else '❌'}")
+        print(f"[LOG] {dcp_id} {'OK' if success else 'FAIL'}")
         
     except Exception as e:
         print(f"[ERROR LOG] {e}")
@@ -2980,6 +2990,99 @@ def ConvertFrom6BitsSutron(binaryDataMsg):
         return result
     except Exception as e:
         print(f"[DECODE] Error: {e}")
+        return []
+
+
+def ConvertFrom6BitsTo8Bits(binaryDataMsg):
+    """
+    Convierte datos pseudo-binarios de 6 bits a bytes estándar de 8 bits.
+    Replica la lógica de Manager (prepending 6-bit chunks and reading from end).
+    """
+    try:
+        dataMsgIn6Bits = binaryDataMsg.decode('ascii')
+        valueIn2Base = ""
+        sub = 64
+        for by in dataMsgIn6Bits:
+            by_val = ord(by)
+            val = by_val if by_val < 64 else by_val - sub
+            # Convertir a 6 bits y PREPEND (como en el C# Insert(0, r))
+            r = bin(val)[2:].zfill(6)
+            valueIn2Base = r + valueIn2Base
+        
+        res_bytes = bytearray()
+        # Leer 8 bits desde el FINAL (como en el C# Substring(Length-8, 8))
+        while len(valueIn2Base) > 0:
+            take = 8 if len(valueIn2Base) >= 8 else len(valueIn2Base)
+            base8 = valueIn2Base[-take:]
+            valueIn2Base = valueIn2Base[:-take]
+            res_bytes.append(int(base8, 2))
+            
+        return bytes(res_bytes)
+    except Exception as e:
+        print(f"[DECODE OTT] Error binario: {e}")
+        return b""
+
+
+def IsOttFlag(data_value):
+    """
+    Verifica si un valor es una bandera de error de OTT (<-32700).
+    """
+    return data_value < -32700
+
+
+def decode_ott_binary(payload, dt_transmition_time):
+    """
+    Decodifica el payload binario de OTT.
+    Estructura:
+    - Skip 5 bytes iniciales.
+    - ConvertFrom6BitsTo8Bits.
+    - 4 bytes: TransmitionTime (segundos desde 2000-01-01).
+    - Bloques: [2b interval][2b samples][samples * 2b value]
+    """
+    try:
+        # 1. Skip 5 bytes y convertir
+        raw_to_convert = payload[5:]
+        data_8bits = ConvertFrom6BitsTo8Bits(raw_to_convert)
+        if len(data_8bits) < 4:
+            return []
+
+        # 2. Leer TransmitionTime (4 bytes, Little Endian Int32)
+        base_time_sec = struct.unpack('<i', data_8bits[0:4])[0]
+        # Fecha base OTT: 2000-01-01
+        dt_base = datetime.datetime(2000, 1, 1)
+        dt_msg = dt_base + datetime.timedelta(seconds=base_time_sec)
+        
+        # Usamos dt_msg como referencia de tiempo
+        print(f"[DECODE OTT] Msg Time: {dt_msg}")
+
+        result_values = []
+        pos = 4
+        while pos + 4 <= len(data_8bits):
+            interval = struct.unpack('<h', data_8bits[pos:pos+2])[0]
+            samples = struct.unpack('<h', data_8bits[pos+2:pos+4])[0]
+            pos += 4
+            
+            if interval < 0 or samples < 0 or interval > 1440 or samples > 1000:
+                break
+            
+            # Nota: En mycloud_all_timescale, 'valores' es una lista plana de Int32
+            # que luego se mapea por posición en insertar_datos_mapeados.
+            # Para mantener compatibilidad, simplemente extendemos la lista.
+            for i in range(samples):
+                if pos + 2 > len(data_8bits):
+                    break
+                val = struct.unpack('<h', data_8bits[pos:pos+2])[0]
+                pos += 2
+                # En el Manager, se guarda el timestamp calculado.
+                # Aquí, insertar_datos_mapeados recalcula el timestamp basándose en el orden y periodo.
+                # IMPORTANTE: Aseguramos que el orden sea cronológico inverso (el más reciente primero)
+                # o el que espera asignar_posiciones_sensores.
+                result_values.append(val)
+                
+        return result_values
+
+    except Exception as e:
+        print(f"[DECODE OTT] Error: {e}")
         return []
 
 # ==================== DDS PROTOCOL (SIN CAMBIOS) ====================
@@ -3119,11 +3222,21 @@ def fetch_from_host(host: str, dcp_id: str, nombre: str, since: str = "now - 2 h
                 valores = []
                 if payload:
                     try:
-                        payload_clean = payload.decode('ascii')[4:].encode('ascii')
-                        valores = ConvertFrom6BitsSutron(payload_clean)
-                        id_asignado = ESTACIONES[dcp_id].get("id_asignado", "")
+                        # Identificar decodificador
+                        est_data = ESTACIONES.get(dcp_id, {})
+                        decoder_type = est_data.get("decoder", "GS300")
+                        id_asignado = est_data.get("id_asignado", "")
+
+                        if decoder_type == 'OTTBinario':
+                            print(f"[DECODE] Usando decodificador OTTBinario para {dcp_id}")
+                            valores = decode_ott_binary(payload, meta["timestamp"])
+                        else:
+                            # Default: GS300 / Sutron 6-bit
+                            payload_clean = payload.decode('ascii')[4:].encode('ascii')
+                            valores = ConvertFrom6BitsSutron(payload_clean)
                         
-                        insertar_datos_mapeados(dcp_id, id_asignado, meta["timestamp"], valores)
+                        if valores:
+                            insertar_datos_mapeados(dcp_id, id_asignado, meta["timestamp"], valores)
 
                         sensores_estacion = SENSORES.get(id_asignado, [])
                         
@@ -3264,7 +3377,7 @@ def _ejecutar_reintento(dcp_id):
 
         # Rotar hosts: usar orden invertido en reintentos impares para diversificar
         hosts_orden = list(reversed(HOSTS)) if intento % 2 == 0 else HOSTS
-        print(f"[RETRY {intento}/{MAX_RETRIES}] {dcp_id} | {nombre} → intentando ({hosts_orden[0]}...)")
+        print(f"[RETRY {intento}/{MAX_RETRIES}] {dcp_id} | {nombre} -> intentando ({hosts_orden[0]}...)")
 
         success = False
         data = ESTACIONES[dcp_id]
@@ -3274,7 +3387,7 @@ def _ejecutar_reintento(dcp_id):
                 break
 
         if success:
-            print(f"[RETRY OK] {dcp_id} | {nombre} → datos recuperados en intento {intento}")
+            print(f"[RETRY OK] {dcp_id} | {nombre} -> datos recuperados en intento {intento}")
             _retry_state.pop(dcp_id, None)
         else:
             log_to_pg(dcp_id, False, None, None)
@@ -3402,12 +3515,12 @@ def recuperacion_automatica():
             print(f"[AUTO-RECOVER] Solo {retrasos} estaciones con retraso (se recuperarán en su próxima TX).")
             return
 
-        print(f"[AUTO-RECOVER] {len(estaciones_a_recuperar)} estaciones con huecos → recuperando...")
+        print(f"[AUTO-RECOVER] {len(estaciones_a_recuperar)} estaciones con huecos -> recuperando...")
         for est in estaciones_a_recuperar:
             max_h = max(h["duracion_h"] for h in est["huecos"])
             recover_h = min(int(max_h + 2), recover_hours)
             since = f"now - {recover_h} hours"
-            print(f"  [FIX] {est['dcp_id']} | {est['nombre']} → recover {recover_h}h "
+            print(f"  [FIX] {est['dcp_id']} | {est['nombre']} -> recover {recover_h}h "
                   f"({len(est['huecos'])} huecos)")
             try:
                 fetch_messages_for_dcp(est["dcp_id"], since=since, multi=True)
@@ -3429,10 +3542,10 @@ def _programar_estacion(dcp_id, data):
 
     if carry:
         schedule.every().hour.at(":00").do(lambda did=dcp_id: fetch_messages_for_dcp_wrapper(did)).tag(f"dcp_{dcp_id}")
-        print(f"[SCHED+] {dcp_id} | {nombre} → :00 (próxima hora)")
+        print(f"[SCHED+] {dcp_id} | {nombre} -> :00 (próxima hora)")
     else:
         schedule.every().hour.at(f":{minuto_ejec:02d}").do(lambda did=dcp_id: fetch_messages_for_dcp_wrapper(did)).tag(f"dcp_{dcp_id}")
-        print(f"[SCHED+] {dcp_id} | {nombre} → :{minuto_ejec:02d}")
+        print(f"[SCHED+] {dcp_id} | {nombre} -> :{minuto_ejec:02d}")
 
 def recargar_configuracion():
     """Recarga estaciones y sensores desde SQL Server.
@@ -3530,9 +3643,9 @@ def _ensure_static_assets():
             try:
                 print(f"[STATIC] Descargando {filename}...")
                 urllib.request.urlretrieve(url, filepath)
-                print(f"[STATIC] ✓ {filename} descargado")
+                print(f"[STATIC] OK: {filename} descargado")
             except Exception as e:
-                print(f"[STATIC] ✗ Error descargando {filename}: {e}")
+                print(f"[STATIC] ERR: Error descargando {filename}: {e}")
 
 # ==================== PANEL DE MONITOREO WEB ====================
 _MONITOR_HTML = r'''<!DOCTYPE html>
@@ -4552,7 +4665,7 @@ if __name__ == "__main__":
             for est in estaciones_con_huecos:
                 print(f"\n  {est['dcp_id']} | {est['nombre']} (TX cada {est['rango_tx']} min)")
                 for h in est["huecos"]:
-                    print(f"    [{h['tipo']}] {h['desde']} → {h['hasta']} ({h['duracion_h']}h)")
+                    print(f"    [{h['tipo']}] {h['desde']} -> {h['hasta']} ({h['duracion_h']}h)")
 
             if auto_fix:
                 print(f"\n[GAPS] Recuperando datos faltantes...")
@@ -4560,7 +4673,7 @@ if __name__ == "__main__":
                     max_h = max(h["duracion_h"] for h in est["huecos"])
                     recover_hours = min(int(max_h + 2), horas)
                     since = f"now - {recover_hours} hours"
-                    print(f"  [FIX] {est['dcp_id']} | {est['nombre']} → recover {recover_hours}h")
+                    print(f"  [FIX] {est['dcp_id']} | {est['nombre']} -> recover {recover_hours}h")
                     fetch_messages_for_dcp(est["dcp_id"], since=since, multi=True)
                 print("[GAPS] Recuperación finalizada.")
             else:
