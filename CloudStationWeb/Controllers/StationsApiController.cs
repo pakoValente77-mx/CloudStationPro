@@ -152,12 +152,12 @@ namespace CloudStationWeb.Controllers
             return Ok(stations);
         }
 
-        /// <summary>GET /api/get/station/conventional/all — Estaciones sin telemetría GOES (convencionales).</summary>
+        /// <summary>GET /api/get/station/conventional/all — Estaciones convencionales cargadas desde Excel BHG.</summary>
         [HttpGet("api/get/station/conventional/all")]
         public async Task<IActionResult> GetConventionalStations()
         {
             if (!ValidateAuth()) return Unauthorized();
-            var stations = await GetDbStationsAsync(goesFilter: false);
+            var stations = await GetBhgConventionalStationsAsync();
             return Ok(stations);
         }
 
@@ -911,6 +911,36 @@ namespace CloudStationWeb.Controllers
             return rows.Select(r => MapDbStation(r)).ToList();
         }
 
+        /// <summary>
+        /// Consulta estaciones convencionales reales desde la carga BHG.
+        /// Estas estaciones nacen del Excel BHG y se almacenan en TimescaleDB.
+        /// </summary>
+        private async Task<List<object>> GetBhgConventionalStationsAsync()
+        {
+            using var db = new NpgsqlConnection(_pgConn);
+            var rows = await db.QueryAsync<dynamic>(@"
+                WITH latest_station AS (
+                    SELECT estacion, subcuenca, MAX(ts) AS last_ts
+                    FROM bhg_estacion_diario
+                    WHERE estacion IS NOT NULL AND BTRIM(estacion) <> ''
+                    GROUP BY estacion, subcuenca
+                ),
+                ranked_station AS (
+                    SELECT estacion, subcuenca, last_ts,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY estacion
+                               ORDER BY last_ts DESC, subcuenca NULLS LAST
+                           ) AS rn
+                    FROM latest_station
+                )
+                SELECT estacion, subcuenca, last_ts
+                FROM ranked_station
+                WHERE rn = 1
+                ORDER BY subcuenca NULLS LAST, estacion");
+
+            return rows.Select(r => MapBhgStation(r)).ToList();
+        }
+
         private static object MapDbStation(dynamic r) => new
         {
             id = (string?)(r.IdAsignado),
@@ -927,6 +957,35 @@ namespace CloudStationWeb.Controllers
             radio = (bool)(r.RADIO ?? false),
             type = (bool)(r.GOES ?? false) ? "automatic" : "conventional"
         };
+
+        private static object MapBhgStation(dynamic r)
+        {
+            string stationName = (string)r.estacion;
+            string? subBasin = (string?)r.subcuenca;
+            string lastReportDate = r.last_ts switch
+            {
+                DateTime dt => dt.ToString("yyyy-MM-dd"),
+                DateOnly d => d.ToString("yyyy-MM-dd"),
+                _ => Convert.ToString(r.last_ts) ?? ""
+            };
+
+            return new
+            {
+                id = stationName,
+                assignedId = stationName,
+                name = stationName,
+                clazz = "C",
+                type = "conventional",
+                centralId = (int?)null,
+                subBasinId = subBasin,
+                subBasinName = subBasin,
+                latitude = (double?)null,
+                longitude = (double?)null,
+                dcpId = (string?)null,
+                source = "BHG",
+                lastReportDate
+            };
+        }
 
         private bool ValidateAuth()
         {

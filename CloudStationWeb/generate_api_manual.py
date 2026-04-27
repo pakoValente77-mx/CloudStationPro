@@ -212,7 +212,7 @@ def main():
     # 2.3 station/conventional/all
     pdf.check_space(50)
     pdf.titulo_endpoint("GET", "/api/get/station/conventional/all")
-    pdf.parrafo("Retorna solo las estaciones convencionales (sin GOES). Total: 14 estaciones.")
+    pdf.parrafo("Retorna las estaciones convencionales cargadas desde el Excel BHG.")
     pdf.label("Ejemplo:")
     pdf.code_block(build_curl("GET", "/api/get/station/conventional/all"))
 

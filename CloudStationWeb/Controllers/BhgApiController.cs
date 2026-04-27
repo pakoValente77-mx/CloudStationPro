@@ -53,22 +53,25 @@ namespace CloudStationWeb.Controllers
                     await file.CopyToAsync(stream);
                 }
 
-                var (presaRows, estRows, error) = await _service.StoreFromUploadAsync(tempPath);
+                var result = await _service.ParseAndStoreAsync(tempPath, file.FileName);
 
-                if (error != null)
+                if (result.Errors.Any())
                 {
-                    _logger.LogWarning("BHG API: error procesando '{File}': {Error}", file.FileName, error);
-                    return BadRequest(new { success = false, fileName = file.FileName, error });
+                    _logger.LogWarning("BHG API: error procesando '{File}': {Error}", file.FileName, string.Join("; ", result.Errors));
+                    return BadRequest(new { success = false, fileName = file.FileName, errors = result.Errors });
                 }
 
-                _logger.LogInformation("BHG API: archivo '{File}' copiado al inbox para procesamiento",
-                    file.FileName);
+                _logger.LogInformation("BHG API: archivo '{File}' importado ({PresaRows} presas, {EstRows} estaciones)",
+                    file.FileName, result.PresaRows, result.EstacionRows);
 
                 return Ok(new
                 {
                     success = true,
                     fileName = file.FileName,
-                    message = "Archivo recibido. Será procesado por el servicio de importación automática."
+                    date = result.Fecha.ToString("yyyy-MM-dd"),
+                    presaRows = result.PresaRows,
+                    estacionRows = result.EstacionRows,
+                    message = "Archivo BHG procesado e importado correctamente."
                 });
             }
             catch (Exception ex)

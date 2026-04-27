@@ -14,15 +14,18 @@ namespace CloudStationWeb.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly FunVasosService _funVasosService;
+        private readonly BhgService _bhgService;
 
         public DocumentsController(
             ApplicationDbContext context,
             UserManager<ApplicationUser> userManager,
-            FunVasosService funVasosService)
+            FunVasosService funVasosService,
+            BhgService bhgService)
         {
             _context = context;
             _userManager = userManager;
             _funVasosService = funVasosService;
+            _bhgService = bhgService;
         }
 
         // GET: /Documents
@@ -291,6 +294,28 @@ namespace CloudStationWeb.Controllers
                 return RedirectToAction("Index");
             }
 
+            // --- Auto-parse BHG from document repository upload ---
+            if (product.Code == "boletin")
+            {
+                try
+                {
+                    var result = await _bhgService.ParseAndStoreAsync(fullPath, storedFileName);
+                    if (result.Errors.Any())
+                    {
+                        TempData["Warning"] = $"Archivo subido como {storedFileName}, pero con errores al procesar BHG: {string.Join("; ", result.Errors)}";
+                    }
+                    else
+                    {
+                        TempData["Success"] = $"Archivo subido como {storedFileName}. BHG importado: {result.PresaRows} registros de presas y {result.EstacionRows} estaciones ({result.Fecha:dd/MM/yyyy}).";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TempData["Warning"] = $"Archivo subido como {storedFileName}, pero falló la importación BHG: {ex.Message}";
+                }
+                return RedirectToAction("Index");
+            }
+
             TempData["Success"] = $"Archivo subido exitosamente como {storedFileName}.";
             return RedirectToAction("Index");
         }
@@ -440,6 +465,28 @@ namespace CloudStationWeb.Controllers
                 catch (Exception ex)
                 {
                     TempData["Warning"] = $"Archivo histórico subido, pero falló el vaciado: {ex.Message}";
+                }
+                return RedirectToAction("History", new { id = productId, year = reportDate.Year, month = reportDate.Month });
+            }
+
+            // --- Auto-parse BHG from historical repository upload ---
+            if (product.Code == "boletin")
+            {
+                try
+                {
+                    var result = await _bhgService.ParseAndStoreAsync(fullPath, entry.StoredFileName);
+                    if (result.Errors.Any())
+                    {
+                        TempData["Warning"] = $"Reporte histórico '{entry.StoredFileName}' subido, pero con errores al procesar BHG: {string.Join("; ", result.Errors)}";
+                    }
+                    else
+                    {
+                        TempData["Success"] = $"Reporte histórico '{entry.StoredFileName}' subido. BHG importado: {result.PresaRows} registros de presas y {result.EstacionRows} estaciones ({result.Fecha:dd/MM/yyyy}).";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TempData["Warning"] = $"Reporte histórico '{entry.StoredFileName}' subido, pero falló la importación BHG: {ex.Message}";
                 }
                 return RedirectToAction("History", new { id = productId, year = reportDate.Year, month = reportDate.Month });
             }
