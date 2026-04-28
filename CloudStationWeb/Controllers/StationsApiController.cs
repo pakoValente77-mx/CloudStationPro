@@ -1,12 +1,9 @@
 using System.Data;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using CloudStationWeb.Services;
 using Dapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 
 namespace CloudStationWeb.Controllers
@@ -39,24 +36,19 @@ namespace CloudStationWeb.Controllers
     /// GET /v1/record/forecast-date/{date}/sub-basin-id/{subBasinId}/dates/{start}/{end}
     /// </summary>
     [ApiController]
+    // FIX RECOMENDACIÓN 7: [Authorize] declarativo con política que acepta X-Api-Key, JWT Bearer o Cookie de sesión.
+    // Reemplaza el método ValidateAuth() manual que era propenso a olvidos en nuevos endpoints.
+    [Authorize(Policy = "ApiAccess")]
     public class StationsApiController : ControllerBase
     {
         private readonly string _sqlServerConn;
         private readonly string _pgConn;
-        private readonly string _apiKey;
-        private readonly string _jwtKey;
-        private readonly string _jwtIssuer;
-        private readonly string _jwtAudience;
         private readonly ILogger<StationsApiController> _logger;
 
         public StationsApiController(IConfiguration config, ILogger<StationsApiController> logger)
         {
             _sqlServerConn = config.GetConnectionString("SqlServer") ?? "";
             _pgConn = config.GetConnectionString("PostgreSQL") ?? "";
-            _apiKey = config["ImageStore:ApiKey"] ?? "pih-default-key-change-me";
-            _jwtKey = config["Jwt:Key"] ?? "";
-            _jwtIssuer = config["Jwt:Issuer"] ?? "CloudStationWeb";
-            _jwtAudience = config["Jwt:Audience"] ?? "CloudStationAPI";
             _logger = logger;
         }
 
@@ -147,7 +139,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/all")]
         public async Task<IActionResult> GetAllStations()
         {
-            if (!ValidateAuth()) return Unauthorized();
             var stations = await GetDbStationsAsync();
             return Ok(stations);
         }
@@ -156,7 +147,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/conventional/all")]
         public async Task<IActionResult> GetConventionalStations()
         {
-            if (!ValidateAuth()) return Unauthorized();
             var stations = await GetBhgConventionalStationsAsync();
             return Ok(stations);
         }
@@ -165,7 +155,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/automatic/all")]
         public async Task<IActionResult> GetAutomaticStations()
         {
-            if (!ValidateAuth()) return Unauthorized();
             var stations = await GetDbStationsAsync(goesFilter: true);
             return Ok(stations);
         }
@@ -174,7 +163,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/by/id/{stationId}")]
         public async Task<IActionResult> GetStationById(string stationId)
         {
-            if (!ValidateAuth()) return Unauthorized();
             using var db = new SqlConnection(_sqlServerConn);
             var row = await db.QueryFirstOrDefaultAsync<dynamic>(@"
                 SELECT e.Id AS DatabaseId, e.IdAsignado, e.Nombre, e.Latitud, e.Longitud,
@@ -197,7 +185,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/by/central-id/{centralId}/class/{clazz}/type/{stationType}")]
         public async Task<IActionResult> GetStationByCentralClassType(int centralId, char clazz, char stationType)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             // Buscar estaciones de presa por centralId en SQL Server
             using var db = new SqlConnection(_sqlServerConn);
@@ -226,7 +213,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station/hydro-model/by/sub-basin/{subBasinId}")]
         public async Task<IActionResult> GetHydroModelStations(int subBasinId)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             using var db = new SqlConnection(_sqlServerConn);
             var rows = await db.QueryAsync<dynamic>(@"
@@ -250,7 +236,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam/all")]
         public async Task<IActionResult> GetAllDams()
         {
-            if (!ValidateAuth()) return Unauthorized();
             var dams = await LoadDamsAsync();
             return Ok(dams.Values.Select(MapDam));
         }
@@ -261,7 +246,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam/by/id/{damId}")]
         public async Task<IActionResult> GetDamById(int damId)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var dams = await LoadDamsAsync();
             if (!dams.TryGetValue(damId, out var dam)) return NotFound();
             return Ok(MapDam(dam));
@@ -273,7 +257,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam/by/central/{centralId}")]
         public async Task<IActionResult> GetDamByCentral(int centralId)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var dams = await LoadDamsAsync();
             var dam = dams.Values.FirstOrDefault(d => d.CentralId == centralId);
             if (dam == null) return NotFound();
@@ -291,7 +274,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/sub-basin/by/id/{id}")]
         public async Task<IActionResult> GetSubBasinById(int id)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var subBasins = await LoadSubBasinsAsync();
             if (!subBasins.TryGetValue(id, out var sb)) return NotFound();
 
@@ -332,7 +314,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/central/by/id/{id}")]
         public async Task<IActionResult> GetCentralById(int id)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var centrales = await LoadCentralesAsync();
             if (!centrales.TryGetValue(id, out var c)) return NotFound();
 
@@ -366,7 +347,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/elevation-capacity/by/central/{centralId}/elevation/{elevation}")]
         public async Task<IActionResult> GetElevationCapacityByElevation(int centralId, float elevation)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             var damName = await GetDamNameByCentralAsync(centralId);
             if (damName == null) return NotFound();
@@ -392,7 +372,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/elevation-capacity/by/central/{centralId}/capacity/{capacity}")]
         public async Task<IActionResult> GetElevationCapacityByCapacity(int centralId, double capacity)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             var damName = await GetDamNameByCentralAsync(centralId);
             if (damName == null) return NotFound();
@@ -422,7 +401,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station-report/records/by/station-id/{stationId}/date/{dateValue}")]
         public async Task<IActionResult> GetStationReportAllHours(string stationId, string dateValue)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             // Try to map stationId as integer centralId for hydro-model presas
             int centralId = 0;
@@ -469,7 +447,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/station-report/records/by/station/{stationId}/date/{dateValue}/hour/{hour}")]
         public async Task<IActionResult> GetStationReportRecord(int stationId, string dateValue, int hour)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             var presaName = await GetPresaNameByCentralAsync(stationId);
             if (presaName == null) return NotFound();
@@ -511,7 +488,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam-behavior/central-id/{centralId}/date/{dateValue}")]
         public async Task<IActionResult> GetDamBehavior(int centralId, string dateValue)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var presaName = await GetPresaNameByCentralAsync(centralId);
             if (presaName == null) return NotFound();
             if (!DateTime.TryParse(dateValue, out var date))
@@ -562,7 +538,6 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> GetDamBehaviorAlt(string dateValue, int centralId)
         {
             // FIX CVE-M3: este alias también debe validar autenticación
-            if (!ValidateAuth()) return Unauthorized();
             return await GetDamBehavior(centralId, dateValue);
         }
 
@@ -573,7 +548,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam-behavior/primary-flow-spending/by/central-id/{centralId}/date/{dateValue}/hour/{hour}")]
         public async Task<IActionResult> GetPrimaryFlowSpending(int centralId, string dateValue, int hour)
         {
-            if (!ValidateAuth()) return Unauthorized();
             var presaName = await GetPresaNameByCentralAsync(centralId);
             if (presaName == null) return NotFound();
             if (!DateTime.TryParse(dateValue, out var date))
@@ -601,7 +575,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("automatic-station/api/get/sensor/by/station-id/{stationId}")]
         public async Task<IActionResult> GetSensorsByStationId(string stationId)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             // Resolve station from SQL Server to get DCP ID
             using var sqlDb = new SqlConnection(_sqlServerConn);
@@ -649,7 +622,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("automatic-station/api/get/sensor-value/by/assigned-id/{assignedId}/sensor-number/{sensorNumber}/date/{dateValue}/hour/{hour}")]
         public async Task<IActionResult> GetSensorValue(string assignedId, int sensorNumber, string dateValue, int hour)
         {
-            if (!ValidateAuth()) return Unauthorized();
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Formato de fecha inválido. Use yyyy-MM-dd" });
 
@@ -701,7 +673,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/accumulative-rain/by/id/{stationId}/date/{dateValue}/hour/{hour}")]
         public async Task<IActionResult> GetAccumRainById(string stationId, string dateValue, int hour)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
@@ -723,7 +694,6 @@ namespace CloudStationWeb.Controllers
         public async Task<IActionResult> GetAccumRainByAssignedAndVendor(
             string assignedId, string vendorId, string dateValue, int hour)
         {
-            if (!ValidateAuth()) return Unauthorized();
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
 
@@ -741,7 +711,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("v1/forecast/last")]
         public async Task<IActionResult> GetLastForecast()
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             using var db = new NpgsqlConnection(_pgConn);
             var row = await db.QueryFirstOrDefaultAsync<dynamic>(
@@ -768,7 +737,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("v1/forecast/date/{strDate}")]
         public async Task<IActionResult> GetForecastByDate(string strDate)
         {
-            if (!ValidateAuth()) return Unauthorized();
             if (!DateTime.TryParse(strDate, out var date))
                 return BadRequest(new { error = "Invalid date" });
 
@@ -795,7 +763,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("v1/record/forecast-date/{strDate}/sub-basin-id/{subBasinId}/dates/{startIsoDate}/{endIsoDate}")]
         public async Task<IActionResult> GetRainRecords(string strDate, int subBasinId, string startIsoDate, string endIsoDate)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             if (!DateTime.TryParse(strDate, out var forecastDate))
                 return BadRequest(new { error = "Invalid forecast date" });
@@ -989,48 +956,7 @@ namespace CloudStationWeb.Controllers
             };
         }
 
-        private bool ValidateAuth()
-        {
-            // 1. API Key
-            if (Request.Headers.TryGetValue("X-Api-Key", out var key) &&
-                string.Equals(key, _apiKey, StringComparison.Ordinal))
-                return true;
-
-            // 2. Cookie/session auth
-            if (User.Identity?.IsAuthenticated == true &&
-                (User.IsInRole("ApiConsumer") || User.IsInRole("SuperAdmin") || User.IsInRole("Administrador")))
-                return true;
-
-            // 3. JWT Bearer token (manual validation — controller has no [Authorize])
-            if (Request.Headers.TryGetValue("Authorization", out var authHeader))
-            {
-                var bearer = authHeader.ToString();
-                if (bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    var token = bearer["Bearer ".Length..].Trim();
-                    try
-                    {
-                        var handler = new JwtSecurityTokenHandler();
-                        var validationParams = new TokenValidationParameters
-                        {
-                            ValidateIssuer = true,
-                            ValidIssuer = _jwtIssuer,
-                            ValidateAudience = true,
-                            ValidAudience = _jwtAudience,
-                            ValidateLifetime = true,
-                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey)),
-                            ValidateIssuerSigningKey = true
-                        };
-                        var principal = handler.ValidateToken(token, validationParams, out _);
-                        if (principal.IsInRole("ApiConsumer") || principal.IsInRole("SuperAdmin") || principal.IsInRole("Administrador"))
-                            return true;
-                    }
-                    catch { /* token inválido o expirado */ }
-                }
-            }
-
-            return false;
-        }
+        // ValidateAuth() ELIMINADO — reemplazado por [Authorize(Policy="ApiAccess")] en la clase.
 
         private static object MapDam(DamData d) => new
         {
@@ -1107,7 +1033,6 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/request-input/{dateValue}")]
         public IActionResult GetRequestInput(string dateValue)
         {
-            if (!ValidateAuth()) return Unauthorized();
             if (!DateTime.TryParse(dateValue, out var date))
                 return BadRequest(new { error = "Invalid date format" });
 
@@ -1139,7 +1064,6 @@ namespace CloudStationWeb.Controllers
         [HttpPost("api/post/concentrated/")]
         public async Task<IActionResult> PostConcentratedModel([FromBody] HydroModelRequestDto request)
         {
-            if (!ValidateAuth()) return Unauthorized();
 
             // 1. Resolve Dam from DB
             var dams = await LoadDamsAsync();

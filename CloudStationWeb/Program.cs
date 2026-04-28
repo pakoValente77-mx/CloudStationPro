@@ -78,7 +78,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-// Configure JWT Bearer authentication for API consumers (mobile, desktop, etc.)
+// ─── JWT Bearer + ApiKey authentication for API consumers (mobile, desktop, etc.) ─
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection["Key"] ?? throw new InvalidOperationException("Jwt:Key is missing in configuration");
 builder.Services.AddAuthentication()
@@ -118,7 +118,10 @@ builder.Services.AddAuthentication()
                 return Task.CompletedTask;
             }
         };
-    });
+    })
+    // FIX RECOMENDACIÓN 7: esquema nativo para X-Api-Key (reemplaza ValidateAuth() manual)
+    .AddScheme<CloudStationWeb.Services.ApiKeyAuthenticationOptions, CloudStationWeb.Services.ApiKeyAuthenticationHandler>(
+        CloudStationWeb.Services.ApiKeyAuthenticationOptions.SchemeName, _ => { });
 
 // Configure external authentication (Google & Microsoft)
 var googleSection = builder.Configuration.GetSection("Authentication:Google");
@@ -142,6 +145,19 @@ if (!string.IsNullOrEmpty(msSection["ClientId"]))
             options.ClientSecret = msSection["ClientSecret"]!;
         });
 }
+
+// Política de autorización para la API REST:
+// Acepta X-Api-Key, JWT Bearer, o Cookie de sesión con rol autorizado.
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ApiAccess", policy =>
+        policy.AddAuthenticationSchemes(
+            CloudStationWeb.Services.ApiKeyAuthenticationOptions.SchemeName,
+            JwtBearerDefaults.AuthenticationScheme,
+            "Identity.Application")
+        .RequireAuthenticatedUser()
+        .RequireRole("ApiConsumer", "SuperAdmin", "Administrador"));
+});
 
 // Add services to the container
 builder.Services.AddHttpClient();
