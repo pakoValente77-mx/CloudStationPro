@@ -250,10 +250,21 @@ using (var scope = app.Services.CreateScope())
 // ─── Pipeline de seguridad ───────────────────────────────────────────────────
 
 // Cloudflare / IIS reverse proxy: respetar headers X-Forwarded-*
+// FIX CVE-A1: KnownNetworks solo acepta proxies de red local para evitar IP spoofing
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+    // Solo confiar en loopback y red privada (ajustar si el proxy está en otra subred)
+    KnownNetworks =
+    {
+        new Microsoft.AspNetCore.HttpOverrides.IPNetwork(
+            System.Net.IPAddress.Parse("10.0.0.0"), 8),
+        new Microsoft.AspNetCore.HttpOverrides.IPNetwork(
+            System.Net.IPAddress.Parse("172.16.0.0"), 12),
+        new Microsoft.AspNetCore.HttpOverrides.IPNetwork(
+            System.Net.IPAddress.Parse("192.168.0.0"), 16)
+    }
 });
 
 // FIX CVE-A1: forzar HTTPS en todas las peticiones
@@ -311,6 +322,36 @@ app.UseRateLimiter();
 app.UseCors("ApiCors");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// FIX CVE-I1: forzar 2FA para roles SuperAdmin y Administrador
+// Si el admin no tiene 2FA habilitado, se le redirige a configurarlo
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true &&
+        (context.User.IsInRole("SuperAdmin") || context.User.IsInRole("Administrador")))
+    {
+        var path = context.Request.Path.Value ?? "";
+        var excluded2fa = new[] { "/Account/Setup2fa", "/Account/Enable2fa", "/Account/Logout",
+                                   "/Account/Login", "/Account/AccessDenied", "/api/", "/hubs/",
+                                   "/css/", "/js/", "/lib/", "/favicon" };
+        if (!excluded2fa.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            var userManager = context.RequestServices
+                .GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.GetUserAsync(context.User);
+            if (user != null)
+            {
+                var is2faEnabled = await userManager.GetTwoFactorEnabledAsync(user);
+                if (!is2faEnabled)
+                {
+                    context.Response.Redirect("/Account/Setup2fa?enforced=1");
+                    return;
+                }
+            }
+        }
+    }
+    await next();
+});
 
 // Force password change every 30 days
 app.UseMiddleware<CloudStationWeb.Services.PasswordExpiryMiddleware>();

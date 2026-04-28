@@ -25,7 +25,7 @@ namespace CloudStationWeb.Services
                 var password = smtpSection["Password"];
                 var fromEmail = smtpSection["From"] ?? username;
                 var fromName = smtpSection["FromName"] ?? "Plataforma Integral Hidrometeorológica";
-                if (!bool.TryParse(smtpSection["EnableSsl"], out var enableSsl)) enableSsl = false;
+                if (!bool.TryParse(smtpSection["EnableSsl"], out var enableSsl)) enableSsl = true; // FIX CVE-I2: default seguro = TLS habilitado
 
                 if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(username))
                 {
