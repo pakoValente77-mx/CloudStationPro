@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -88,9 +89,10 @@ namespace CloudStationWeb.Controllers
         }
 
         /// <summary>
-        /// Descargar imagen — acceso público, sin autenticación.
+        /// Descargar imagen — requiere autenticación (FIX CVE-M2).
         /// GET /api/images/{category}/{fileName}
         /// </summary>
+        [Authorize]
         [HttpGet("{category}/{fileName}")]
         public IActionResult Download(string category, string fileName)
         {
@@ -112,9 +114,10 @@ namespace CloudStationWeb.Controllers
         }
 
         /// <summary>
-        /// Obtener la última imagen por prefijo en una categoría.
+        /// Obtener la última imagen por prefijo en una categoría — requiere autenticación (FIX CVE-M2).
         /// GET /api/images/{category}/latest?prefix=reporte_lluvia_1_1_
         /// </summary>
+        [Authorize]
         [HttpGet("{category}/latest")]
         public IActionResult GetLatest(string category, [FromQuery] string prefix)
         {

@@ -15,10 +15,12 @@ namespace CloudStationWeb.Services
         private readonly string _sqlServerConn;
         private readonly string _postgresConn;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<DataService> _logger;
 
-        public DataService(IConfiguration configuration)
+        public DataService(IConfiguration configuration, ILogger<DataService> logger)
         {
             _configuration = configuration;
+            _logger = logger;
             _sqlServerConn = configuration.GetConnectionString("SqlServer") ?? "";
             _postgresConn = configuration.GetConnectionString("PostgreSQL") ?? "";
         }
@@ -260,11 +262,14 @@ namespace CloudStationWeb.Services
                 
                 if (string.IsNullOrEmpty(dcpId)) dcpId = stationId;
 
+                // FIX CVE-C2: usar parámetro @Cutoff en lugar de concatenar 'hours' directamente
+                var cutoff = DateTime.UtcNow.AddHours(-hours);
+
                 string query = @"
                     SELECT ts as Ts, valor as Valor, variable as Variable 
                     FROM public.dcp_datos 
                     WHERE dcp_id = @DcpId AND variable = @Var 
-                    AND ts >= now() - interval '" + hours + @" hours'
+                    AND ts >= @Cutoff
                     ORDER BY ts ASC";
 
                 // Si es viento, necesitamos velocidad y dirección
@@ -275,11 +280,11 @@ namespace CloudStationWeb.Services
                         FROM public.dcp_datos 
                         WHERE dcp_id = @DcpId 
                         AND (variable = 'velocidad_del_viento' OR variable = 'dirección_del_viento')
-                        AND ts >= now() - interval '" + hours + @" hours'
+                        AND ts >= @Cutoff
                         ORDER BY ts ASC";
                 }
 
-                var history = (await pgDb.QueryAsync<HistoricalMeasurement>(query, new { DcpId = dcpId, Var = variable })).ToList();
+                var history = (await pgDb.QueryAsync<HistoricalMeasurement>(query, new { DcpId = dcpId, Var = variable, Cutoff = cutoff })).ToList();
 
                 // Apply cotas (offsets) based on timestamp and validity ranges
                 var sqlVariable = GetSqlVariableName(variable);
@@ -730,8 +735,11 @@ namespace CloudStationWeb.Services
                        LEFT JOIN DatosGOES g ON g.IdEstacion = e.Id
                        WHERE e.IdAsignado IN @StationIds", new { StationIds = request.StationIds })).ToList();
 
-                Console.WriteLine($"[DEBUG] Requested Stations: {request.StationIds.Count}, SQL Found: {basicStations.Count}");
-                foreach(var s in basicStations) Console.WriteLine($"[DEBUG] Found Station: {s.IdAsignado}");
+                // FIX CVE-A3: usar ILogger en lugar de Console.WriteLine
+                _logger.LogDebug("[DataService] Requested Stations: {Count}, SQL Found: {Found}",
+                    request.StationIds.Count, basicStations.Count);
+                foreach(var s in basicStations)
+                    _logger.LogDebug("[DataService] Found Station: {Id}", s.IdAsignado);
 
                 // Get limits (Optional)
                 try 

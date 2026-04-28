@@ -561,6 +561,8 @@ namespace CloudStationWeb.Controllers
         [HttpGet("api/get/dam-behavior/date/{dateValue}/central-id/{centralId}")]
         public async Task<IActionResult> GetDamBehaviorAlt(string dateValue, int centralId)
         {
+            // FIX CVE-M3: este alias también debe validar autenticación
+            if (!ValidateAuth()) return Unauthorized();
             return await GetDamBehavior(centralId, dateValue);
         }
 

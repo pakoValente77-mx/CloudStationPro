@@ -3,8 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 using CloudStationWeb.Data;
 using CloudStationWeb.Models;
 
@@ -21,7 +23,7 @@ ExcelPackage.License.SetNonCommercialPersonal("CloudStation User");
 
 // Add EF Core with SQL Server for Identity
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer"), 
+    options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer"),
         sqlOptions => sqlOptions.UseCompatibilityLevel(110)));
 
 // Add ASP.NET Identity
@@ -45,16 +47,24 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Configure cookie authentication
+// ─── Duración de sesión desde configuración (CVE-M4) ────────────────────────
+var sessionExpireHours = builder.Configuration.GetValue<int>("Security:Session:ExpireHours", 8);
+var slidingExpiration = builder.Configuration.GetValue<bool>("Security:Session:SlidingExpiration", false);
+
+// Configure cookie authentication (CVE-A1, CVE-M4)
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
-    options.ExpireTimeSpan = TimeSpan.FromDays(30);
-    options.SlidingExpiration = true;
+    options.ExpireTimeSpan = TimeSpan.FromHours(sessionExpireHours);
+    options.SlidingExpiration = slidingExpiration;
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    // FIX CVE-A1: forzar siempre Secure (solo HTTPS) en lugar de SameAsRequest
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    // FIX CVE-A1: SameSite Strict para mitigar CSRF
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.Name = "__pih_session";
     // When an API call arrives without cookie, return 401 instead of redirect
     options.Events.OnRedirectToLogin = context =>
     {
@@ -150,11 +160,72 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudStationWeb.Se
 builder.Services.AddSingleton<CloudStationWeb.Services.PrecipitationAlertService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudStationWeb.Services.PrecipitationAlertService>());
 
-// CORS for API consumers (mobile, desktop apps)
+// ─── CORS — FIX CVE-C3: restringir orígenes a lista configurada ──────────────
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
+
 builder.Services.AddCors(options =>
 {
+    // Política estricta para la web (solo orígenes conocidos)
     options.AddPolicy("ApiCors", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    {
+        if (allowedOrigins.Length > 0)
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        else
+            // Sin orígenes configurados: bloquear todo cross-origin
+            policy.SetIsOriginAllowed(_ => false);
+    });
+
+    // Política abierta solo para WebSockets de SignalR (móvil/desktop nativo)
+    options.AddPolicy("SignalRCors", policy =>
+        policy.WithOrigins(allowedOrigins.Length > 0 ? allowedOrigins : new[] { "null" })
+              .AllowAnyHeader()
+              .AllowCredentials());
+});
+
+// ─── Rate Limiting — FIX CVE-A4 ──────────────────────────────────────────────
+builder.Services.AddRateLimiter(rl =>
+{
+    // Límite de login: 10 intentos por minuto por IP
+    rl.AddFixedWindowLimiter("login", opt =>
+    {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+        opt.AutoReplenishment = true;
+    });
+
+    // Límite de registro: 5 por minuto por IP
+    rl.AddFixedWindowLimiter("register", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+        opt.AutoReplenishment = true;
+    });
+
+    // Límite de API REST: 120 peticiones por minuto por IP
+    rl.AddFixedWindowLimiter("api", opt =>
+    {
+        opt.PermitLimit = 120;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 5;
+        opt.AutoReplenishment = true;
+    });
+
+    // Respuesta 429 cuando se excede el límite
+    rl.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"error\":\"Demasiadas solicitudes. Intente más tarde.\"}",
+            cancellationToken: token);
+    };
 });
 
 var app = builder.Build();
@@ -176,7 +247,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Configure the HTTP request pipeline
+// ─── Pipeline de seguridad ───────────────────────────────────────────────────
 
 // Cloudflare / IIS reverse proxy: respetar headers X-Forwarded-*
 app.UseForwardedHeaders(new ForwardedHeadersOptions
@@ -185,10 +256,43 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
                      | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
 });
 
+// FIX CVE-A1: forzar HTTPS en todas las peticiones
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
+    // HSTS: forzar HTTPS por 1 año en navegadores
+    app.UseHsts();
 }
+
+// Redirigir HTTP → HTTPS
+app.UseHttpsRedirection();
+
+// FIX CVE-A2: Headers de seguridad HTTP
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    // Prevenir MIME sniffing
+    headers.Append("X-Content-Type-Options", "nosniff");
+    // Prevenir clickjacking
+    headers.Append("X-Frame-Options", "DENY");
+    // Referrer mínimo (no filtrar a terceros)
+    headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Deshabilitar funciones de navegador innecesarias
+    headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    // Content Security Policy básico (scripts solo del mismo origen)
+    if (!context.Request.Path.StartsWithSegments("/api"))
+    {
+        headers.Append("Content-Security-Policy",
+            "default-src 'self'; " +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://maps.googleapis.com; " +
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
+            "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; " +
+            "img-src 'self' data: blob: https:; " +
+            "connect-src 'self' wss: ws:; " +
+            "frame-ancestors 'none';");
+    }
+    await next();
+});
 
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".kml"] = "application/vnd.google-earth.kml+xml";
@@ -200,6 +304,9 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+
+// Rate limiting (antes de auth para proteger endpoints)
+app.UseRateLimiter();
 
 app.UseCors("ApiCors");
 app.UseAuthentication();

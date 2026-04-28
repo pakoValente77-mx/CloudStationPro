@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using CloudStationWeb.Models;
 using CloudStationWeb.Data;
@@ -57,6 +58,7 @@ namespace CloudStationWeb.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("login")] // FIX CVE-A4: limitar intentos de login
         public async Task<IActionResult> Login(string username, string password, bool rememberMe, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
@@ -202,6 +204,7 @@ namespace CloudStationWeb.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("register")] // FIX CVE-A4: limitar solicitudes de registro masivo
         public async Task<IActionResult> Register(string username, string fullName, string email, string password, string confirmPassword, string? registrationNote, int? organismoId, int? centroTrabajoId, bool esTrabajadorCFE = true, string? empresaExterna = null, string? departamentoExterno = null)
         {
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(fullName))

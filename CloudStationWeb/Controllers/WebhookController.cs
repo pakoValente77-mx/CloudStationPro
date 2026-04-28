@@ -65,6 +65,20 @@ namespace CloudStationWeb.Controllers
             if (string.IsNullOrEmpty(_telegramToken))
                 return Ok(); // Silently ignore if not configured
 
+            // FIX CVE-M1: verificar que la petición proviene realmente de Telegram.
+            // El bot debe estar registrado con un SecretToken via setWebhook.
+            var secretToken = _config["Webhook:Telegram:SecretToken"] ?? "";
+            if (!string.IsNullOrEmpty(secretToken))
+            {
+                if (!Request.Headers.TryGetValue("X-Telegram-Bot-Api-Secret-Token", out var receivedSecret) ||
+                    !string.Equals(receivedSecret, secretToken, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("[Webhook/Telegram] Petición rechazada: Secret Token inválido. IP={IP}",
+                        HttpContext.Connection.RemoteIpAddress);
+                    return Unauthorized();
+                }
+            }
+
             try
             {
                 using var reader = new StreamReader(Request.Body);

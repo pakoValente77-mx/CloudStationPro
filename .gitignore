@@ -540,3 +540,22 @@ node_modules/
 CloudStationWeb/cuenca-grijalva-firebase-adminsdk-fbsvc*.json
 publicado_pih_2026/
 publicado_pih_2026.zip
+
+# ─── SEGURIDAD: credenciales y secretos de desarrollo ──────────────────────────
+# NUNCA versionar estos archivos — contienen contraseñas reales
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.Secrets.json
+**/appsettings.Production.json
+# Google/Firebase service account keys
+*firebase-adminsdk*.json
+*service-account*.json
+# Certificados y llaves privadas
+*.pfx
+*.p12
+*.key
+*.pem
+# Variables de entorno locales
+.env
+.env.local
+.env.*.local
